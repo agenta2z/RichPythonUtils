@@ -1,0 +1,905 @@
+"""
+File-based variable manager implementation.
+
+This module provides FileBasedVariableManager, a full-featured implementation
+of VariableManager that loads variables from files on the filesystem.
+"""
+
+import fnmatch
+import re
+from enum import Enum
+from pathlib import Path
+from typing import Callable, Dict, Iterator, List, Mapping, Optional, Set, Tuple
+
+from rich_python_utils.common_objects.variable_manager.base import VariableManager
+from rich_python_utils.common_objects.variable_manager.config import (
+    VariableManagerConfig,
+    VariableSyntax,
+)
+from rich_python_utils.common_objects.variable_manager.exceptions import (
+    AmbiguousVariableError,
+    CircularReferenceError,
+    MaxDepthExceededError,
+)
+
+
+class KeyDiscoveryMode(Enum):
+    """Mode for discovering available variable keys.
+
+    Controls when the filesystem is scanned to discover available variable names.
+    """
+
+    LAZY = "lazy"
+    """Discover keys only when __iter__ or __len__ is called (default)."""
+
+    EAGER = "eager"
+    """Discover keys immediately on initialization."""
+
+
+class FileBasedVariableManager(VariableManager):
+    """Full-featured file-based variable manager.
+
+    Loads and resolves variables from files on the filesystem. Supports:
+
+    - **Underscore split inference**: `notes_safety` → `notes/safety.hbs`
+    - **Multiple extension support**: `.hbs`, `.j2`, `.txt`, bare files
+    - **Content caching**: Avoid re-reading unchanged files
+    - **Cascade resolution**: `variable_type` → `variable_root_space` → global
+    - **Scope modifiers**: `^{{var}}` (global), `.{{var}}` (current), `{{var}}?` (optional)
+    - **Composition**: Variables can reference other variables
+    - **Configurable syntax**: Handlebars, Jinja2, Python format, Template, or custom
+    - **Flexible key discovery**: Lazy (on-demand) or eager (upfront)
+
+    Example:
+        >>> from rich_python_utils.common_objects.variable_manager import (
+        ...     FileBasedVariableManager,
+        ...     VariableManagerConfig,
+        ... )
+        >>>
+        >>> # Simple dict-like access
+        >>> manager = FileBasedVariableManager(base_path="/config")
+        >>> value = manager['database_host']
+        >>> value = manager.get('database_port', '5432')
+        >>>
+        >>> # With cascade resolution
+        >>> vars = manager.resolve_from_content(
+        ...     "{{mindset}} and {{notes_safety}}",
+        ...     variable_root_space="my_agent",
+        ...     variable_type="main",
+        ... )
+    """
+
+    # Regex pattern for variable references (Handlebars-style by default)
+    # Group 1: scope modifier (^ or .)
+    # Group 2: variable name (without braces)
+    # Group 3: optional marker (?)
+    VARIABLE_PATTERN = re.compile(r"(\^|\.)?\{\{([^}]+)\}\}(\?)?")
+
+    def __init__(
+        self,
+        base_path: str,
+        config: Optional[VariableManagerConfig] = None,
+        key_discovery_mode: KeyDiscoveryMode = KeyDiscoveryMode.LAZY,
+        variable_root_space: str = "",
+        variable_type: str = "",
+    ):
+        """Initialize FileBasedVariableManager.
+
+        Args:
+            base_path: Root directory for variable resolution.
+            config: Configuration options (uses defaults if not provided).
+            key_discovery_mode: When to discover available keys.
+            variable_root_space: Default root space for cascade resolution.
+                E.g., "production" searches production/ before global.
+            variable_type: Default variable type for cascade resolution.
+                E.g., "api" searches {space}/api/ before {space}/.
+        """
+        self.base_path = Path(base_path)
+        self.config = config or VariableManagerConfig()
+        self.key_discovery_mode = key_discovery_mode
+        self.variable_root_space = variable_root_space
+        self.variable_type = variable_type
+        self._content_cache: Dict[str, str] = {}
+        self._discovered_keys: Optional[Set[str]] = None
+
+        # Eager mode: discover keys immediately
+        if key_discovery_mode == KeyDiscoveryMode.EAGER:
+            self._discover_keys()
+
+    # region Public API
+
+    def get_variable(
+        self,
+        name: str,
+        compose: Optional[bool] = None,
+        variable_root_space: str = "",
+        variable_type: str = "",
+        version: str = "",
+    ) -> Optional[str]:
+        """Get a single variable by name.
+
+        Args:
+            name: The variable name to look up.
+            compose: Whether to resolve nested variable references in the content.
+                If None, uses config.compose_on_access (default True).
+            variable_root_space: Root space for cascade resolution (used during composition).
+            variable_type: Variable type for cascade resolution (used during composition).
+            version: Version suffix for variable resolution.
+
+        Returns:
+            The variable content as a string, or None if not found.
+        """
+        # Determine whether to compose
+        should_compose = compose if compose is not None else self.config.compose_on_access
+
+        # Get cascade paths for file lookup
+        cascade_paths = self._get_cascade_paths(variable_root_space, variable_type)
+        file_path, _ = self._find_variable_file(name, cascade_paths, version=version)
+
+        if file_path is None:
+            return None
+
+        content = self._read_file_content(file_path)
+
+        # Resolve nested variables if composition is enabled
+        if should_compose:
+            extractor = self._get_variable_extractor(file_path)
+            if extractor is not None:
+                content = self._resolve_content(
+                    content,
+                    variable_root_space,
+                    variable_type,
+                    version,
+                    resolution_stack=[name],
+                    current_file_path=file_path,
+                )
+
+        return content
+
+    def resolve_variables(self, names: List[str]) -> Dict[str, str]:
+        """Resolve multiple variables at once.
+
+        Args:
+            names: List of variable names to resolve.
+
+        Returns:
+            Dictionary mapping variable names to their resolved content.
+            Variables that are not found are omitted from the result.
+        """
+        result = {}
+        for name in names:
+            value = self.get_variable(name)
+            if value is not None:
+                result[name] = value
+        return result
+
+    def resolve_from_content(
+        self,
+        content: str,
+        variable_root_space: str = "",
+        variable_type: str = "",
+        version: str = "",
+    ) -> Dict[str, str]:
+        """Auto-detect and resolve all variables from content.
+
+        Scans the content for variable references based on the configured syntax,
+        resolves those that have matching files, and returns a dictionary
+        of variable names to resolved content.
+
+        Args:
+            content: Content string containing variable references.
+            variable_root_space: Root space for cascade resolution.
+            variable_type: Variable type for cascade resolution.
+            version: Version suffix for variable resolution.
+
+        Returns:
+            Dictionary mapping variable names to resolved content.
+            Only includes variables that were successfully resolved.
+        """
+        resolved_variables: Dict[str, str] = {}
+
+        # Get variable extractor based on config
+        extractor = self._get_variable_extractor()
+        if extractor is None:
+            # Pure text mode - no composition
+            return resolved_variables
+
+        # Check if we should use the Handlebars pattern (supports scope modifiers)
+        syntax = self.config.variable_syntax
+        use_handlebars_pattern = (
+            syntax == VariableSyntax.HANDLEBARS
+            or syntax == VariableSyntax.JINJA2  # JINJA2 uses same {{}} pattern
+        )
+
+        if use_handlebars_pattern:
+            # Use built-in pattern matching for scope modifiers support
+            for match in self.VARIABLE_PATTERN.finditer(content):
+                scope = match.group(1)
+                var_name = match.group(2).strip()
+                is_optional = match.group(3) == "?"
+
+                # Skip partials (Handlebars-specific)
+                if var_name.startswith(">"):
+                    continue
+
+                # Skip if already resolved
+                if var_name in resolved_variables:
+                    continue
+
+                resolved = self._resolve_variable(
+                    var_name,
+                    variable_root_space,
+                    variable_type,
+                    version,
+                    scope,
+                    is_optional,
+                    resolution_stack=[],
+                    current_level_path=None,
+                )
+
+                if resolved is not None:
+                    resolved_variables[var_name] = resolved
+        else:
+            # Use extractor for other syntaxes (no scope modifier support)
+            var_names = extractor(content)
+            for var_name in var_names:
+                if var_name in resolved_variables:
+                    continue
+
+                resolved = self._resolve_variable(
+                    var_name,
+                    variable_root_space,
+                    variable_type,
+                    version,
+                    scope=None,  # No scope modifiers for other syntaxes
+                    is_optional=False,
+                    resolution_stack=[],
+                    current_level_path=None,
+                )
+
+                if resolved is not None:
+                    resolved_variables[var_name] = resolved
+
+        return resolved_variables
+
+    def reload(self) -> None:
+        """Clear all caches. Call this for hot-reload during development."""
+        self.clear_cache()
+        self._discovered_keys = None
+
+    def clear_cache(self) -> None:
+        """Clear the content cache."""
+        self._content_cache.clear()
+
+    # endregion
+
+    # region Mapping Interface
+
+    def __getitem__(self, key: str) -> str:
+        """Get variable content by name.
+
+        Uses class-level variable_root_space and variable_type for cascade,
+        and config.compose_on_access for composition.
+        For explicit control, use get() or get_variable() instead.
+
+        Raises:
+            KeyError: If the variable is not found.
+        """
+        value = self.get_variable(
+            key,
+            compose=self.config.compose_on_access,
+            variable_root_space=self.variable_root_space,
+            variable_type=self.variable_type,
+        )
+        if value is None:
+            raise KeyError(key)
+        return value
+
+    def get(
+        self,
+        key: str,
+        default: Optional[str] = None,
+        *,
+        compose: Optional[bool] = None,
+        cascade: bool = True,
+        variable_root_space: Optional[str] = None,
+        variable_type: Optional[str] = None,
+        version: str = "",
+    ) -> Optional[str]:
+        """Get variable content by name with a default value.
+
+        Args:
+            key: The variable name to look up.
+            default: Value to return if variable is not found.
+            compose: Whether to resolve nested variable references.
+                If None, uses config.compose_on_access (default True).
+            cascade: Whether to use cascade resolution.
+                If True, uses class-level variable_root_space and variable_type.
+                If False, searches global only.
+            variable_root_space: Override class-level root space.
+                Only used when cascade=True.
+            variable_type: Override class-level variable type.
+                Only used when cascade=True.
+            version: Version suffix for variable resolution.
+
+        Returns:
+            The variable content, or default if not found.
+        """
+        # Determine cascade parameters
+        if cascade:
+            space = variable_root_space if variable_root_space is not None else self.variable_root_space
+            vtype = variable_type if variable_type is not None else self.variable_type
+        else:
+            space = ""
+            vtype = ""
+
+        value = self.get_variable(
+            key,
+            compose=compose,
+            variable_root_space=space,
+            variable_type=vtype,
+            version=version,
+        )
+        return value if value is not None else default
+
+    def __iter__(self) -> Iterator[str]:
+        """Iterate over available variable names."""
+        if self._discovered_keys is None:
+            self._discover_keys()
+        return iter(self._discovered_keys)
+
+    def __len__(self) -> int:
+        """Return the number of available variables."""
+        if self._discovered_keys is None:
+            self._discover_keys()
+        return len(self._discovered_keys)
+
+    # endregion
+
+    # region Key Discovery
+
+    def _discover_keys(self) -> None:
+        """Scan filesystem to discover available variable names."""
+        keys: Set[str] = set()
+
+        # Determine the variables folder path
+        vars_folder = self.config.variables_folder_name
+        if vars_folder:
+            base = self.base_path / vars_folder
+        else:
+            base = self.base_path
+
+        if not base.exists():
+            self._discovered_keys = keys
+            return
+
+        # Walk the directory tree
+        for ext in self.config.file_extensions:
+            if ext:
+                pattern = f"**/*{ext}"
+            else:
+                pattern = "**/*"
+
+            for file_path in base.glob(pattern):
+                if file_path.is_file():
+                    # Convert file path to variable name
+                    rel_path = file_path.relative_to(base)
+                    # Remove extension
+                    name = str(rel_path)
+                    for e in self.config.file_extensions:
+                        if e and name.endswith(e):
+                            name = name[: -len(e)]
+                            break
+                    # Skip override files
+                    if self.config.override_suffix in name:
+                        continue
+                    # Convert path separators to underscores
+                    name = name.replace("/", "_").replace("\\", "_")
+                    keys.add(name)
+
+        self._discovered_keys = keys
+
+    # endregion
+
+    # region Underscore Splits
+
+    def _generate_underscore_splits(self, name: str) -> List[str]:
+        """Generate all possible path splits for a variable name with underscores.
+
+        Args:
+            name: Variable name (e.g., "notes_mindset" or "my_app_settings")
+
+        Returns:
+            List of possible paths (e.g., ["notes/mindset", "notes_mindset"])
+        """
+        if "_" not in name:
+            return [name]  # Flat file only
+
+        splits = []
+        parts = name.split("_")
+
+        # Generate all possible split points
+        # For "a_b_c", generate: "a/b_c", "a_b/c", "a_b_c"
+        for i in range(1, len(parts)):
+            folder = "_".join(parts[:i])
+            file_name = "_".join(parts[i:])
+            splits.append(f"{folder}/{file_name}")
+
+        # Also try as flat file
+        splits.append(name)
+
+        return splits
+
+    # endregion
+
+    # region Cascade Resolution
+
+    def _get_cascade_paths(
+        self,
+        variable_root_space: str,
+        variable_type: str,
+        scope: Optional[str] = None,
+        current_level_path: Optional[Path] = None,
+    ) -> List[Path]:
+        """Get the cascade paths for variable resolution.
+
+        Args:
+            variable_root_space: Root space name (e.g., "my_agent")
+            variable_type: Variable type (e.g., "main")
+            scope: Scope modifier (None for cascade, "^" for global, "." for current)
+            current_level_path: Path of the file containing the reference (for "." scope)
+
+        Returns:
+            List of paths to check, in priority order
+        """
+        vars_folder = self.config.variables_folder_name
+
+        # Build the base path with optional subfolder
+        def get_vars_path(parent: Path) -> Path:
+            if vars_folder:
+                return parent / vars_folder
+            return parent
+
+        if scope == "^":
+            # Global only
+            return [get_vars_path(self.base_path)]
+
+        if scope == ".":
+            # Current level only
+            if current_level_path:
+                # Find the _variables folder at the same level
+                parent = current_level_path.parent
+                while parent != self.base_path.parent:
+                    vars_path = get_vars_path(parent)
+                    if vars_path.exists():
+                        return [vars_path]
+                    parent = parent.parent
+            # If current_level_path not provided, use variable_type level
+            if variable_type and variable_root_space:
+                return [get_vars_path(self.base_path / variable_root_space / variable_type)]
+            elif variable_root_space:
+                return [get_vars_path(self.base_path / variable_root_space)]
+            return [get_vars_path(self.base_path)]
+
+        # Default: cascade (variable_type -> variable_root_space -> global)
+        paths = []
+        if variable_type and variable_root_space:
+            paths.append(
+                get_vars_path(self.base_path / variable_root_space / variable_type)
+            )
+        if variable_root_space:
+            paths.append(get_vars_path(self.base_path / variable_root_space))
+        paths.append(get_vars_path(self.base_path))
+
+        return paths
+
+    # endregion
+
+    # region File Resolution
+
+    def _find_variable_file(
+        self,
+        variable_name: str,
+        cascade_paths: List[Path],
+        version: str = "",
+    ) -> Tuple[Optional[Path], Optional[str]]:
+        """Find the variable file for a given variable name.
+
+        Args:
+            variable_name: Variable name (e.g., "notes_mindset")
+            cascade_paths: List of folders to search
+            version: Version suffix (e.g., "enterprise")
+
+        Returns:
+            Tuple of (file_path, resolved_name) or (None, None) if not found
+        """
+        possible_paths = self._generate_underscore_splits(variable_name)
+
+        for cascade_path in cascade_paths:
+            matches_at_level = []
+
+            for path_variant in possible_paths:
+                # Build version resolution order
+                file_variants = []
+                if version and self.config.enable_overrides:
+                    file_variants.append(
+                        f"{path_variant}.{version}{self.config.override_suffix}"
+                    )
+                if self.config.enable_overrides:
+                    file_variants.append(f"{path_variant}{self.config.override_suffix}")
+                if version:
+                    file_variants.append(f"{path_variant}.{version}")
+                file_variants.append(path_variant)
+
+                # Check each version variant for this path
+                found_for_this_variant = False
+                for file_variant in file_variants:
+                    for ext in self.config.file_extensions:
+                        file_path = cascade_path / f"{file_variant}{ext}"
+                        if file_path.exists():
+                            matches_at_level.append((file_path, variable_name))
+                            found_for_this_variant = True
+                            break  # First extension wins for this variant
+                    if found_for_this_variant:
+                        break  # First version variant wins
+
+            # Check ambiguity at this cascade level
+            if len(matches_at_level) > 1:
+                raise AmbiguousVariableError(
+                    variable_name, [str(m[0]) for m in matches_at_level]
+                )
+            if len(matches_at_level) == 1:
+                return matches_at_level[0]
+
+        return None, None
+
+    def _read_file_content(self, file_path: Path) -> str:
+        """Read file content with optional caching."""
+        path_str = str(file_path)
+
+        if self.config.cache_content and path_str in self._content_cache:
+            return self._content_cache[path_str]
+
+        content = file_path.read_text(encoding="utf-8")
+
+        if self.config.cache_content:
+            self._content_cache[path_str] = content
+
+        return content
+
+    # endregion
+
+    # region Variable Resolution
+
+    def _resolve_variable(
+        self,
+        variable_name: str,
+        variable_root_space: str,
+        variable_type: str,
+        version: str,
+        scope: Optional[str],
+        is_optional: bool,
+        resolution_stack: List[str],
+        current_level_path: Optional[Path] = None,
+    ) -> Optional[str]:
+        """Resolve a single variable.
+
+        Args:
+            variable_name: Variable name to resolve
+            variable_root_space: Root space name (e.g., "my_agent")
+            variable_type: Variable type
+            version: Version suffix
+            scope: Scope modifier (None, "^", or ".")
+            is_optional: Whether the variable is optional
+            resolution_stack: Current resolution stack for circular detection
+            current_level_path: Path of file containing reference (for "." scope)
+
+        Returns:
+            Resolved content or None if not found
+        """
+        # Trim whitespace from variable name
+        variable_name = variable_name.strip()
+
+        # Skip Handlebars partials
+        if variable_name.startswith(">"):
+            return None
+
+        # Check for circular references
+        if variable_name in resolution_stack:
+            raise CircularReferenceError(resolution_stack, variable_name)
+
+        # Check max depth
+        if len(resolution_stack) > self.config.max_recursion_depth:
+            raise MaxDepthExceededError(resolution_stack, self.config.max_recursion_depth)
+
+        # Get cascade paths based on scope
+        cascade_paths = self._get_cascade_paths(
+            variable_root_space, variable_type, scope, current_level_path
+        )
+
+        # Find the variable file
+        file_path, _ = self._find_variable_file(variable_name, cascade_paths, version)
+
+        if file_path is None:
+            return "" if is_optional else None
+
+        # Read content
+        content = self._read_file_content(file_path)
+
+        # Check if composition is enabled
+        extractor = self._get_variable_extractor(file_path)
+        if extractor is None:
+            # Pure text mode - return content as-is
+            return content
+
+        # Recursively resolve any variable references in the content
+        new_stack = resolution_stack + [variable_name]
+        content = self._resolve_content(
+            content, variable_root_space, variable_type, version, new_stack, file_path
+        )
+
+        return content
+
+    def _resolve_content(
+        self,
+        content: str,
+        variable_root_space: str,
+        variable_type: str,
+        version: str,
+        resolution_stack: List[str],
+        current_file_path: Optional[Path] = None,
+    ) -> str:
+        """Resolve all variable references in content.
+
+        Args:
+            content: Content with variable references
+            variable_root_space: Root space name (e.g., "my_agent")
+            variable_type: Variable type
+            version: Version suffix
+            resolution_stack: Current resolution stack
+            current_file_path: Path of the file containing the content
+
+        Returns:
+            Content with variables resolved
+        """
+        # Check if we should use the Handlebars pattern (supports scope modifiers)
+        syntax = self.config.variable_syntax
+        use_handlebars_pattern = (
+            syntax == VariableSyntax.HANDLEBARS
+            or syntax == VariableSyntax.JINJA2  # JINJA2 uses same {{}} pattern
+        )
+
+        if use_handlebars_pattern:
+            # Use built-in pattern matching for scope modifiers support
+            def replace_match(match: re.Match) -> str:
+                scope = match.group(1)  # ^ or . or None
+                var_name = match.group(2)  # variable name
+                is_optional = match.group(3) == "?"
+
+                resolved = self._resolve_variable(
+                    var_name,
+                    variable_root_space,
+                    variable_type,
+                    version,
+                    scope,
+                    is_optional,
+                    resolution_stack,
+                    current_file_path,
+                )
+
+                if resolved is not None:
+                    return resolved
+
+                # Not resolved - strip modifier or leave as-is
+                if scope:
+                    # Strip the modifier, leave for template engine
+                    return f"{{{{{var_name}}}}}"
+                if is_optional:
+                    return ""
+                # Leave as-is for template engine
+                return match.group(0)
+
+            return self.VARIABLE_PATTERN.sub(replace_match, content)
+        else:
+            # Use extractor and formatter for other syntaxes
+            extractor = self._get_variable_extractor(current_file_path)
+            formatter = self._get_variable_formatter(current_file_path)
+
+            if extractor is None or formatter is None:
+                # Pure text mode or no formatter available
+                return content
+
+            # Extract variable names from content
+            var_names = extractor(content)
+            if not var_names:
+                return content
+
+            # Resolve each variable
+            resolved_vars: Dict[str, str] = {}
+            for var_name in var_names:
+                resolved = self._resolve_variable(
+                    var_name,
+                    variable_root_space,
+                    variable_type,
+                    version,
+                    scope=None,  # No scope modifiers for other syntaxes
+                    is_optional=False,
+                    resolution_stack=resolution_stack,
+                    current_level_path=current_file_path,
+                )
+                if resolved is not None:
+                    resolved_vars[var_name] = resolved
+
+            # Use the formatter to substitute variables
+            if resolved_vars:
+                try:
+                    return formatter(content, resolved_vars)
+                except Exception:
+                    # If formatting fails, return content as-is
+                    return content
+
+            return content
+
+    # endregion
+
+    # region Formatter Integration
+
+    def _get_variable_extractor(
+        self, file_path: Optional[Path] = None
+    ) -> Optional[Callable[[str], Set[str]]]:
+        """Get the variable extraction function based on config and file path.
+
+        Args:
+            file_path: Path to the variable file (used for pattern matching).
+
+        Returns:
+            Callable that extracts variable names from content string,
+            or None if no composition (pure text mode).
+        """
+        syntax = self.config.variable_syntax
+
+        # None = pure text mode, no composition
+        if syntax is None:
+            return None
+
+        # If it's a mapping, find matching pattern
+        if isinstance(syntax, dict) and file_path is not None:
+            matched_syntax = None
+            for pattern, pattern_syntax in syntax.items():
+                if fnmatch.fnmatch(file_path.name, pattern):
+                    matched_syntax = pattern_syntax
+                    break
+
+            if matched_syntax is None:
+                # No pattern matched - use pure text mode
+                return None
+
+            syntax = matched_syntax
+
+        # If it's still None after mapping lookup
+        if syntax is None:
+            return None
+
+        # If it's a callable, use it directly
+        if callable(syntax):
+            return syntax
+
+        # Otherwise, look up the predefined extractor
+        # Import here to avoid circular dependencies
+        try:
+            from rich_python_utils.string_utils.formatting import handlebars_format
+
+            extractors = {
+                VariableSyntax.HANDLEBARS: handlebars_format._extract_variables,
+            }
+
+            # Try to import other formatters
+            try:
+                from rich_python_utils.string_utils.formatting import jinja2_format
+
+                extractors[VariableSyntax.JINJA2] = (
+                    lambda t: jinja2_format.compile_template(t, return_variables=True)[
+                        1
+                    ]
+                )
+            except ImportError:
+                pass
+
+            try:
+                from rich_python_utils.string_utils.formatting import (
+                    python_str_format,
+                )
+
+                extractors[VariableSyntax.PYTHON_FORMAT] = (
+                    python_str_format._extract_variables
+                )
+            except ImportError:
+                pass
+
+            try:
+                from rich_python_utils.string_utils.formatting import (
+                    string_template_format,
+                )
+
+                extractors[VariableSyntax.TEMPLATE] = (
+                    string_template_format._extract_variables
+                )
+            except ImportError:
+                pass
+
+            return extractors.get(syntax)
+
+        except ImportError:
+            # Fallback: return None (pure text mode) if formatters not available
+            return None
+
+    def _get_variable_formatter(
+        self, file_path: Optional[Path] = None
+    ) -> Optional[Callable[[str, Mapping[str, str]], str]]:
+        """Get the variable formatting function based on config and file path.
+
+        Args:
+            file_path: Path to the variable file (used for pattern matching).
+
+        Returns:
+            Callable that formats a template string with a dict of values,
+            or None if no composition (pure text mode).
+        """
+        syntax = self.config.variable_syntax
+
+        # None = pure text mode, no composition
+        if syntax is None:
+            return None
+
+        # If it's a mapping, find matching pattern
+        if isinstance(syntax, dict) and file_path is not None:
+            matched_syntax = None
+            for pattern, pattern_syntax in syntax.items():
+                if fnmatch.fnmatch(file_path.name, pattern):
+                    matched_syntax = pattern_syntax
+                    break
+
+            if matched_syntax is None:
+                return None
+
+            syntax = matched_syntax
+
+        if syntax is None:
+            return None
+
+        # If it's a callable, we can't format - return None
+        if callable(syntax):
+            return None
+
+        # Otherwise, look up the predefined formatter
+        try:
+            from rich_python_utils.string_utils.formatting import handlebars_format
+
+            formatters: Dict[VariableSyntax, Callable[[str, Mapping[str, str]], str]] = {
+                VariableSyntax.HANDLEBARS: lambda t, v: handlebars_format.format_template(t, v),
+            }
+
+            try:
+                from rich_python_utils.string_utils.formatting import jinja2_format
+                formatters[VariableSyntax.JINJA2] = lambda t, v: jinja2_format.format_template(t, v)
+            except ImportError:
+                pass
+
+            try:
+                from rich_python_utils.string_utils.formatting import python_str_format
+                formatters[VariableSyntax.PYTHON_FORMAT] = lambda t, v: python_str_format.format_template(t, v)
+            except ImportError:
+                pass
+
+            try:
+                from rich_python_utils.string_utils.formatting import string_template_format
+                formatters[VariableSyntax.TEMPLATE] = lambda t, v: string_template_format.format_template(t, v)
+            except ImportError:
+                pass
+
+            return formatters.get(syntax)
+
+        except ImportError:
+            return None
+
+    # endregion
