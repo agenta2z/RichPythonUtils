@@ -34,7 +34,7 @@ All features (cascade resolution, scope modifiers, composition, syntax options, 
 are documented in the `FileBasedVariableManager` examples:
 
 ```
-examples/science_python_utils/common_objects/variable_manager/file_based_variable_manager/
+examples/rich_python_utils/common_objects/variable_manager/file_based_variable_manager/
 ├── 01_basic_usage.py          # Dict-like access, underscore inference
 ├── 02_cascade_resolution.py   # Space/type hierarchy
 ├── 03_scope_modifiers.py      # ^, ., ? modifiers

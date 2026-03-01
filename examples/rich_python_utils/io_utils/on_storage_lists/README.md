@@ -591,8 +591,8 @@ python example_use_cases.py
 
 ## Related Resources
 
-- Implementation: [src/science_python_utils/io_utils/on_storage_lists.py](../../../../../../src/science_python_utils/io_utils/on_storage_lists.py)
-- Tests: [test/science_python_utils/io_utils/test_on_storage_lists.py](../../../../../../test/science_python_utils/io_utils/test_on_storage_lists.py)
+- Implementation: [src/rich_python_utils/io_utils/on_storage_lists.py](../../../../../../src/rich_python_utils/io_utils/on_storage_lists.py)
+- Tests: [test/rich_python_utils/io_utils/test_on_storage_lists.py](../../../../../../test/rich_python_utils/io_utils/test_on_storage_lists.py)
 
 ## License
 

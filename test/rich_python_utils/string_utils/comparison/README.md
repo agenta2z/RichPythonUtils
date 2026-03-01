@@ -1,6 +1,6 @@
 # Tests for comparison.py
 
-This directory contains tests for the `science_python_utils.string_utils.comparison` module, specifically testing the compiled regex feature enhancements.
+This directory contains tests for the `rich_python_utils.string_utils.comparison` module, specifically testing the compiled regex feature enhancements.
 
 ## Test Files
 

@@ -1,6 +1,6 @@
 # FileBasedVariableManager Examples
 
-Comprehensive examples for `FileBasedVariableManager` from `science_python_utils.common_objects`.
+Comprehensive examples for `FileBasedVariableManager` from `rich_python_utils.common_objects`.
 
 ## Overview
 
@@ -134,4 +134,4 @@ For template contexts, use `TemplateVariableManager` (alias: `VariableLoader`) w
 - Renamed parameters: `template_dir`, `template_root_space`, `template_type`
 - Default `variables_folder_name="_variables"`
 
-See: `examples/science_python_utils/string_utils/formatting/template_manager/`
+See: `examples/rich_python_utils/string_utils/formatting/template_manager/`

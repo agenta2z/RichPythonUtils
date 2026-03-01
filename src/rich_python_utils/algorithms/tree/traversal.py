@@ -152,7 +152,7 @@ def post_order_traversal(
         get_value: Callable = None,
         return_iterator: bool = True,
 ):
-    """
+    r"""
     Performs a post-order traversal of a generic tree (or tree-like structure) using a stack,
     optionally extracting node values and applying a custom node-processing function.
 

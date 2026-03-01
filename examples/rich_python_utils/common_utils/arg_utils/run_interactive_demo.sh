@@ -20,7 +20,7 @@ cd "$SCRIPT_DIR/../../../.."
 # Set PYTHONPATH to include src directory
 export PYTHONPATH=src
 
-EXAMPLES_DIR="examples/science_python_utils/common_utils/arg_utils"
+EXAMPLES_DIR="examples/rich_python_utils/common_utils/arg_utils"
 
 echo ""
 echo "╔══════════════════════════════════════════════════════════════════════╗"

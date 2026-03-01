@@ -334,10 +334,10 @@ Get statistics about queues.
 ## Related Resources
 
 For more information and test cases, see:
-- Implementation: `src/science_python_utils/service_utils/queue_service/thread_queue_service.py`
+- Implementation: `src/rich_python_utils/service_utils/queue_service/thread_queue_service.py`
 - Tests: `test/service_utils/queue_service/thread_queue_service/`
-- Abstract base: `src/science_python_utils/service_utils/queue_service/queue_service_base.py`
-- Redis alternative: `src/science_python_utils/service_utils/queue_service/redis_queue_service.py`
+- Abstract base: `src/rich_python_utils/service_utils/queue_service/queue_service_base.py`
+- Redis alternative: `src/rich_python_utils/service_utils/queue_service/redis_queue_service.py`
 
 ## License
 

@@ -167,12 +167,12 @@ def format_template(
 
         Using the currentDateTime helper:
         >>> import re
-        >>> bool(re.match(r'<CurrentDate>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}</CurrentDate>',
+        >>> bool(re.match(r'<CurrentDate>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}</CurrentDate>',
         ...     format_template("<CurrentDate>{{currentDateTime}}</CurrentDate>")))
         True
 
         Using currentDateTime with formatting:
-        >>> bool(re.match(r'<CurrentDate>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}',
+        >>> bool(re.match(r'<CurrentDate>\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}',
         ...     format_template("<CurrentDate>{{currentDateTime 'iso'}}</CurrentDate>")))
         True
 

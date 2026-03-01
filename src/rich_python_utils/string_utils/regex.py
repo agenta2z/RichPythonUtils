@@ -35,7 +35,7 @@ def iter_matches(
         ['First', 'Second', 'Third']
         >>> list(iter_matches(r'[A-Za-z]+', 'First Second Third', start_pos=6))
         ['Second', 'Third']
-        >>> list(iter_matches(r'[A-Za-z]+\s?', 'First Second Third', strip=False))
+        >>> list(iter_matches(r'[A-Za-z]+\\s?', 'First Second Third', strip=False))
         ['First ', 'Second ', 'Third']
         >>> list(iter_matches(
         ...     r'[A-Za-z]+',
@@ -128,12 +128,12 @@ def regex_extract_all_groups(
         ['song']
         >>> regex_extract_all_groups('song by ', r'(.+) by (.*)', ignore_empty_matches=False)
         ['song', '']
-        >>> regex_extract_all_groups('foo123bar', r'([a-zA-Z]+)(\d+)([a-zA-Z]+)')
+        >>> regex_extract_all_groups('foo123bar', r'([a-zA-Z]+)(\\d+)([a-zA-Z]+)')
         ['foo', '123', 'bar']
         >>> regex_extract_all_groups('apple,orange,banana', r'(?:([^,]*),)+')
         ['orange']
         >>> import re
-        >>> regex_extract_all_groups('foo123bar', r'([a-z]+)(\d+)([a-z]+)', flags=re.IGNORECASE)
+        >>> regex_extract_all_groups('foo123bar', r'([a-z]+)(\\d+)([a-z]+)', flags=re.IGNORECASE)
         ['foo', '123', 'bar']
     """
     m = search(pattern, s, flags=flags)
@@ -157,21 +157,21 @@ def regexp_remove_many(s: str, *removals: Union[str, Pattern], flags: int = 0) -
         str: A new string with all occurrences of the given patterns removed.
 
     Examples:
-        >>> regexp_remove_many('The quick brown fox jumps over the lazy dog', 'brown', r'\s\w{3}\s')
+        >>> regexp_remove_many('The quick brown fox jumps over the lazy dog', 'brown', r'\\s\\w{3}\\s')
         'The quick jumps overlazy dog'
-        >>> regexp_remove_many('1 2 3 4 5', r'\d\s')
+        >>> regexp_remove_many('1 2 3 4 5', r'\\d\\s')
         '5'
         >>> regexp_remove_many('Hello, World!', r'[,!]')
         'Hello World'
-        >>> regexp_remove_many('i am single', r'\ssingle$')
+        >>> regexp_remove_many('i am single', r'\\ssingle$')
         'i am'
-        >>> regexp_remove_many('i am a single person', r'\ssingle$')
+        >>> regexp_remove_many('i am a single person', r'\\ssingle$')
         'i am a single person'
         >>> import re
         >>> regexp_remove_many(
         ...    'thang you [Explicit]',
-        ...    '[0-9]+\\.[0-9]+', '\\.\\.\\.', '\\s\\-\\s(.+)\\.com',
-        ...    '\\s\\(.*\\)$', '\\s\\[explicit\\]',
+        ...    r'[0-9]+\\.[0-9]+', r'\\.\\.\\.', r'\\s\\-\\s(.+)\\.com',
+        ...    r'\\s\\(.*\\)$', r'\\s\\[explicit\\]',
         ...    flags=re.IGNORECASE
         ... )
         'thang you'
@@ -207,7 +207,7 @@ def get_regex_match_group_indexes(
         {1, 2, 4}
         >>> get_regex_match_group_indexes(pattern, string, start_pos=8)
         {2, 4}
-        >>> pattern = r'(.+)\s\((zero)|(one)|(two)|(three)|(four)|(five)\)'
+        >>> pattern = r'(.+)\\s\\((zero)|(one)|(two)|(three)|(four)|(five)\\)'
         >>> string = 'number (one oh one two four)'
         >>> get_regex_match_group_indexes(pattern, string, start_group_index=1)
         {1, 2, 4}

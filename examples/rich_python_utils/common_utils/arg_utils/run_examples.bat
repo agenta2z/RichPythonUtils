@@ -25,7 +25,7 @@ REM Set PYTHONPATH
 set PYTHONPATH=src
 
 REM Get the examples directory
-set EXAMPLES_DIR=examples\science_python_utils\common_utils\arg_utils
+set EXAMPLES_DIR=examples\rich_python_utils\common_utils\arg_utils
 
 if "%1"=="" goto menu
 if "%1"=="basic" goto basic

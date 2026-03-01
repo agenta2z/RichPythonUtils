@@ -272,4 +272,4 @@ Download OAuth2 credentials from Google Cloud Console.
 
 ## Examples
 
-See `examples/science_python_utils/service_utils/email_queue/` for complete examples.
+See `examples/rich_python_utils/service_utils/email_queue/` for complete examples.

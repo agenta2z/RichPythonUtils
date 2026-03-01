@@ -156,7 +156,7 @@ pip install science-python-utils  # From PyPI
 ## Directory Structure
 
 ```
-examples/science_python_utils/
+examples/rich_python_utils/
 ├── common_objects/
 │   ├── resolve_path.py ✓
 │   └── example_*.py ✓

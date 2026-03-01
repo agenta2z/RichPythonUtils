@@ -543,9 +543,9 @@ python example_multiprocessing.py
 
 ## Related Resources
 
-- Implementation: [src/science_python_utils/service_utils/queue_service/storage_based_queue_service.py](../../../../../../src/science_python_utils/service_utils/queue_service/storage_based_queue_service.py)
-- Tests: [test/science_python_utils/service_utils/queue_service/test_storage_based_queue_service.py](../../../../../../test/science_python_utils/service_utils/queue_service/test_storage_based_queue_service.py)
-- OnStorageLists: [src/science_python_utils/io_utils/on_storage_lists.py](../../../../../../src/science_python_utils/io_utils/on_storage_lists.py)
+- Implementation: [src/rich_python_utils/service_utils/queue_service/storage_based_queue_service.py](../../../../../../src/rich_python_utils/service_utils/queue_service/storage_based_queue_service.py)
+- Tests: [test/rich_python_utils/service_utils/queue_service/test_storage_based_queue_service.py](../../../../../../test/rich_python_utils/service_utils/queue_service/test_storage_based_queue_service.py)
+- OnStorageLists: [src/rich_python_utils/io_utils/on_storage_lists.py](../../../../../../src/rich_python_utils/io_utils/on_storage_lists.py)
 
 ## License
 
