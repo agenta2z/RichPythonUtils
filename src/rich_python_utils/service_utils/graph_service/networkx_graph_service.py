@@ -55,6 +55,7 @@ from attr import attrs, attrib
 
 from .graph_node import GraphEdge, GraphNode
 from .graph_service_base import GraphServiceBase
+from rich_python_utils.service_utils.data_operation_record import DataOperationRecord
 
 _DEFAULT_NAMESPACE = "_default"
 
@@ -117,6 +118,8 @@ class NetworkxGraphService(GraphServiceBase):
                 node_type=node.node_type,
                 label=node.label,
                 properties=dict(node.properties),
+                history=[r.to_dict() for r in node.history],
+                is_active=node.is_active,
             )
 
     def get_node(self, node_id: str, namespace: Optional[str] = None) -> Optional[GraphNode]:
@@ -139,11 +142,18 @@ class NetworkxGraphService(GraphServiceBase):
             if node_id not in graph:
                 return None
             data = dict(graph.nodes[node_id])
+            history_raw = data.get("history", [])
+            history = [
+                DataOperationRecord.from_dict(r) if isinstance(r, dict) else r
+                for r in history_raw
+            ]
             return GraphNode(
                 node_id=node_id,
                 node_type=data["node_type"],
                 label=data.get("label", ""),
                 properties=data.get("properties", {}),
+                history=history,
+                is_active=data.get("is_active", True),
             )
 
     def remove_node(self, node_id: str, namespace: Optional[str] = None) -> bool:
@@ -209,6 +219,8 @@ class NetworkxGraphService(GraphServiceBase):
                 key=edge.edge_type,
                 edge_type=edge.edge_type,
                 properties=dict(edge.properties),
+                history=[r.to_dict() for r in edge.history],
+                is_active=edge.is_active,
             )
 
     def get_edges(
@@ -242,6 +254,20 @@ class NetworkxGraphService(GraphServiceBase):
 
             results = []
 
+            def _edge_from_data(src, tgt, key, data):
+                et = data.get("edge_type", key)
+                history_raw = data.get("history", [])
+                history = [
+                    DataOperationRecord.from_dict(r) if isinstance(r, dict) else r
+                    for r in history_raw
+                ]
+                return GraphEdge(
+                    source_id=src, target_id=tgt, edge_type=et,
+                    properties=data.get("properties", {}),
+                    history=history,
+                    is_active=data.get("is_active", True),
+                )
+
             # Collect outgoing edges
             if direction in ("outgoing", "both"):
                 for source, target, key, data in graph.out_edges(
@@ -250,14 +276,7 @@ class NetworkxGraphService(GraphServiceBase):
                     et = data.get("edge_type", key)
                     if edge_type is not None and et != edge_type:
                         continue
-                    results.append(
-                        GraphEdge(
-                            source_id=source,
-                            target_id=target,
-                            edge_type=et,
-                            properties=data.get("properties", {}),
-                        )
-                    )
+                    results.append(_edge_from_data(source, target, key, data))
 
             # Collect incoming edges
             if direction in ("incoming", "both"):
@@ -267,14 +286,7 @@ class NetworkxGraphService(GraphServiceBase):
                     et = data.get("edge_type", key)
                     if edge_type is not None and et != edge_type:
                         continue
-                    results.append(
-                        GraphEdge(
-                            source_id=source,
-                            target_id=target,
-                            edge_type=et,
-                            properties=data.get("properties", {}),
-                        )
-                    )
+                    results.append(_edge_from_data(source, target, key, data))
 
             return results
 
@@ -371,11 +383,18 @@ class NetworkxGraphService(GraphServiceBase):
 
                     # Reconstruct GraphNode from graph node data
                     node_data = dict(graph.nodes[target_id])
+                    n_history_raw = node_data.get("history", [])
+                    n_history = [
+                        DataOperationRecord.from_dict(r) if isinstance(r, dict) else r
+                        for r in n_history_raw
+                    ]
                     neighbor_node = GraphNode(
                         node_id=target_id,
                         node_type=node_data["node_type"],
                         label=node_data.get("label", ""),
                         properties=node_data.get("properties", {}),
+                        history=n_history,
+                        is_active=node_data.get("is_active", True),
                     )
                     result.append((neighbor_node, neighbor_depth))
                     queue.append((target_id, neighbor_depth))
@@ -407,12 +426,19 @@ class NetworkxGraphService(GraphServiceBase):
             for nid, data in graph.nodes(data=True):
                 if node_type is not None and data.get("node_type") != node_type:
                     continue
+                l_history_raw = data.get("history", [])
+                l_history = [
+                    DataOperationRecord.from_dict(r) if isinstance(r, dict) else r
+                    for r in l_history_raw
+                ]
                 result.append(
                     GraphNode(
                         node_id=nid,
                         node_type=data["node_type"],
                         label=data.get("label", ""),
                         properties=data.get("properties", {}),
+                        history=l_history,
+                        is_active=data.get("is_active", True),
                     )
                 )
             return result

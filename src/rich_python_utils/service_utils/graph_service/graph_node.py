@@ -8,11 +8,12 @@ compatibility with BFS/DFS traversal algorithms.
 GraphEdge represents a directed, typed edge between two graph nodes.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from attr import attrs, attrib
 
 from rich_python_utils.algorithms.graph.node import Node
+from rich_python_utils.service_utils.data_operation_record import DataOperationRecord
 
 
 @attrs(slots=False, eq=False, hash=False)
@@ -28,12 +29,16 @@ class GraphNode(Node):
         node_type: The type/category of this node.
         label: Optional human-readable label for the node.
         properties: Arbitrary key-value properties associated with the node.
+        history: List of DataOperationRecord tracking all operations on this node.
+        is_active: Whether this node is active (False = soft-deleted).
     """
 
     node_id: str = attrib(kw_only=True)
     node_type: str = attrib(kw_only=True)
     label: str = attrib(default="", kw_only=True)
     properties: Dict[str, Any] = attrib(factory=dict, kw_only=True)
+    history: List[DataOperationRecord] = attrib(factory=list, kw_only=True)
+    is_active: bool = attrib(default=True, kw_only=True)
 
     def __attrs_post_init__(self):
         super().__attrs_post_init__()
@@ -49,12 +54,17 @@ class GraphNode(Node):
         Returns:
             Dictionary containing node_id, node_type, label, and properties.
         """
-        return {
+        d = {
             "node_id": self.node_id,
             "node_type": self.node_type,
             "label": self.label,
             "properties": dict(self.properties),
         }
+        if self.history:
+            d["history"] = [r.to_dict() for r in self.history]
+        if not self.is_active:
+            d["is_active"] = self.is_active
+        return d
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "GraphNode":
@@ -73,6 +83,11 @@ class GraphNode(Node):
             node_type=data["node_type"],
             label=data.get("label", ""),
             properties=data.get("properties", {}),
+            history=[
+                DataOperationRecord.from_dict(r)
+                for r in data.get("history", [])
+            ],
+            is_active=data.get("is_active", True),
         )
 
 
@@ -85,12 +100,16 @@ class GraphEdge:
         target_id: The node_id of the target (destination) node.
         edge_type: The type/category of this edge relationship.
         properties: Arbitrary key-value properties associated with the edge.
+        history: List of DataOperationRecord tracking all operations on this edge.
+        is_active: Whether this edge is active (False = soft-deleted).
     """
 
     source_id: str = attrib()
     target_id: str = attrib()
     edge_type: str = attrib()
     properties: Dict[str, Any] = attrib(factory=dict)
+    history: List[DataOperationRecord] = attrib(factory=list)
+    is_active: bool = attrib(default=True)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize the edge to a dictionary.
@@ -98,12 +117,17 @@ class GraphEdge:
         Returns:
             Dictionary containing all edge fields.
         """
-        return {
+        d = {
             "source_id": self.source_id,
             "target_id": self.target_id,
             "edge_type": self.edge_type,
             "properties": dict(self.properties),
         }
+        if self.history:
+            d["history"] = [r.to_dict() for r in self.history]
+        if not self.is_active:
+            d["is_active"] = self.is_active
+        return d
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "GraphEdge":
@@ -122,4 +146,9 @@ class GraphEdge:
             target_id=data["target_id"],
             edge_type=data["edge_type"],
             properties=data.get("properties", {}),
+            history=[
+                DataOperationRecord.from_dict(r)
+                for r in data.get("history", [])
+            ],
+            is_active=data.get("is_active", True),
         )

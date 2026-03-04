@@ -3,14 +3,16 @@ File Retrieval Service
 
 File-based indexed document retrieval service using JSON files on disk.
 Each document is stored as a separate JSON file at:
-    {base_dir}/{namespace}/{encoded_doc_id}.json
+    {base_dir}/{namespace_path}/{encoded_doc_id}.json
+
+Namespace paths use hierarchical directories — a namespace like
+``user:tony-chen`` becomes the nested path ``user/tony-chen/``.
 
 Supports BM25-based text search (via optional ``rank-bm25`` library)
 or a term-overlap fallback when rank-bm25 is not installed. Both modes
 normalize scores to [0.0, 1.0].
 
-Doc IDs are percent-encoded to produce safe filenames, using the same
-encoding scheme as FileKeyValueService:
+Doc IDs are percent-encoded to produce safe filenames:
     '%' → '%25'  (first, to avoid double-encoding)
     ':' → '%3A'
     '/' → '%2F'
@@ -74,6 +76,50 @@ try:
     _HAS_BM25 = True
 except ImportError:
     _HAS_BM25 = False
+
+
+# ── Namespace encoding (hierarchical directories) ───────────────────────
+
+
+def _encode_namespace(namespace: str) -> str:
+    """Encode a namespace for use as a directory path.
+
+    Converts ':' to os.sep so that ``user:tony-chen`` becomes a nested
+    directory ``user/tony-chen`` instead of the flat ``user%3Atony-chen``.
+
+    Other unsafe characters are still percent-encoded for filesystem safety.
+
+    Args:
+        namespace: The raw namespace string (typically an entity_id).
+
+    Returns:
+        A filesystem-safe path component (may contain os.sep for nesting).
+    """
+    return (
+        namespace
+        .replace("%", "%25")
+        .replace("\\", "%5C")
+        .replace(":", os.sep)
+        # '/' left as-is — it creates nested dirs (desired behavior)
+    )
+
+
+def _decode_namespace(encoded: str) -> str:
+    """Reverse of _encode_namespace. Reconstructs the original namespace
+    from a relative directory path.
+
+    Args:
+        encoded: The encoded namespace path (may contain os.sep).
+
+    Returns:
+        The original namespace string with ':' restored.
+    """
+    return (
+        encoded
+        .replace(os.sep, ":")
+        .replace("%5C", "\\")
+        .replace("%25", "%")
+    )
 
 
 # ── Percent-encoding helpers (same scheme as FileKeyValueService) ────────
@@ -186,8 +232,11 @@ class FileRetrievalService(RetrievalServiceBase):
         return namespace if namespace is not None else _DEFAULT_NAMESPACE
 
     def _namespace_dir(self, namespace: str) -> str:
-        """Return the directory path for a namespace."""
-        return os.path.join(self.base_dir, _encode_doc_id(namespace))
+        """Return the directory path for a namespace.
+
+        Uses hierarchical encoding: ``user:tony-chen`` → ``user/tony-chen/``.
+        """
+        return os.path.join(self.base_dir, _encode_namespace(namespace))
 
     def _doc_path(self, namespace: str, doc_id: str) -> str:
         """Return the file path for a document within a namespace."""
@@ -557,9 +606,14 @@ class FileRetrievalService(RetrievalServiceBase):
                 os.remove(os.path.join(ns_dir, filename))
                 count += 1
 
-        # Clean up empty namespace directory
-        if os.path.isdir(ns_dir) and not os.listdir(ns_dir):
-            os.rmdir(ns_dir)
+        # Clean up empty namespace directory (and empty parents up to base_dir)
+        current = ns_dir
+        while current != self.base_dir:
+            if os.path.isdir(current) and not os.listdir(current):
+                os.rmdir(current)
+                current = os.path.dirname(current)
+            else:
+                break
 
         return count
 
@@ -567,7 +621,9 @@ class FileRetrievalService(RetrievalServiceBase):
         """
         List all namespaces that contain documents.
 
-        Scans subdirectories of base_dir that contain at least one JSON file.
+        Walks the directory tree under base_dir to find leaf directories
+        that contain JSON files. Supports both flat namespaces (e.g.,
+        ``_default/``) and hierarchical namespaces (e.g., ``user/tony-chen/``).
 
         Returns:
             List of namespace strings.
@@ -576,11 +632,10 @@ class FileRetrievalService(RetrievalServiceBase):
             return []
 
         result = []
-        for entry in os.listdir(self.base_dir):
-            entry_path = os.path.join(self.base_dir, entry)
-            if os.path.isdir(entry_path):
-                if any(f.endswith(".json") for f in os.listdir(entry_path)):
-                    result.append(_decode_doc_id(entry))
+        for dirpath, _dirnames, filenames in os.walk(self.base_dir):
+            if any(f.endswith(".json") for f in filenames):
+                rel = os.path.relpath(dirpath, self.base_dir)
+                result.append(_decode_namespace(rel))
         return result
 
     def get_stats(self, namespace: Optional[str] = None) -> Dict[str, Any]:
