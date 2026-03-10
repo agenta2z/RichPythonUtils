@@ -61,6 +61,7 @@ from attr import attrs, attrib
 
 from .graph_node import GraphEdge, GraphNode
 from .graph_service_base import GraphServiceBase
+from rich_python_utils.nlp_utils.semantic_search import tokenize, term_overlap_search
 
 logger = logging.getLogger(__name__)
 
@@ -707,6 +708,79 @@ class FileGraphService(GraphServiceBase):
             if has_nodes or has_edges:
                 result.append(entry)
         return result
+
+    # ── Search operations ──
+
+    @staticmethod
+    def _build_node_search_text(node: GraphNode) -> str:
+        """Build searchable text from a graph node.
+
+        Concatenates node_type, label, and property values.  Mirrors the
+        ``default_node_text_builder`` pattern used by ``SemanticGraphStore``.
+        Skips the ``embedding_text`` property key.
+
+        Args:
+            node: The GraphNode to convert to searchable text.
+
+        Returns:
+            A space-joined string of non-empty parts.
+        """
+        parts = [node.node_type, node.label]
+        for key in sorted(node.properties.keys()):
+            val = node.properties[key]
+            if key == "embedding_text":
+                continue
+            if isinstance(val, str):
+                parts.append(val)
+            else:
+                parts.append(f"{key}: {val}")
+        return " ".join(p for p in parts if p)
+
+    @property
+    def supports_search(self) -> bool:
+        """FileGraphService supports term-overlap search."""
+        return True
+
+    def search_nodes(
+        self,
+        query: str,
+        top_k: int = 5,
+        node_type: Optional[str] = None,
+        namespace: Optional[str] = None,
+    ) -> List[Tuple[GraphNode, float]]:
+        """Search nodes by term-overlap scoring.
+
+        Loads all nodes (optionally filtered by ``node_type``), builds
+        searchable text for each, and delegates scoring to the shared
+        ``term_overlap_search`` utility.
+
+        Args:
+            query: The search query string.  Empty/whitespace returns ``[]``.
+            top_k: Maximum number of results to return.
+            node_type: Optional filter to return only nodes of this type.
+            namespace: Optional namespace to scope the search.
+
+        Returns:
+            List of ``(GraphNode, score)`` tuples ordered by descending
+            score, then by ``node_id`` for determinism.  At most ``top_k``
+            results.
+        """
+        if not query or not query.strip():
+            return []
+        query_tokens = tokenize(query, stem=True)
+        if not query_tokens:
+            return []
+        nodes = self.list_nodes(node_type=node_type, namespace=namespace)
+        if not nodes:
+            return []
+        return term_overlap_search(
+            items=nodes,
+            query_tokens=query_tokens,
+            text_fn=self._build_node_search_text,
+            id_fn=lambda n: n.node_id,
+            top_k=top_k,
+            stem=True,
+        )
 
     # ── Context manager protocol ──
 

@@ -18,8 +18,8 @@ from rich_python_utils.service_utils.retrieval_service.file_retrieval_service im
     FileRetrievalService,
     _encode_doc_id,
     _decode_doc_id,
-    _tokenize,
 )
+from rich_python_utils.nlp_utils.semantic_search import tokenize as _tokenize
 
 
 class TestFileRetrievalServiceAdd:

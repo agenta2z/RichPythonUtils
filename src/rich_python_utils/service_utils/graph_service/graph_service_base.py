@@ -304,3 +304,41 @@ class GraphServiceBase(ABC):
     def __repr__(self) -> str:
         """String representation of the service."""
         pass
+
+    # ── Optional search support ──
+
+    @property
+    def supports_search(self) -> bool:
+        """Whether this service supports ``search_nodes()``.
+
+        Subclasses that implement ``search_nodes()`` should override this
+        to return ``True``.  Default is ``False``.
+        """
+        return False
+
+    def search_nodes(
+        self,
+        query: str,
+        top_k: int = 5,
+        node_type: Optional[str] = None,
+        namespace: Optional[str] = None,
+    ) -> List[Tuple[GraphNode, float]]:
+        """Search nodes by query text.
+
+        Default raises ``NotImplementedError``.  Subclasses that support
+        search should override this method and set ``supports_search``
+        to return ``True``.
+
+        Args:
+            query: The search query string.
+            top_k: Maximum number of results to return.
+            node_type: Optional filter to return only nodes of this type.
+            namespace: Optional namespace to scope the search.
+
+        Returns:
+            List of ``(GraphNode, score)`` tuples ordered by descending
+            score.  Scores are in [0.0, 1.0].
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support search_nodes"
+        )

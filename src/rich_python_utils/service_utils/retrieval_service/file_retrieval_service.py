@@ -173,27 +173,10 @@ def _decode_doc_id(encoded: str) -> str:
     )
 
 
-# ── Tokenization ────────────────────────────────────────────────────────
-
-
-def _tokenize(text: str) -> List[str]:
-    """Tokenize text into lowercase words.
-
-    Splits on whitespace and strips non-alphanumeric characters from each
-    token. Empty tokens are discarded.
-
-    Args:
-        text: The text to tokenize.
-
-    Returns:
-        A list of lowercase token strings.
-    """
-    tokens = []
-    for word in text.lower().split():
-        cleaned = "".join(ch for ch in word if ch.isalnum())
-        if cleaned:
-            tokens.append(cleaned)
-    return tokens
+from rich_python_utils.nlp_utils.semantic_search import (
+    tokenize,
+    term_overlap_search,
+)
 
 
 # ── FileRetrievalService ────────────────────────────────────────────────
@@ -331,7 +314,7 @@ class FileRetrievalService(RetrievalServiceBase):
         Returns:
             Sorted list of (Document, normalized_score) tuples.
         """
-        corpus = [_tokenize(self._doc_searchable_text(d)) for d in docs]
+        corpus = [tokenize(self._doc_searchable_text(d), stem=True) for d in docs]
         bm25 = BM25Okapi(corpus)
         raw_scores = bm25.get_scores(query_tokens)
 
@@ -355,9 +338,7 @@ class FileRetrievalService(RetrievalServiceBase):
     ) -> List[Tuple[Document, float]]:
         """Score documents using term overlap between query and document text.
 
-        score = |query_terms ∩ doc_terms| / |query_terms|
-
-        This naturally produces scores in [0.0, 1.0].
+        Delegates to the shared ``term_overlap_search`` utility.
 
         Args:
             docs: Pre-filtered candidate documents.
@@ -367,20 +348,14 @@ class FileRetrievalService(RetrievalServiceBase):
         Returns:
             Sorted list of (Document, score) tuples.
         """
-        query_terms = set(query_tokens)
-        num_query_terms = len(query_terms)
-
-        scored = []
-        for doc in docs:
-            doc_terms = set(_tokenize(self._doc_searchable_text(doc)))
-            overlap = len(query_terms & doc_terms)
-            score = overlap / num_query_terms if num_query_terms > 0 else 0.0
-            if score > 0.0:
-                scored.append((doc, score))
-
-        # Sort by score descending, then by doc_id for determinism
-        scored.sort(key=lambda x: (-x[1], x[0].doc_id))
-        return scored[:top_k]
+        return term_overlap_search(
+            items=docs,
+            query_tokens=query_tokens,
+            text_fn=self._doc_searchable_text,
+            id_fn=lambda doc: doc.doc_id,
+            top_k=top_k,
+            stem=True,
+        )
 
     # ── Public API ───────────────────────────────────────────────────
 
@@ -528,7 +503,7 @@ class FileRetrievalService(RetrievalServiceBase):
         if not docs:
             return []
 
-        query_tokens = _tokenize(query)
+        query_tokens = tokenize(query, stem=True)
         if not query_tokens:
             return []
 
