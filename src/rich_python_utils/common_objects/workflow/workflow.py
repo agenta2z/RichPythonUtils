@@ -1,6 +1,7 @@
 import glob
 import os
 import pickle
+import re
 import shutil
 from abc import ABC
 from enum import Enum
@@ -417,8 +418,13 @@ class Workflow(WorkNodeBase, ABC):
                         pattern = os.path.join(base_dir, f"{base_name_parts[0]}___seq*")
                         if len(base_name_parts) > 1:
                             pattern += f".{base_name_parts[1]}"
-                        matches = sorted(glob.glob(pattern))
+                        matches = glob.glob(pattern)
                         if matches:
+                            matches.sort(
+                                key=lambda p: int(
+                                    re.search(r'___seq(\d+)', p).group(1)
+                                )
+                            )
                             step_result_path = matches[-1]
                             exists_step_result_or_preloaded_step_result = True
 
@@ -678,8 +684,13 @@ class Workflow(WorkNodeBase, ABC):
                         pattern = os.path.join(base_dir, f"{base_name_parts[0]}___seq*")
                         if len(base_name_parts) > 1:
                             pattern += f".{base_name_parts[1]}"
-                        matches = sorted(glob.glob(pattern))
+                        matches = glob.glob(pattern)
                         if matches:
+                            matches.sort(
+                                key=lambda p: int(
+                                    re.search(r'___seq(\d+)', p).group(1)
+                                )
+                            )
                             step_result_path = matches[-1]
                             exists_step_result_or_preloaded_step_result = True
 
