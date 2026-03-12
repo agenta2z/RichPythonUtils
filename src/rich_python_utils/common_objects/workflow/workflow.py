@@ -1,8 +1,10 @@
+import glob
 import os
+import pickle
 import shutil
 from abc import ABC
 from enum import Enum
-from typing import Any, Dict, Optional, Sequence, Callable
+from typing import Any, Dict, Optional, Sequence, Callable, Union
 
 from attr import attrs, attrib
 
@@ -190,6 +192,77 @@ class Workflow(WorkNodeBase, ABC):
                 return idx
         raise ValueError(f"Loop target step '{target}' not found")
 
+    # ------------------------------------------------------------------
+    # Loop + resume checkpoint helpers
+    # ------------------------------------------------------------------
+
+    def _has_loop_steps(self) -> bool:
+        """Detect if any step uses loop_back_to."""
+        return any(
+            getattr(s, 'loop_back_to', None) is not None
+            for s in (self._steps or ())
+        )
+
+    @staticmethod
+    def _make_seq_result_id(step_name_or_index, exec_seq) -> str:
+        """Return a unique result ID with a sequence number suffix."""
+        return f"{step_name_or_index}___seq{exec_seq}"
+
+    def _save_checkpoint(self, checkpoint_dict, *args, **kwargs):
+        """Save a workflow checkpoint, delegating to _save_result for subclass compat."""
+        checkpoint_path = self._get_result_path("__wf_checkpoint__", *args, **kwargs)
+        self._save_result(checkpoint_dict, output_path=checkpoint_path)
+
+    def _try_load_checkpoint(self, *args, **kwargs) -> Optional[dict]:
+        """Try loading a checkpoint. Returns None on any failure (falls back to backward scan)."""
+        try:
+            ckpt_id = "__wf_checkpoint__"
+            ckpt_path = self._get_result_path(ckpt_id, *args, **kwargs)
+            exists = self._exists_result(result_id=ckpt_id, result_path=ckpt_path)
+            if not exists:
+                return None
+            ckpt = self._load_result(
+                result_id=ckpt_id,
+                result_path_or_preloaded_result=(
+                    ckpt_path if isinstance(exists, bool) else exists
+                ),
+            )
+            if not isinstance(ckpt, dict) or "next_step_index" not in ckpt:
+                return None
+            return ckpt
+        except Exception:
+            return None
+
+    def _save_loop_checkpoint(self, step_index, next_step_index,
+                              last_saved_result_id, state, *args, **kwargs):
+        """Save a loop checkpoint after the loop decision is resolved.
+
+        Shared by both _run() and _arun() to avoid duplication.
+        """
+        # Validate state picklability on first checkpoint only.
+        # _save_checkpoint → _save_result will pickle the whole dict anyway;
+        # this pre-check gives a clear error message.
+        if not getattr(self, '_state_picklability_verified', False):
+            try:
+                pickle.dumps(state)
+            except Exception as e:
+                raise TypeError(
+                    f"Workflow state is not picklable and cannot be checkpointed "
+                    f"for loop resume. Either make state picklable or set "
+                    f"enable_result_save=False. Original error: {e}"
+                ) from e
+            self._state_picklability_verified = True
+
+        self._save_checkpoint({
+            "version": 1,
+            "exec_seq": self._exec_seq,
+            "step_index": step_index,
+            "result_id": last_saved_result_id,
+            "next_step_index": next_step_index,
+            "loop_counts": dict(self._loop_counts),
+            "state": state,
+        }, *args, **kwargs)
+
     def _get_step_identifier(self, step: Callable, index: int) -> Dict[str, Any]:
         """Get serializable identifier for a step callable.
         
@@ -273,12 +346,18 @@ class Workflow(WorkNodeBase, ABC):
         if not self._steps:
             return
 
+        # Detect if any step uses loop_back_to — needed by both resume and save blocks.
+        _has_loops = self._has_loop_steps()
+
         # Determine the starting step index for execution. By default, start from -1,
         # which means no steps have been completed and we start from the first step (index 0).
         # If resuming is enabled, we try to find the latest completed step result to resume from.
         start_step_i = -1
         step_result = None
         prev_step_result = None
+        _checkpoint = None
+        _checkpoint_state = None
+        _checkpoint_next_i = None
 
         # Check if we should resume from a previously saved step result.
         # resume_with_saved_results can be:
@@ -286,63 +365,109 @@ class Workflow(WorkNodeBase, ABC):
         #   - True: Resume from the last saved step result.
         #   - int: Resume from the specific step index given.
         if self.resume_with_saved_results is not False:
-            # We iterate backward from the given start index (or the last step)
-            # looking for an existing saved result. The first found result sets
-            # our start_step_i to that step index.
-            saved_step_results_back_search_start_index = (
-                self.resume_with_saved_results
-                if isinstance(self.resume_with_saved_results, int)
-                else len(self._steps) - 1
-            )
+            # Try checkpoint-based resume for auto-resume with loops
+            if _has_loops and self.resume_with_saved_results is True:
+                _checkpoint = self._try_load_checkpoint(*args, **kwargs)
 
-            for i in range(saved_step_results_back_search_start_index, -1, -1):
-                result_id = self._get_step_name(self._steps[i], i) or i
-                step_result_path = self._get_result_path(result_id, *args, **kwargs)
-                exists_step_result_or_preloaded_step_result = self._exists_result(
-                    result_id=result_id, result_path=step_result_path
-                )
-                if (
-                        exists_step_result_or_preloaded_step_result is not None and
-                        exists_step_result_or_preloaded_step_result is not False
-                ):
-                    # If a result file (or preloaded result) is found, log this and set start_step_i to i.
-                    self.log_info((f'step {i} result exists', True))
-                    start_step_i = i
-                    break
-                else:
-                    # No result found for this step, log the absence.
-                    self.log_info((f'step {i} result exists', False))
+            if _checkpoint is not None:
+                # --- Checkpoint-based resume ---
+                try:
+                    _ckpt_result_id = _checkpoint["result_id"]
+                    step_result = self._load_result(
+                        result_id=_ckpt_result_id,
+                        result_path_or_preloaded_result=self._get_result_path(
+                            _ckpt_result_id, *args, **kwargs
+                        ),
+                    )
+                except Exception:
+                    self.log_warning(
+                        "Checkpoint result file not found, falling back to backward scan"
+                    )
+                    _checkpoint = None
 
-        # If start_step_i is not -1, it means we found a previous step's result to resume from.
-        # Load that result into 'step_result' so that we can continue from the next step.
-        if start_step_i != -1:
-            step_result = self._load_result(
-                result_id=start_step_i,
-                result_path_or_preloaded_result=(
-                    step_result_path if
-                    isinstance(exists_step_result_or_preloaded_step_result, bool)
-                    else exists_step_result_or_preloaded_step_result
+            if _checkpoint is not None:
+                start_step_i = _checkpoint["step_index"]
+                self._loop_counts = _checkpoint.get("loop_counts", {})
+                self._exec_seq = _checkpoint.get("exec_seq", 0)
+                _checkpoint_state = _checkpoint.get("state")
+                _checkpoint_next_i = _checkpoint["next_step_index"]
+            else:
+                # --- Existing backward scan (unchanged) ---
+                saved_step_results_back_search_start_index = (
+                    self.resume_with_saved_results
+                    if isinstance(self.resume_with_saved_results, int)
+                    else len(self._steps) - 1
                 )
-            )
+
+                for i in range(saved_step_results_back_search_start_index, -1, -1):
+                    result_id = self._get_step_name(self._steps[i], i) or i
+                    step_result_path = self._get_result_path(result_id, *args, **kwargs)
+                    exists_step_result_or_preloaded_step_result = self._exists_result(
+                        result_id=result_id, result_path=step_result_path
+                    )
+
+                    # Glob fallback for ___seqN files when loops are active
+                    if _has_loops and not (
+                        exists_step_result_or_preloaded_step_result is not None
+                        and exists_step_result_or_preloaded_step_result is not False
+                    ):
+                        base_path = step_result_path
+                        base_dir = os.path.dirname(base_path)
+                        base_name_parts = os.path.basename(base_path).rsplit('.', 1)
+                        pattern = os.path.join(base_dir, f"{base_name_parts[0]}___seq*")
+                        if len(base_name_parts) > 1:
+                            pattern += f".{base_name_parts[1]}"
+                        matches = sorted(glob.glob(pattern))
+                        if matches:
+                            step_result_path = matches[-1]
+                            exists_step_result_or_preloaded_step_result = True
+
+                    if (
+                            exists_step_result_or_preloaded_step_result is not None and
+                            exists_step_result_or_preloaded_step_result is not False
+                    ):
+                        self.log_info((f'step {i} result exists', True))
+                        start_step_i = i
+                        break
+                    else:
+                        self.log_info((f'step {i} result exists', False))
+
+                # Load the found result
+                if start_step_i != -1:
+                    step_result = self._load_result(
+                        result_id=start_step_i,
+                        result_path_or_preloaded_result=(
+                            step_result_path if
+                            isinstance(exists_step_result_or_preloaded_step_result, bool)
+                            else exists_step_result_or_preloaded_step_result
+                        )
+                    )
 
         # --- State initialization ---
-        # Detect if any step uses state features.  When no step declares
-        # update_state or receives_state the state stays None and all
-        # state code-paths are no-ops (full backward compatibility).
         _uses_state = any(
             getattr(s, 'update_state', None) is not None
             or getattr(s, 'receives_state', False)
             for s in self._steps
         )
-        state = self._init_state() if _uses_state else None
+        if _checkpoint_state is not None:
+            state = _checkpoint_state
+        else:
+            state = self._init_state() if _uses_state else None
         self._state = state
 
-        # Per-run loop tracking (reset each run, not an attrs attribute).
-        self._loop_counts = {}
+        # Initialize loop-resume tracking variables.
+        # These must be set BEFORE the while loop to avoid NameError.
+        if _checkpoint is None:
+            self._exec_seq = 0
+            self._loop_counts = {}
+        self._state_picklability_verified = False
+        _last_saved_result_id = None
 
-        # Now proceed to execute the steps from start_step_i+1 onward.
-        # Uses a while loop (instead of for) so loop_back_to can rewind i.
-        i = start_step_i + 1
+        # Determine starting step index.
+        if _checkpoint_next_i is not None:
+            i = _checkpoint_next_i
+        else:
+            i = start_step_i + 1
 
         try:  # OUTER try: catches WorkflowAborted → _handle_abort
             while i < len(self._steps):
@@ -362,21 +487,12 @@ class Workflow(WorkNodeBase, ABC):
                         step_result = this_step(*args, **kwargs)
 
                 except Exception as err:
-                    # Per-step error handler.  Steps WITH an error_handler
-                    # attribute delegate to it; steps WITHOUT use the
-                    # default path (OnError save + re-raise).
                     error_handler = getattr(this_step, 'error_handler', None)
                     if error_handler is not None:
-                        # Error handler outcomes:
-                        #   1. RETURN a value → becomes step_result, execution continues
-                        #   2. RAISE (e.g. WorkflowAborted) → propagates to outer try
                         step_result = error_handler(
                             err, step_result, state, step_name, i
                         )
-                        # If we reach here the handler returned — continue
-                        # to post-process below.
                     else:
-                        # Default path: preserves existing OnError save + re-raise.
                         result_save_on_error_enabled = (
                             i > 0
                             and (not isinstance(self.enable_result_save, bool))
@@ -425,12 +541,20 @@ class Workflow(WorkNodeBase, ABC):
                 )
                 if (enable_result_save is True
                         or enable_result_save == StepResultSaveOptions.Always):
+                    if _has_loops:
+                        self._exec_seq += 1
+                        _current_result_id = self._make_seq_result_id(
+                            step_name or i, self._exec_seq
+                        )
+                    else:
+                        _current_result_id = step_name or i
                     self._save_result(
                         step_result,
                         output_path=self._get_result_path(
-                            step_name or i, *args, **kwargs
+                            _current_result_id, *args, **kwargs
                         ),
                     )
+                    _last_saved_result_id = _current_result_id
 
                 # Loop check — only evaluated when the step has loop_back_to.
                 loop_back_to = getattr(this_step, 'loop_back_to', None)
@@ -448,9 +572,16 @@ class Workflow(WorkNodeBase, ABC):
                         count = self._loop_counts.get(i, 0)
                         if count < max_iters:
                             self._loop_counts[i] = count + 1
-                            i = self._resolve_step_index(
+                            target_i = self._resolve_step_index(
                                 loop_back_to, self._steps
                             )
+                            # Checkpoint: looping back
+                            if _has_loops and _last_saved_result_id is not None:
+                                self._save_loop_checkpoint(
+                                    i, target_i, _last_saved_result_id,
+                                    state, *args, **kwargs
+                                )
+                            i = target_i
                             continue  # jump back, skip _on_step_complete
                         else:
                             # Loop exhausted — invoke handler if present.
@@ -465,11 +596,16 @@ class Workflow(WorkNodeBase, ABC):
                     step_result, step_name, i, state, *args, **kwargs
                 )
 
+                # Checkpoint: advancing to next step
+                if _has_loops and _last_saved_result_id is not None:
+                    self._save_loop_checkpoint(
+                        i, i + 1, _last_saved_result_id,
+                        state, *args, **kwargs
+                    )
+
                 i += 1
 
         except WorkflowAborted as exc:
-            # Any WorkflowAborted raised by error_handler,
-            # on_loop_exhausted, or _on_step_complete is caught here.
             return self._handle_abort(exc, step_result, state)
 
         # After completing all steps, return the final result of the last step.
@@ -480,76 +616,118 @@ class Workflow(WorkNodeBase, ABC):
         if not self._steps:
             return
 
-        # Determine the starting step index for execution. By default, start from -1,
-        # which means no steps have been completed and we start from the first step (index 0).
-        # If resuming is enabled, we try to find the latest completed step result to resume from.
+        # Detect if any step uses loop_back_to — needed by both resume and save blocks.
+        _has_loops = self._has_loop_steps()
+
         start_step_i = -1
         step_result = None
         prev_step_result = None
+        _checkpoint = None
+        _checkpoint_state = None
+        _checkpoint_next_i = None
 
-        # Check if we should resume from a previously saved step result.
-        # resume_with_saved_results can be:
-        #   - False: Do not resume, run from the beginning.
-        #   - True: Resume from the last saved step result.
-        #   - int: Resume from the specific step index given.
         if self.resume_with_saved_results is not False:
-            # We iterate backward from the given start index (or the last step)
-            # looking for an existing saved result. The first found result sets
-            # our start_step_i to that step index.
-            saved_step_results_back_search_start_index = (
-                self.resume_with_saved_results
-                if isinstance(self.resume_with_saved_results, int)
-                else len(self._steps) - 1
-            )
+            # Try checkpoint-based resume for auto-resume with loops
+            if _has_loops and self.resume_with_saved_results is True:
+                _checkpoint = self._try_load_checkpoint(*args, **kwargs)
 
-            for i in range(saved_step_results_back_search_start_index, -1, -1):
-                result_id = self._get_step_name(self._steps[i], i) or i
-                step_result_path = self._get_result_path(result_id, *args, **kwargs)
-                exists_step_result_or_preloaded_step_result = self._exists_result(
-                    result_id=result_id, result_path=step_result_path
-                )
-                if (
-                        exists_step_result_or_preloaded_step_result is not None and
-                        exists_step_result_or_preloaded_step_result is not False
-                ):
-                    # If a result file (or preloaded result) is found, log this and set start_step_i to i.
-                    self.log_info((f'step {i} result exists', True))
-                    start_step_i = i
-                    break
-                else:
-                    # No result found for this step, log the absence.
-                    self.log_info((f'step {i} result exists', False))
+            if _checkpoint is not None:
+                try:
+                    _ckpt_result_id = _checkpoint["result_id"]
+                    step_result = self._load_result(
+                        result_id=_ckpt_result_id,
+                        result_path_or_preloaded_result=self._get_result_path(
+                            _ckpt_result_id, *args, **kwargs
+                        ),
+                    )
+                except Exception:
+                    self.log_warning(
+                        "Checkpoint result file not found, falling back to backward scan"
+                    )
+                    _checkpoint = None
 
-        # If start_step_i is not -1, it means we found a previous step's result to resume from.
-        # Load that result into 'step_result' so that we can continue from the next step.
-        if start_step_i != -1:
-            step_result = self._load_result(
-                result_id=start_step_i,
-                result_path_or_preloaded_result=(
-                    step_result_path if
-                    isinstance(exists_step_result_or_preloaded_step_result, bool)
-                    else exists_step_result_or_preloaded_step_result
+            if _checkpoint is not None:
+                start_step_i = _checkpoint["step_index"]
+                self._loop_counts = _checkpoint.get("loop_counts", {})
+                self._exec_seq = _checkpoint.get("exec_seq", 0)
+                _checkpoint_state = _checkpoint.get("state")
+                _checkpoint_next_i = _checkpoint["next_step_index"]
+            else:
+                # --- Existing backward scan (unchanged) ---
+                saved_step_results_back_search_start_index = (
+                    self.resume_with_saved_results
+                    if isinstance(self.resume_with_saved_results, int)
+                    else len(self._steps) - 1
                 )
-            )
+
+                for i in range(saved_step_results_back_search_start_index, -1, -1):
+                    result_id = self._get_step_name(self._steps[i], i) or i
+                    step_result_path = self._get_result_path(result_id, *args, **kwargs)
+                    exists_step_result_or_preloaded_step_result = self._exists_result(
+                        result_id=result_id, result_path=step_result_path
+                    )
+
+                    # Glob fallback for ___seqN files when loops are active
+                    if _has_loops and not (
+                        exists_step_result_or_preloaded_step_result is not None
+                        and exists_step_result_or_preloaded_step_result is not False
+                    ):
+                        base_path = step_result_path
+                        base_dir = os.path.dirname(base_path)
+                        base_name_parts = os.path.basename(base_path).rsplit('.', 1)
+                        pattern = os.path.join(base_dir, f"{base_name_parts[0]}___seq*")
+                        if len(base_name_parts) > 1:
+                            pattern += f".{base_name_parts[1]}"
+                        matches = sorted(glob.glob(pattern))
+                        if matches:
+                            step_result_path = matches[-1]
+                            exists_step_result_or_preloaded_step_result = True
+
+                    if (
+                            exists_step_result_or_preloaded_step_result is not None and
+                            exists_step_result_or_preloaded_step_result is not False
+                    ):
+                        self.log_info((f'step {i} result exists', True))
+                        start_step_i = i
+                        break
+                    else:
+                        self.log_info((f'step {i} result exists', False))
+
+                # Load the found result
+                if start_step_i != -1:
+                    step_result = self._load_result(
+                        result_id=start_step_i,
+                        result_path_or_preloaded_result=(
+                            step_result_path if
+                            isinstance(exists_step_result_or_preloaded_step_result, bool)
+                            else exists_step_result_or_preloaded_step_result
+                        )
+                    )
 
         # --- State initialization ---
-        # Detect if any step uses state features.  When no step declares
-        # update_state or receives_state the state stays None and all
-        # state code-paths are no-ops (full backward compatibility).
         _uses_state = any(
             getattr(s, 'update_state', None) is not None
             or getattr(s, 'receives_state', False)
             for s in self._steps
         )
-        state = self._init_state() if _uses_state else None
+        if _checkpoint_state is not None:
+            state = _checkpoint_state
+        else:
+            state = self._init_state() if _uses_state else None
         self._state = state
 
-        # Per-run loop tracking (reset each run, not an attrs attribute).
-        self._loop_counts = {}
+        # Initialize loop-resume tracking variables.
+        if _checkpoint is None:
+            self._exec_seq = 0
+            self._loop_counts = {}
+        self._state_picklability_verified = False
+        _last_saved_result_id = None
 
-        # Now proceed to execute the steps from start_step_i+1 onward.
-        # Uses a while loop (instead of for) so loop_back_to can rewind i.
-        i = start_step_i + 1
+        # Determine starting step index.
+        if _checkpoint_next_i is not None:
+            i = _checkpoint_next_i
+        else:
+            i = start_step_i + 1
 
         try:  # OUTER try: catches WorkflowAborted → _handle_abort
             while i < len(self._steps):
@@ -557,7 +735,6 @@ class Workflow(WorkNodeBase, ABC):
                 step_name = self._get_step_name(this_step, i)
 
                 try:  # INNER try: per-step error handling
-                    # Handle input arguments to the step:
                     if i > 0:
                         prev_step_result = step_result
                         nargs, nkwargs = self._get_args_for_downstream(
@@ -565,25 +742,15 @@ class Workflow(WorkNodeBase, ABC):
                         )
                         step_result = await call_maybe_async(this_step, *nargs, **nkwargs)
                     else:
-                        # For the very first step (i=0), there's no previous result.
                         step_result = await call_maybe_async(this_step, *args, **kwargs)
 
                 except Exception as err:
-                    # Per-step error handler.  Steps WITH an error_handler
-                    # attribute delegate to it; steps WITHOUT use the
-                    # default path (OnError save + re-raise).
                     error_handler = getattr(this_step, 'error_handler', None)
                     if error_handler is not None:
-                        # Error handler outcomes:
-                        #   1. RETURN a value → becomes step_result, execution continues
-                        #   2. RAISE (e.g. WorkflowAborted) → propagates to outer try
                         step_result = await call_maybe_async(
                             error_handler, err, step_result, state, step_name, i
                         )
-                        # If we reach here the handler returned — continue
-                        # to post-process below.
                     else:
-                        # Default path: preserves existing OnError save + re-raise.
                         result_save_on_error_enabled = (
                             i > 0
                             and (not isinstance(self.enable_result_save, bool))
@@ -604,13 +771,11 @@ class Workflow(WorkNodeBase, ABC):
                             )
                         raise err
 
-                # After the step executes successfully, run the mandatory _post_process hook.
+                # Post-process hooks
                 _step_result = await call_maybe_async(self._post_process, step_result, *args, **kwargs)
                 if _step_result is not None:
                     step_result = _step_result
 
-                # If optional post-processing is enabled both on the workflow and on this step,
-                # run the _optional_post_process hook next.
                 if getattr(this_step, 'enable_optional_post_process',
                            self.enable_optional_post_process):
                     _step_result = await call_maybe_async(
@@ -632,12 +797,20 @@ class Workflow(WorkNodeBase, ABC):
                 )
                 if (enable_result_save is True
                         or enable_result_save == StepResultSaveOptions.Always):
+                    if _has_loops:
+                        self._exec_seq += 1
+                        _current_result_id = self._make_seq_result_id(
+                            step_name or i, self._exec_seq
+                        )
+                    else:
+                        _current_result_id = step_name or i
                     self._save_result(
                         step_result,
                         output_path=self._get_result_path(
-                            step_name or i, *args, **kwargs
+                            _current_result_id, *args, **kwargs
                         ),
                     )
+                    _last_saved_result_id = _current_result_id
 
                 # Loop check — only evaluated when the step has loop_back_to.
                 loop_back_to = getattr(this_step, 'loop_back_to', None)
@@ -655,12 +828,18 @@ class Workflow(WorkNodeBase, ABC):
                         count = self._loop_counts.get(i, 0)
                         if count < max_iters:
                             self._loop_counts[i] = count + 1
-                            i = self._resolve_step_index(
+                            target_i = self._resolve_step_index(
                                 loop_back_to, self._steps
                             )
+                            # Checkpoint: looping back
+                            if _has_loops and _last_saved_result_id is not None:
+                                self._save_loop_checkpoint(
+                                    i, target_i, _last_saved_result_id,
+                                    state, *args, **kwargs
+                                )
+                            i = target_i
                             continue  # jump back, skip _on_step_complete
                         else:
-                            # Loop exhausted — invoke handler if present.
                             on_exhausted = getattr(
                                 this_step, 'on_loop_exhausted', None
                             )
@@ -672,13 +851,17 @@ class Workflow(WorkNodeBase, ABC):
                     self._on_step_complete, step_result, step_name, i, state, *args, **kwargs
                 )
 
+                # Checkpoint: advancing to next step
+                if _has_loops and _last_saved_result_id is not None:
+                    self._save_loop_checkpoint(
+                        i, i + 1, _last_saved_result_id,
+                        state, *args, **kwargs
+                    )
+
                 i += 1
 
         except WorkflowAborted as exc:
-            # Any WorkflowAborted raised by error_handler,
-            # on_loop_exhausted, or _on_step_complete is caught here.
             return await call_maybe_async(self._handle_abort, exc, step_result, state)
 
-        # After completing all steps, return the final result of the last step.
         return step_result
 
