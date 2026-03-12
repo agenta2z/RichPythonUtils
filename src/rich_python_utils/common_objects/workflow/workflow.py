@@ -12,6 +12,7 @@ from rich_python_utils.common_objects.workflow.common.step_result_save_options i
 )
 from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
 from rich_python_utils.common_objects.workflow.common.worknode_base import WorkNodeBase
+from rich_python_utils.common_utils.async_utils import call_maybe_async
 
 
 @attrs(slots=False)
@@ -473,3 +474,211 @@ class Workflow(WorkNodeBase, ABC):
 
         # After completing all steps, return the final result of the last step.
         return step_result
+
+    async def _arun(self, *args, **kwargs):
+        # If no steps are defined, simply return as there's nothing to run.
+        if not self._steps:
+            return
+
+        # Determine the starting step index for execution. By default, start from -1,
+        # which means no steps have been completed and we start from the first step (index 0).
+        # If resuming is enabled, we try to find the latest completed step result to resume from.
+        start_step_i = -1
+        step_result = None
+        prev_step_result = None
+
+        # Check if we should resume from a previously saved step result.
+        # resume_with_saved_results can be:
+        #   - False: Do not resume, run from the beginning.
+        #   - True: Resume from the last saved step result.
+        #   - int: Resume from the specific step index given.
+        if self.resume_with_saved_results is not False:
+            # We iterate backward from the given start index (or the last step)
+            # looking for an existing saved result. The first found result sets
+            # our start_step_i to that step index.
+            saved_step_results_back_search_start_index = (
+                self.resume_with_saved_results
+                if isinstance(self.resume_with_saved_results, int)
+                else len(self._steps) - 1
+            )
+
+            for i in range(saved_step_results_back_search_start_index, -1, -1):
+                result_id = self._get_step_name(self._steps[i], i) or i
+                step_result_path = self._get_result_path(result_id, *args, **kwargs)
+                exists_step_result_or_preloaded_step_result = self._exists_result(
+                    result_id=result_id, result_path=step_result_path
+                )
+                if (
+                        exists_step_result_or_preloaded_step_result is not None and
+                        exists_step_result_or_preloaded_step_result is not False
+                ):
+                    # If a result file (or preloaded result) is found, log this and set start_step_i to i.
+                    self.log_info((f'step {i} result exists', True))
+                    start_step_i = i
+                    break
+                else:
+                    # No result found for this step, log the absence.
+                    self.log_info((f'step {i} result exists', False))
+
+        # If start_step_i is not -1, it means we found a previous step's result to resume from.
+        # Load that result into 'step_result' so that we can continue from the next step.
+        if start_step_i != -1:
+            step_result = self._load_result(
+                result_id=start_step_i,
+                result_path_or_preloaded_result=(
+                    step_result_path if
+                    isinstance(exists_step_result_or_preloaded_step_result, bool)
+                    else exists_step_result_or_preloaded_step_result
+                )
+            )
+
+        # --- State initialization ---
+        # Detect if any step uses state features.  When no step declares
+        # update_state or receives_state the state stays None and all
+        # state code-paths are no-ops (full backward compatibility).
+        _uses_state = any(
+            getattr(s, 'update_state', None) is not None
+            or getattr(s, 'receives_state', False)
+            for s in self._steps
+        )
+        state = self._init_state() if _uses_state else None
+        self._state = state
+
+        # Per-run loop tracking (reset each run, not an attrs attribute).
+        self._loop_counts = {}
+
+        # Now proceed to execute the steps from start_step_i+1 onward.
+        # Uses a while loop (instead of for) so loop_back_to can rewind i.
+        i = start_step_i + 1
+
+        try:  # OUTER try: catches WorkflowAborted → _handle_abort
+            while i < len(self._steps):
+                this_step = self._steps[i]
+                step_name = self._get_step_name(this_step, i)
+
+                try:  # INNER try: per-step error handling
+                    # Handle input arguments to the step:
+                    if i > 0:
+                        prev_step_result = step_result
+                        nargs, nkwargs = self._get_args_for_downstream(
+                            prev_step_result, args, kwargs
+                        )
+                        step_result = await call_maybe_async(this_step, *nargs, **nkwargs)
+                    else:
+                        # For the very first step (i=0), there's no previous result.
+                        step_result = await call_maybe_async(this_step, *args, **kwargs)
+
+                except Exception as err:
+                    # Per-step error handler.  Steps WITH an error_handler
+                    # attribute delegate to it; steps WITHOUT use the
+                    # default path (OnError save + re-raise).
+                    error_handler = getattr(this_step, 'error_handler', None)
+                    if error_handler is not None:
+                        # Error handler outcomes:
+                        #   1. RETURN a value → becomes step_result, execution continues
+                        #   2. RAISE (e.g. WorkflowAborted) → propagates to outer try
+                        step_result = await call_maybe_async(
+                            error_handler, err, step_result, state, step_name, i
+                        )
+                        # If we reach here the handler returned — continue
+                        # to post-process below.
+                    else:
+                        # Default path: preserves existing OnError save + re-raise.
+                        result_save_on_error_enabled = (
+                            i > 0
+                            and (not isinstance(self.enable_result_save, bool))
+                            and self.enable_result_save == StepResultSaveOptions.OnError
+                        )
+
+                        self.log_error({
+                            'step_failed': i,
+                            'result_save_on_error_enabled': result_save_on_error_enabled,
+                        })
+
+                        if i > 0 and result_save_on_error_enabled:
+                            self._save_result(
+                                prev_step_result,
+                                output_path=self._get_result_path(
+                                    step_name or i, *args, **kwargs
+                                ),
+                            )
+                        raise err
+
+                # After the step executes successfully, run the mandatory _post_process hook.
+                _step_result = await call_maybe_async(self._post_process, step_result, *args, **kwargs)
+                if _step_result is not None:
+                    step_result = _step_result
+
+                # If optional post-processing is enabled both on the workflow and on this step,
+                # run the _optional_post_process hook next.
+                if getattr(this_step, 'enable_optional_post_process',
+                           self.enable_optional_post_process):
+                    _step_result = await call_maybe_async(
+                        self._optional_post_process, step_result, *args, **kwargs
+                    )
+                    if _step_result is not None:
+                        step_result = _step_result
+
+                # Update flow state (no-op when state is None).
+                if state is not None:
+                    state = await call_maybe_async(
+                        self._update_state, state, step_result, this_step, step_name, i
+                    )
+                    self._state = state
+
+                # Save result based on the configured saving options.
+                enable_result_save = getattr(
+                    this_step, 'enable_result_save', self.enable_result_save
+                )
+                if (enable_result_save is True
+                        or enable_result_save == StepResultSaveOptions.Always):
+                    self._save_result(
+                        step_result,
+                        output_path=self._get_result_path(
+                            step_name or i, *args, **kwargs
+                        ),
+                    )
+
+                # Loop check — only evaluated when the step has loop_back_to.
+                loop_back_to = getattr(this_step, 'loop_back_to', None)
+                if loop_back_to is not None:
+                    loop_condition = getattr(this_step, 'loop_condition', None)
+                    should_loop = (
+                        await call_maybe_async(loop_condition, state, step_result)
+                        if loop_condition else False
+                    )
+                    if should_loop:
+                        max_iters = getattr(
+                            this_step, 'max_loop_iterations',
+                            self.max_loop_iterations,
+                        )
+                        count = self._loop_counts.get(i, 0)
+                        if count < max_iters:
+                            self._loop_counts[i] = count + 1
+                            i = self._resolve_step_index(
+                                loop_back_to, self._steps
+                            )
+                            continue  # jump back, skip _on_step_complete
+                        else:
+                            # Loop exhausted — invoke handler if present.
+                            on_exhausted = getattr(
+                                this_step, 'on_loop_exhausted', None
+                            )
+                            if on_exhausted:
+                                await call_maybe_async(on_exhausted, state, step_result)
+
+                # Step-complete hook (only fires when NOT looping back).
+                await call_maybe_async(
+                    self._on_step_complete, step_result, step_name, i, state, *args, **kwargs
+                )
+
+                i += 1
+
+        except WorkflowAborted as exc:
+            # Any WorkflowAborted raised by error_handler,
+            # on_loop_exhausted, or _on_step_complete is caught here.
+            return await call_maybe_async(self._handle_abort, exc, step_result, state)
+
+        # After completing all steps, return the final result of the last step.
+        return step_result
+

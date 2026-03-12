@@ -275,3 +275,44 @@ class WorkNodeBase(Serializable, Debuggable, Resumable, PostProcessable, ABC):
                 return result
             else:
                 return stop_flag, result
+
+    async def _arun(self, *args, **kwargs):
+        """Async implementation — override in subclasses."""
+        raise NotImplementedError
+
+    async def arun(self, *args, _output: list = None, _output_idx: tuple = None, **kwargs):
+        """Async entry point. Mirrors run() but calls await self._arun()."""
+        result = await self._arun(*args, **kwargs)
+        stop_flag, result = WorkGraphStopFlags.separate_stop_flag_from_result(result)
+
+        # region try unpacking singleton result
+        if (
+                (
+                        (
+                                self.unpack_single_result is True
+                                and isinstance(result, (list, tuple))
+                        ) or
+                        (
+                                is_class_or_type_(self.unpack_single_result)
+                                and isinstance(result, self.unpack_single_result)
+                        )
+                ) and len(result) == 1
+
+        ):
+            result = result[0]
+        # endregion
+
+        if _output_idx is not None:
+            # Indexed insertion for deterministic output ordering in WorkGraph._arun()
+            output_list, idx = _output_idx
+            output_list[idx] = result
+            return stop_flag
+        elif _output is not None:
+            _output.append(result)
+            return stop_flag
+        else:
+            if stop_flag == WorkGraphStopFlags.Continue:
+                return result
+            else:
+                return stop_flag, result
+

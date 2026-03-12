@@ -1,3 +1,4 @@
+import asyncio
 import os
 import tempfile
 import uuid
@@ -21,6 +22,7 @@ from rich_python_utils.common_objects.workflow.common.worknode_base import (
 )
 from rich_python_utils.common_utils import flatten_iter, len_, get_relevant_named_args, get_relevant_args
 from rich_python_utils.common_utils.attr_helper import getattr_or_new
+from rich_python_utils.common_utils.async_utils import call_maybe_async, async_execute_with_retry
 
 
 @attrs(slots=False)
@@ -606,6 +608,273 @@ class WorkGraphNode(Node, WorkNodeBase):
         else:
             return stop_flag, result  # pop `WorkGraphStopFlags.Terminate` to stop the entire graph
 
+    async def _arun(self, *args, **kwargs):
+        """Async implementation mirroring _run() for WorkGraphNode.
+
+        Uses asyncio.Queue for multi-parent input collection, async_execute_with_retry
+        for node execution, call_maybe_async for hooks, and asyncio.gather() for
+        concurrent downstream fan-out.
+
+        Known concurrency semantic difference from _run():
+        - In sync _run(), downstream nodes execute sequentially in a for-loop, so if one
+          downstream node returns Terminate, subsequent siblings are skipped immediately.
+          In async _arun(), all downstream nodes launch concurrently via asyncio.gather(),
+          so one sibling's Terminate flag cannot prevent other already-launched siblings
+          from executing. This is an intentional tradeoff: the async path prioritizes
+          throughput over strict sequential stop-flag propagation between siblings.
+          The Terminate flag is still respected at the WorkGraph level and within each
+          branch. Only the inter-sibling sequential ordering is relaxed.
+          If strict sync-equivalent ordering is needed, use max_concurrency=1 on WorkGraph.
+        """
+        stop_flag = WorkGraphStopFlags.Continue
+
+        # region Process a special scenario when input is the AbstainResult flag
+        is_input_single_stop_flag = WorkGraphStopFlags.is_input_single_stop_flag(*args, **kwargs)
+        if is_input_single_stop_flag:
+            if not self.pass_abstain_result_flag_downstream:
+                raise ValueError(
+                    "`pass_abstain_result_flag_downstream` is set False, "
+                    "but downstream nodes still receive AbstainResult flag"
+                )
+            stop_flag = args[0]
+            if stop_flag != WorkGraphStopFlags.AbstainResult:
+                raise ValueError(f"Only AbstainResult flag allowed to pass downstream; got '{stop_flag}'")
+        # endregion
+
+        # region Track execution depth for debugging
+        graph_depth = kwargs.pop('_graph_depth', 0)
+        # endregion
+
+        # Pop _semaphore early so it doesn't leak into get_relevant_args or node execution
+        semaphore = kwargs.pop('_semaphore', None)
+
+        # region Multi-parent input collection using asyncio.Queue
+        num_real_parents = sum(1 for p in (self.previous or []) if p is not self)
+        if num_real_parents > 1:
+            aqueue: asyncio.Queue = getattr_or_new(self, '_aqueue', default_factory=asyncio.Queue)
+            if is_input_single_stop_flag:
+                await aqueue.put(stop_flag)
+            else:
+                await aqueue.put((args, kwargs))
+
+            if aqueue.qsize() < num_real_parents:
+                return  # Not all inputs are ready yet
+
+            inputs = [aqueue.get_nowait() for _ in range(num_real_parents)]
+            if self.remove_abstain_result_flag_from_upstream_input:
+                inputs = list(
+                    filter(lambda x: x != WorkGraphStopFlags.AbstainResult, inputs)
+                )
+            args, kwargs = self._merge_upstream_inputs(inputs)
+
+            if inputs:
+                stop_flag = WorkGraphStopFlags.Continue
+        # endregion
+
+        # Check once if self-edge exists (used for iterative self-loop)
+        has_self_edge = self in (self.next or [])
+
+        # Warn if self-loop node has result saving enabled
+        if has_self_edge and (
+            self.enable_result_save is True or
+            self.enable_result_save == StepResultSaveOptions.Always
+        ):
+            self.log_warning(
+                {
+                    'node_name': self.name,
+                    'enable_result_save': self.enable_result_save,
+                },
+                'SelfLoopWithResultSave',
+                message=(
+                    f"Node '{self.name}' has a self-edge (self-loop) but enable_result_save is enabled. "
+                    "If results are loaded from saved state, the self-loop will not continue because "
+                    "include_self won't be set. Consider setting enable_result_save=False for self-loop nodes."
+                )
+            )
+
+        # Store original args for potential self-loop (needed for NoPassDown mode)
+        original_args, original_kwargs = args, kwargs
+
+        result = None
+        include_self = False
+        include_others = True
+
+        # =========================================================================
+        # ITERATIVE SELF-LOOP (async): Wrap main execution in while True
+        # Same pattern as sync _run() — avoids recursion for self-loop nodes.
+        # =========================================================================
+        self_loop_iteration = 0
+        while True:
+            self_loop_iteration += 1
+
+            self.log_debug(
+                {
+                    'node_name': self.name,
+                    'graph_depth': graph_depth,
+                    'self_loop_iteration': self_loop_iteration,
+                    'is_self_loop': has_self_edge and self_loop_iteration > 1,
+                },
+                'NodeExecution'
+            )
+
+            if stop_flag == WorkGraphStopFlags.Continue:
+                is_loaded_from_saved_result, result = self.load_result(*args, **kwargs)
+                if not is_loaded_from_saved_result:
+                    try:
+                        rel_args, rel_kwargs = get_relevant_args(
+                            func=self.value,
+                            all_var_args_relevant_if_func_support_var_args=True,
+                            all_named_args_relevant_if_func_support_named_args=True,
+                            args=args,
+                            **kwargs
+                        )
+
+                        result = await async_execute_with_retry(
+                            func=self.value,
+                            max_retry=self.max_repeat,
+                            min_retry_wait=self.min_repeat_wait,
+                            max_retry_wait=self.max_repeat_wait,
+                            retry_on_exceptions=self.retry_on_exceptions,
+                            output_validator=self.output_validator,
+                            pre_condition=self.repeat_condition,
+                            args=rel_args,
+                            kwargs=rel_kwargs,
+                            default_return_or_raise=self._get_fallback_result(*args, **kwargs),
+                        )
+                    except Exception as err:
+                        import traceback
+                        self.log_error(
+                            {
+                                'name': self.name,
+                                'executor': self.value,
+                                'args': args,
+                                'kwargs': kwargs,
+                                'exception_type': type(err).__name__,
+                                'exception_message': str(err),
+                                'traceback': traceback.format_exc()
+                            },
+                            'NodeExecutionFailed',
+                        )
+                        raise err
+
+                    # Handle NextNodesSelector return value
+                    include_self, include_others, result = self._handle_next_nodes_selector(result)
+
+                    stop_flag, result = WorkGraphStopFlags.separate_stop_flag_from_result(result)
+
+                    # Post-process hooks via call_maybe_async
+                    _result = await call_maybe_async(self._post_process, result, *args, **kwargs)
+                    if _result is not None:
+                        result = _result
+
+                    if self.enable_optional_post_process:
+                        _result = await call_maybe_async(self._optional_post_process, result, *args, **kwargs)
+                        if _result is not None:
+                            result = _result
+
+                    # Save results if configured
+                    if (
+                            self.enable_result_save is True or
+                            self.enable_result_save == StepResultSaveOptions.Always
+                    ):
+                        result_path = self._get_result_path(self.name, *args, **kwargs)
+                        self._save_result(result, result_path)
+
+            # Propagate the result to downstream nodes concurrently
+            if self.next:
+                if stop_flag == WorkGraphStopFlags.Continue:
+                    nargs, nkwargs = self._get_args_for_downstream(result, args, kwargs)
+                    nodes_to_run = self._select_downstream_nodes(include_others, include_self=False)
+                else:
+                    nodes_to_run = [n for n in self.next if n is not self]
+
+                # Concurrent downstream fan-out via asyncio.gather with indexed insertion
+                # for deterministic result ordering (matching sync path's sequential order).
+                downstream_results = [None] * len(nodes_to_run)
+                tasks = []
+                for idx, node in enumerate(nodes_to_run):
+                    if stop_flag == WorkGraphStopFlags.Continue:
+                        # Capture loop variables explicitly to avoid closure-over-loop-variable bug
+                        nargs_copy = tuple(nargs)
+                        nkwargs_copy = dict(nkwargs)
+                        if semaphore:
+                            async def _run_ds(i, n, a, kw, sem):
+                                async with sem:
+                                    return await n.arun(
+                                        *a,
+                                        _output_idx=(downstream_results, i),
+                                        _graph_depth=graph_depth + 1,
+                                        _semaphore=sem,
+                                        **kw
+                                    )
+                            tasks.append(_run_ds(idx, node, nargs_copy, nkwargs_copy, semaphore))
+                        else:
+                            async def _run_ds(i, n, a, kw):
+                                return await n.arun(
+                                    *a,
+                                    _output_idx=(downstream_results, i),
+                                    _graph_depth=graph_depth + 1,
+                                    **kw
+                                )
+                            tasks.append(_run_ds(idx, node, nargs_copy, nkwargs_copy))
+                    elif stop_flag == WorkGraphStopFlags.AbstainResult:
+                        # Notify downstream nodes of abstention
+                        tasks.append(node.arun(stop_flag))
+                    elif stop_flag == WorkGraphStopFlags.Terminate:
+                        break
+
+                if tasks:
+                    await asyncio.gather(*tasks)
+
+                # The AbstainResult flag only impacts sibling nodes,
+                # and needs to reset to avoid impacting other nodes
+                if stop_flag == WorkGraphStopFlags.AbstainResult:
+                    stop_flag = WorkGraphStopFlags.Continue
+
+                # Merge multiple downstream outputs (filter out None slots)
+                downstream_results = [r for r in downstream_results if r is not None]
+                if downstream_results:
+                    result = self._merge_downstream_results(downstream_results)
+
+            # =========================================================================
+            # SELF-LOOP HANDLING (async): Same iterative pattern as sync _run()
+            # =========================================================================
+            if include_self and has_self_edge and stop_flag == WorkGraphStopFlags.Continue:
+                if self.result_pass_down_mode == ResultPassDownMode.NoPassDown:
+                    args, kwargs = original_args, dict(original_kwargs)
+                else:
+                    args, kwargs = nargs, dict(nkwargs)
+                include_self = False
+                include_others = True
+
+                self.log_debug(
+                    {
+                        'node_name': self.name,
+                        'graph_depth': graph_depth,
+                        'completed_iteration': self_loop_iteration,
+                        'next_iteration': self_loop_iteration + 1,
+                    },
+                    'SelfLoopContinue'
+                )
+                continue
+            else:
+                if has_self_edge and self_loop_iteration > 1:
+                    self.log_debug(
+                        {
+                            'node_name': self.name,
+                            'graph_depth': graph_depth,
+                            'total_iterations': self_loop_iteration,
+                            'exit_reason': 'include_self=False' if not include_self else f'stop_flag={stop_flag}',
+                        },
+                        'SelfLoopExit'
+                    )
+                break
+
+        if stop_flag == WorkGraphStopFlags.Continue:
+            return result
+        else:
+            return stop_flag, result
+
 @attrs(slots=False)
 class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
     """
@@ -791,6 +1060,11 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
     # Use wrapper mode (threads) or router mode (multi-processing)
     executor: Optional['QueuedExecutorBase'] = attrib(default=None, kw_only=True)
 
+    # Optional concurrency limit for async execution path (_arun).
+    # When set, creates an asyncio.Semaphore(max_concurrency) to limit concurrent node execution.
+    # Ignored by the sync _run() path.
+    max_concurrency: Optional[int] = attrib(default=None, kw_only=True)
+
     def __attrs_post_init__(self):
         super().__attrs_post_init__()
         for start_node in self.start_nodes:
@@ -854,6 +1128,7 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
 
         This ensures that stale queue items from previous runs (e.g., after Terminate)
         don't corrupt subsequent executions when the graph is reused.
+        Clears both sync _queue (stdlib Queue) and async _aqueue (asyncio.Queue).
         """
         visited = set()
 
@@ -865,6 +1140,9 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
                 # Clear the queue by replacing it
                 from queue import Queue
                 node._queue = Queue()
+            if hasattr(node, '_aqueue'):
+                # asyncio.Queue has no .clear() method, so replace with a new instance
+                node._aqueue = asyncio.Queue()
             for child in (node.next or []):
                 clear_node(child)
 
@@ -1342,4 +1620,103 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
                 result,
                 output_path=result_path
             )
+        return result
+
+    async def _arun(self, *args, **kwargs):
+        """Async implementation mirroring _run() for WorkGraph.
+
+        Uses asyncio.gather() for concurrent start node execution,
+        asyncio.Event for Terminate flag propagation, and asyncio.Semaphore
+        for max_concurrency limiting.
+
+        Known concurrency semantic differences from _run():
+        - AbstainResult between start nodes: all start nodes launch concurrently,
+          so B never sees A's AbstainResult.
+        - Error-path side effects: with return_exceptions=True, all start nodes
+          run to completion regardless of failures.
+        - Executor is ignored in async path (uses native asyncio concurrency).
+        """
+        # Clear all node queues for fresh execution
+        self._clear_all_node_queues()
+
+        _EMPTY = object()  # Sentinel — distinguishes "no result" from "result is None"
+
+        # Pre-allocate with sentinel for deterministic ordering
+        output = [_EMPTY] * len(self.start_nodes)
+        node_info = [None] * len(self.start_nodes)  # [(node, is_loaded), ...]
+
+        terminate_event = asyncio.Event()
+        semaphore = asyncio.Semaphore(self.max_concurrency) if self.max_concurrency else None
+
+        async def _run_start_node(idx, node):
+            is_loaded, result = node.load_result(*args, **kwargs)
+            node_info[idx] = (node, is_loaded)
+            if is_loaded:
+                # Match sync behavior: loaded results are NOT added to output
+                return WorkGraphStopFlags.Continue
+            if terminate_event.is_set():
+                return WorkGraphStopFlags.Continue
+            if semaphore:
+                async with semaphore:
+                    flag = await node.arun(
+                        *args, **kwargs,
+                        _output_idx=(output, idx),
+                        _semaphore=semaphore
+                    )
+            else:
+                flag = await node.arun(
+                    *args, **kwargs,
+                    _output_idx=(output, idx)
+                )
+            if flag == WorkGraphStopFlags.Terminate:
+                terminate_event.set()
+            return flag
+
+        tasks = [_run_start_node(i, node) for i, node in enumerate(self.start_nodes)]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Post-filter: separate successes from exceptions
+        exceptions = [(i, r) for i, r in enumerate(results) if isinstance(r, BaseException)]
+
+        if exceptions:
+            if self.enable_result_save == StepResultSaveOptions.OnError:
+                # Per-node save — mirrors sync _run() exactly
+                for info, result_val in zip(node_info, output):
+                    if info is None:
+                        continue
+                    node, is_loaded = info
+                    if (
+                        node.enable_result_save == StepResultSaveOptions.OnError
+                        and not is_loaded
+                        and result_val is not _EMPTY
+                    ):
+                        node._save_result(
+                            result_val,
+                            output_path=node._get_result_path(node.name, *args, **kwargs)
+                        )
+            raise exceptions[0][1]
+
+        # Filter out sentinel slots (loaded or skipped nodes)
+        output = [r for r in output if r is not _EMPTY]
+
+        # Post-process: call _post_process and _optional_post_process separately
+        # via call_maybe_async (NOT through the chaining post_process() method)
+        _result = await call_maybe_async(self._post_process, output, *args, **kwargs)
+        if _result is not None:
+            output = _result
+        if self.enable_optional_post_process:
+            _result = await call_maybe_async(self._optional_post_process, output, *args, **kwargs)
+            if _result is not None:
+                output = _result
+
+        result = output
+
+        # Always-save: same sync save as _run()
+        if (
+            self.enable_result_save is True
+            or self.enable_result_save == StepResultSaveOptions.Always
+        ):
+            result_path = self._get_result_path(self.name, *args, **kwargs)
+            self._save_result(result, output_path=result_path)
+
         return result
