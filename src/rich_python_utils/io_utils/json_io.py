@@ -1,4 +1,5 @@
 import copy
+import enum
 import json
 import os
 import shutil
@@ -6,7 +7,7 @@ import uuid
 from datetime import datetime
 from itertools import chain, islice
 from os import path
-from typing import Union, Iterable, Iterator, Dict, List, Mapping, Type, Callable, Sequence, Optional
+from typing import Any as TypingAny, Union, Iterable, Iterator, Dict, List, Mapping, Type, Callable, Sequence, Optional
 
 from rich_python_utils.common_objects.partial import Partial
 from rich_python_utils.common_utils import dict__, get_relevant_named_args
@@ -131,6 +132,51 @@ def artifact_field(
         cls.__artifacts__.append(
             PartsKeyPath(key=key, ext=resolve_ext(type), alias=alias, subfolder=group)
         )
+        return cls
+
+    return decorator
+
+
+def artifact_type(
+    target_type: Type,
+    *,
+    type: Optional[str] = None,
+    alias: Optional[str] = None,
+    group: Optional[str] = None,
+) -> Callable[[Type], Type]:
+    """Class decorator that marks a type for automatic parts extraction.
+
+    Any field whose value is an instance of ``target_type`` will be
+    extracted to a separate parts file during ``jsonfy``.  Stack multiple
+    decorators to register multiple types::
+
+        @artifact_type(Workflow, type='json', group='workflows')
+        @artifact_type(HtmlContent, type='html', group='html')
+        @attrs(slots=False)
+        class MyPipeline:
+            name: str = attrib()
+            pre: Workflow = attrib()
+            main: Workflow = attrib()
+            page: HtmlContent = attrib()
+
+    Args:
+        target_type: The Python type to match via ``isinstance``.
+        type: Content type / file extension (e.g. ``'json'``, ``'.html'``).
+            Mapped to :attr:`PartsKeyPath.ext` with automatic dot normalization.
+        alias: Filename alias (replaces key in the output filename).
+        group: Per-entry subdirectory.  Mapped to
+            :attr:`PartsKeyPath.subfolder`.
+    """
+
+    def decorator(cls):
+        if "__artifact_types__" not in cls.__dict__:
+            cls.__artifact_types__ = []
+        cls.__artifact_types__.append({
+            "target_type": target_type,
+            "ext": resolve_ext(type),
+            "alias": alias,
+            "subfolder": group,
+        })
         return cls
 
     return decorator
@@ -383,8 +429,7 @@ def _resolve_parts_references(obj, parts_dir):
     """
     if isinstance(obj, dict):
         if (
-            len(obj) == 2
-            and '__parts_file__' in obj
+            '__parts_file__' in obj
             and '__value_type__' in obj
         ):
             parts_file = path.join(parts_dir, obj['__parts_file__'])
@@ -430,6 +475,664 @@ def resolve_json_parts(
         if path.isdir(parts_dir):
             return _resolve_parts_references(obj, parts_dir)
     return obj
+
+
+# ---------------------------------------------------------------------------
+# Type-resolution helpers (read-side)
+# ---------------------------------------------------------------------------
+
+
+def _get_origin(tp):
+    """Extract the generic origin of a type (e.g., ``List[int]`` → ``list``)."""
+    try:
+        from typing import get_origin
+        result = get_origin(tp)
+        if result is not None:
+            return result
+    except ImportError:
+        pass
+    return getattr(tp, "__origin__", None)
+
+
+def _get_type_args(tp):
+    """Extract generic type arguments (e.g., ``List[int]`` → ``(int,)``)."""
+    try:
+        from typing import get_args
+        result = get_args(tp)
+        if result:
+            return result
+    except ImportError:
+        pass
+    return getattr(tp, "__args__", ())
+
+
+def _unwrap_optional(tp):
+    """Detect ``Optional[T]`` (i.e., ``Union[T, None]``) and unwrap it.
+
+    Returns:
+        ``(True, T)`` if *tp* is ``Optional[T]``, otherwise ``(False, tp)``.
+    """
+    args = _get_type_args(tp)
+    if _get_origin(tp) is Union and len(args) == 2 and type(None) in args:
+        inner = args[0] if args[1] is type(None) else args[1]
+        return (True, inner)
+    return (False, tp)
+
+
+def _dejsonfy_enum(value, enum_type):
+    """Reconstruct an enum member from its string representation."""
+    if not isinstance(value, str):
+        return value
+    try:
+        return enum_type(value)
+    except (ValueError, KeyError):
+        pass
+    try:
+        return enum_type[value]
+    except (KeyError, ValueError):
+        pass
+    if "." in value:
+        try:
+            return enum_type[value.rsplit(".", 1)[-1]]
+        except (KeyError, ValueError):
+            pass
+    for member in enum_type:
+        if str(member) == value:
+            return member
+    return value
+
+
+def _dejsonfy_sequence(data, element_type, container, _type_map=None, _path="", _allowed_modules=None):
+    """Reconstruct a sequence (list, tuple, set) with typed elements."""
+    if not isinstance(data, (list, tuple)):
+        return data
+    if element_type is not None:
+        results = [
+            dejsonfy(item, target_type=element_type, _type_map=_type_map,
+                     _path=(_path + ".*") if _path else "*", _allowed_modules=_allowed_modules)
+            for item in data
+        ]
+    else:
+        results = list(data)
+    return container(results)
+
+
+def _dejsonfy_positional_tuple(data, type_args, _type_map=None, _path="", _allowed_modules=None):
+    """Reconstruct a heterogeneous Tuple[A, B, C] with positional types."""
+    if not isinstance(data, (list, tuple)):
+        return data
+    n = min(len(data), len(type_args))
+    results = [
+        dejsonfy(data[i], target_type=type_args[i], _type_map=_type_map,
+                 _path=_path, _allowed_modules=_allowed_modules)
+        for i in range(n)
+    ]
+    return tuple(results)
+
+
+def _dejsonfy_mapping(data, key_type, value_type, target_type, _type_map=None, _path="", _allowed_modules=None):
+    """Reconstruct a dict, including non-string-key reversal from list-of-pairs."""
+    origin = _get_origin(target_type)
+    if isinstance(data, list) and (origin is dict or target_type is dict):
+        if data and all(isinstance(item, dict) and "key" in item and "value" in item for item in data):
+            result = {}
+            for item in data:
+                k = dejsonfy(item["key"], target_type=key_type, _type_map=_type_map,
+                             _path=_path, _allowed_modules=_allowed_modules) if key_type else item["key"]
+                v = dejsonfy(item["value"], target_type=value_type, _type_map=_type_map,
+                             _path=(_path + ".*") if _path else "*", _allowed_modules=_allowed_modules) if value_type else item["value"]
+                result[k] = v
+            return result
+    if not isinstance(data, dict):
+        return data
+    need_key_reconstruction = (key_type is not None and key_type is not str
+                               and isinstance(key_type, type) and key_type not in (int, float, bool, type(None)))
+    need_value_reconstruction = (value_type is not None
+                                 and value_type not in (str, int, float, bool, type(None)))
+    if need_key_reconstruction or need_value_reconstruction:
+        result = {}
+        for k, v in data.items():
+            new_k = dejsonfy(k, target_type=key_type, _type_map=_type_map,
+                             _path=_path, _allowed_modules=_allowed_modules) if need_key_reconstruction else k
+            new_v = dejsonfy(v, target_type=value_type, _type_map=_type_map,
+                             _path=(_path + "." + k) if _path else k, _allowed_modules=_allowed_modules) if need_value_reconstruction else v
+            result[new_k] = new_v
+        return result
+    return dict(data)
+
+
+def _dejsonfy_structured(data, target_type, target=None, _type_map=None, _path="", _allowed_modules=None):
+    """Reconstruct an attrs class or dataclass from a dict."""
+    import attr
+    import dataclasses
+
+    if not isinstance(data, dict):
+        return data
+
+    if attr.has(target_type):
+        field_names = [f.name for f in attr.fields(target_type)]
+    elif dataclasses.is_dataclass(target_type):
+        field_names = [f.name for f in dataclasses.fields(target_type)]
+    else:
+        return data
+
+    try:
+        import typing
+        hints = typing.get_type_hints(target_type)
+    except Exception:
+        hints = getattr(target_type, "__annotations__", {})
+
+    if attr.has(target_type):
+        for f in attr.fields(target_type):
+            if f.type is not None and f.name not in hints:
+                hints[f.name] = f.type
+
+    kwargs = {}
+    for name in field_names:
+        if name not in data:
+            continue
+        field_type = hints.get(name)
+        child_path = (_path + "." + name) if _path else name
+        value = dejsonfy(data[name], target_type=field_type, _type_map=_type_map,
+                         _path=child_path, _allowed_modules=_allowed_modules)
+        if target is not None:
+            setattr(target, name, value)
+        else:
+            kwargs[name] = value
+
+    if target is not None:
+        return target
+    return target_type(**kwargs)
+
+
+def _dejsonfy_namedtuple(data, target_type, _type_map=None, _path="", _allowed_modules=None):
+    """Reconstruct a namedtuple from a dict."""
+    if not isinstance(data, dict):
+        return data
+    field_names = target_type._fields
+    hints = getattr(target_type, "__annotations__", {})
+    filtered = {}
+    for name in field_names:
+        if name not in data:
+            continue
+        field_type = hints.get(name)
+        child_path = (_path + "." + name) if _path else name
+        filtered[name] = dejsonfy(data[name], target_type=field_type, _type_map=_type_map,
+                                  _path=child_path, _allowed_modules=_allowed_modules)
+    return target_type(**filtered)
+
+
+def _dejsonfy_plain_object(data, target_type, target=None, _type_map=None, _path="", _allowed_modules=None):
+    """Reconstruct a plain class from a dict using __init__ kwargs."""
+    if not isinstance(data, dict):
+        return data
+    if target is not None:
+        for k, v in data.items():
+            setattr(target, k, v)
+        return target
+    relevant = get_relevant_named_args(target_type.__init__, **data)
+    return target_type(**relevant)
+
+
+def _dejsonfy_slots(data, target_type, target=None, _type_map=None, _path="", _allowed_modules=None):
+    """Reconstruct a __slots__-based object."""
+    if not isinstance(data, dict):
+        return data
+    all_slots = []
+    for cls in target_type.__mro__:
+        if "__slots__" in cls.__dict__:
+            all_slots.extend(cls.__dict__["__slots__"])
+    try:
+        import typing
+        hints = typing.get_type_hints(target_type)
+    except Exception:
+        hints = getattr(target_type, "__annotations__", {})
+
+    if target is None:
+        obj = target_type.__new__(target_type)
+    else:
+        obj = target
+
+    for slot in all_slots:
+        if slot not in data:
+            continue
+        slot_type = hints.get(slot)
+        child_path = (_path + "." + slot) if _path else slot
+        value = dejsonfy(data[slot], target_type=slot_type, _type_map=_type_map,
+                         _path=child_path, _allowed_modules=_allowed_modules)
+        setattr(obj, slot, value)
+    return obj
+
+
+def _is_typed_object(obj):
+    """Check if obj is a non-primitive typed object (attrs, dataclass, namedtuple, __slots__, __dict__)."""
+    import attr
+    import dataclasses
+    if obj is None or isinstance(obj, (int, float, str, bool, bytes)):
+        return False
+    if isinstance(obj, enum.Enum):
+        return False
+    if isinstance(obj, dict):
+        return False
+    if isinstance(obj, tuple) and hasattr(type(obj), "_fields"):
+        return True
+    if isinstance(obj, (list, tuple, set)):
+        return False
+    if attr.has(type(obj)):
+        return True
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        return True
+    if hasattr(obj, "__slots__") or hasattr(obj, "__dict__"):
+        return True
+    return False
+
+
+def _inject_type_metadata(original_obj, converted):
+    """Embed __type__/__module__ metadata into converted dicts from typed objects."""
+    import attr
+    import dataclasses
+
+    if _is_typed_object(original_obj) and isinstance(converted, dict):
+        converted["__type__"] = type(original_obj).__qualname__
+        converted["__module__"] = type(original_obj).__module__
+
+        obj_type = type(original_obj)
+        field_names = []
+        if attr.has(obj_type):
+            field_names = [f.name for f in attr.fields(obj_type)]
+        elif dataclasses.is_dataclass(obj_type):
+            field_names = [f.name for f in dataclasses.fields(obj_type)]
+        elif isinstance(original_obj, tuple) and hasattr(obj_type, "_fields"):
+            field_names = list(obj_type._fields)
+        elif hasattr(obj_type, "__slots__"):
+            field_names = []
+            for cls in obj_type.__mro__:
+                if "__slots__" in cls.__dict__:
+                    field_names.extend(cls.__dict__["__slots__"])
+        elif hasattr(original_obj, "__dict__"):
+            field_names = list(vars(original_obj).keys())
+
+        for name in field_names:
+            if name in converted:
+                orig_val = getattr(original_obj, name, None)
+                _inject_type_metadata(orig_val, converted[name])
+
+    elif isinstance(original_obj, (list, tuple, set)) and isinstance(converted, list):
+        orig_list = list(original_obj)
+        for i in range(min(len(orig_list), len(converted))):
+            _inject_type_metadata(orig_list[i], converted[i])
+
+    elif isinstance(original_obj, dict) and isinstance(converted, list):
+        if converted and all(isinstance(item, dict) and "key" in item and "value" in item for item in converted):
+            orig_values = list(original_obj.values())
+            for i, item in enumerate(converted):
+                if i < len(orig_values):
+                    _inject_type_metadata(orig_values[i], item.get("value"))
+
+    elif isinstance(original_obj, dict) and isinstance(converted, dict):
+        for k, v in original_obj.items():
+            str_k = str(k)
+            if str_k in converted:
+                _inject_type_metadata(v, converted[str_k])
+
+
+def _collect_type_metadata(original_obj, converted, path_str=""):
+    """Collect path-based type map from parallel walk of original and converted objects."""
+    import attr
+    import dataclasses
+
+    result = {}
+
+    if _is_typed_object(original_obj) and isinstance(converted, dict):
+        result[path_str] = {
+            "__type__": type(original_obj).__qualname__,
+            "__module__": type(original_obj).__module__,
+        }
+
+        obj_type = type(original_obj)
+        field_names = []
+        if attr.has(obj_type):
+            field_names = [f.name for f in attr.fields(obj_type)]
+        elif dataclasses.is_dataclass(obj_type):
+            field_names = [f.name for f in dataclasses.fields(obj_type)]
+        elif isinstance(original_obj, tuple) and hasattr(obj_type, "_fields"):
+            field_names = list(obj_type._fields)
+        elif hasattr(obj_type, "__slots__"):
+            field_names = []
+            for cls in obj_type.__mro__:
+                if "__slots__" in cls.__dict__:
+                    field_names.extend(cls.__dict__["__slots__"])
+        elif hasattr(original_obj, "__dict__"):
+            field_names = list(vars(original_obj).keys())
+
+        for name in field_names:
+            if name in converted:
+                child_path = (path_str + "." + name) if path_str else name
+                orig_val = getattr(original_obj, name, None)
+                result.update(_collect_type_metadata(orig_val, converted[name], child_path))
+
+    elif isinstance(original_obj, (list, tuple, set)) and isinstance(converted, list):
+        orig_list = list(original_obj)
+        wildcard_path = (path_str + ".*") if path_str else "*"
+        for i in range(min(len(orig_list), len(converted))):
+            result.update(_collect_type_metadata(orig_list[i], converted[i], wildcard_path))
+
+    elif isinstance(original_obj, dict) and isinstance(converted, dict):
+        for k, v in original_obj.items():
+            str_k = str(k)
+            if str_k in converted:
+                child_path = (path_str + "." + str_k) if path_str else str_k
+                result.update(_collect_type_metadata(v, converted[str_k], child_path))
+
+    return result
+
+
+def _collect_type_driven_parts(original_obj, converted, type_map, path_str=""):
+    """Walk original object tree and collect key paths matching types in type_map."""
+    import attr
+    import dataclasses
+
+    results = []
+
+    if path_str:
+        for target_type, config in type_map.items():
+            if isinstance(original_obj, target_type):
+                entry = PartsKeyPath(
+                    key=path_str,
+                    ext=config.get("ext") if isinstance(config, dict) else getattr(config, "ext", None),
+                    alias=config.get("alias") if isinstance(config, dict) else getattr(config, "alias", None),
+                    subfolder=config.get("subfolder") if isinstance(config, dict) else getattr(config, "subfolder", None),
+                )
+                results.append(entry)
+                return results
+
+    if _is_typed_object(original_obj) and isinstance(converted, dict):
+        obj_type = type(original_obj)
+        field_names = []
+        if attr.has(obj_type):
+            field_names = [f.name for f in attr.fields(obj_type)]
+        elif dataclasses.is_dataclass(obj_type):
+            field_names = [f.name for f in dataclasses.fields(obj_type)]
+        elif isinstance(original_obj, tuple) and hasattr(obj_type, "_fields"):
+            field_names = list(obj_type._fields)
+        elif hasattr(obj_type, "__slots__"):
+            field_names = []
+            for cls in obj_type.__mro__:
+                if "__slots__" in cls.__dict__:
+                    field_names.extend(cls.__dict__["__slots__"])
+        elif hasattr(original_obj, "__dict__"):
+            field_names = list(vars(original_obj).keys())
+
+        for name in field_names:
+            if name not in converted:
+                continue
+            orig_val = getattr(original_obj, name, None)
+            if orig_val is None:
+                continue
+            child_path = (path_str + "." + name) if path_str else name
+            results.extend(_collect_type_driven_parts(orig_val, converted[name], type_map, child_path))
+
+    elif isinstance(original_obj, (list, tuple, set)) and isinstance(converted, list):
+        orig_list = list(original_obj)
+        for i in range(min(len(orig_list), len(converted))):
+            child_path = (path_str + "." + str(i)) if path_str else str(i)
+            results.extend(_collect_type_driven_parts(orig_list[i], converted[i], type_map, child_path))
+
+    elif isinstance(original_obj, dict) and isinstance(converted, dict):
+        for k in original_obj:
+            str_k = str(k)
+            if str_k in converted:
+                child_path = (path_str + "." + str_k) if path_str else str_k
+                results.extend(_collect_type_driven_parts(original_obj[k], converted[str_k], type_map, child_path))
+
+    return results
+
+
+def _write_type_file(type_map, data_file_path, type_file_path=None):
+    """Write type map to a .types.json companion file."""
+    if type_file_path is None:
+        type_file_path = data_file_path + ".types.json"
+    os.makedirs(os.path.dirname(type_file_path) or ".", exist_ok=True)
+    with open(type_file_path, "w", encoding="utf-8") as f:
+        f.write(json.dumps(type_map, indent=2))
+    return type_file_path
+
+
+def _read_type_file(type_file):
+    """Read and parse a .types.json file. Returns empty dict on failure."""
+    try:
+        with open(type_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError, TypeError):
+        return {}
+
+
+def _import_type(qualname, module_name, allowed_modules=None):
+    """Securely resolve a class from inline type metadata."""
+    import sys
+    import importlib
+
+    mod = None
+    if module_name in sys.modules:
+        mod = sys.modules[module_name]
+    elif allowed_modules and module_name in allowed_modules:
+        try:
+            mod = importlib.import_module(module_name)
+        except ImportError:
+            return None
+    else:
+        return None
+
+    try:
+        result = mod
+        for part in qualname.split("."):
+            result = getattr(result, part)
+        return result
+    except AttributeError:
+        return None
+
+
+def _is_inline_metadata(data, allowed_modules=None):
+    """Detect inline type metadata in a dict. Returns resolved type or None."""
+    if not isinstance(data, dict):
+        return None
+    if "__type__" not in data or "__module__" not in data:
+        return None
+
+    resolved = _import_type(data["__type__"], data["__module__"], allowed_modules)
+    if resolved is None:
+        return None
+
+    import attr
+    import dataclasses
+
+    remaining_keys = set(data.keys()) - {"__type__", "__module__"}
+    field_names = set()
+    try:
+        if attr.has(resolved):
+            field_names = {f.name for f in attr.fields(resolved)}
+        elif dataclasses.is_dataclass(resolved):
+            field_names = {f.name for f in dataclasses.fields(resolved)}
+        elif hasattr(resolved, "_fields"):
+            field_names = set(resolved._fields)
+        elif hasattr(resolved, "__slots__"):
+            for cls in resolved.__mro__:
+                if "__slots__" in cls.__dict__:
+                    field_names.update(cls.__dict__["__slots__"])
+        elif hasattr(resolved, "__init__"):
+            import inspect
+            try:
+                sig = inspect.signature(resolved.__init__)
+                field_names = {p for p in sig.parameters if p != "self"}
+            except (ValueError, TypeError):
+                pass
+    except Exception:
+        pass
+
+    if field_names and not remaining_keys.intersection(field_names):
+        return None
+
+    return resolved
+
+
+def dejsonfy(
+    data,
+    target_type=None,
+    target=None,
+    type_file=None,
+    _allowed_modules=None,
+    _type_map=None,
+    _path="",
+):
+    """Reconstruct a typed Python object from a JSON-serializable value.
+
+    Args:
+        data: A JSON-serializable value (dict, list, str, int, float, bool, None)
+              typically produced by jsonfy() or dict__().
+        target_type: The Python type to reconstruct into.
+        target: An existing object to restore attributes onto.
+        type_file: Path to a .types.json companion file for type resolution.
+        _allowed_modules: Set of module names allowed for dynamic import.
+        _type_map: Internal — pre-loaded type map from type_file.
+        _path: Internal — current dotted path for type_file lookups.
+
+    Returns:
+        An instance of target_type with fields populated from data,
+        the mutated target object (if target was provided),
+        or data unchanged for basic types / when no type can be resolved.
+    """
+    import attr
+    import dataclasses
+
+    if _path == "" and target_type is not None and target is not None:
+        raise ValueError(
+            "target_type and target are mutually exclusive; provide one or the other"
+        )
+
+    if target is not None:
+        target_type = type(target)
+
+    if data is None:
+        return None
+
+    if isinstance(data, dict) and "__type__" in data and "__module__" in data:
+        resolved = _is_inline_metadata(data, _allowed_modules)
+        if resolved is not None:
+            data = {k: v for k, v in data.items() if k not in ("__type__", "__module__")}
+            if target_type is None:
+                target_type = resolved
+
+    if type_file is not None and _type_map is None:
+        _type_map = _read_type_file(type_file)
+
+    if target_type is None and _type_map:
+        type_info = _type_map.get(_path)
+        if type_info is None:
+            parts = _path.split(".")
+            for i in range(len(parts) - 1, -1, -1):
+                trial = ".".join(parts[:i] + ["*"] * (len(parts) - i))
+                type_info = _type_map.get(trial)
+                if type_info is not None:
+                    break
+        if type_info is not None:
+            resolved = _import_type(
+                type_info.get("__type__", ""),
+                type_info.get("__module__", ""),
+                _allowed_modules,
+            )
+            if resolved is not None:
+                target_type = resolved
+
+    if target_type is None or target_type is TypingAny:
+        return data
+
+    if isinstance(data, (int, float, str, bool)) and not isinstance(data, enum.Enum):
+        if not (isinstance(target_type, type) and issubclass(target_type, enum.Enum)):
+            if target_type is not bytes:
+                return data
+
+    if isinstance(target_type, type) and target_type is bytes:
+        if isinstance(data, str):
+            return data.encode()
+        return data
+
+    is_opt, inner_type = _unwrap_optional(target_type)
+    if is_opt:
+        return dejsonfy(data, target_type=inner_type, _type_map=_type_map,
+                        _path=_path, _allowed_modules=_allowed_modules)
+
+    origin = _get_origin(target_type)
+    args = _get_type_args(target_type)
+    if origin is Union:
+        for union_type in args:
+            if union_type is type(None):
+                continue
+            try:
+                result = dejsonfy(data, target_type=union_type, _type_map=_type_map,
+                                  _path=_path, _allowed_modules=_allowed_modules)
+                return result
+            except Exception:
+                continue
+        return data
+
+    if isinstance(target_type, type) and issubclass(target_type, enum.Enum):
+        return _dejsonfy_enum(data, target_type)
+
+    if origin is list or (isinstance(target_type, type) and target_type is list):
+        element_type = args[0] if args else None
+        return _dejsonfy_sequence(data, element_type, list, _type_map=_type_map,
+                                  _path=_path, _allowed_modules=_allowed_modules)
+
+    if origin is tuple or (isinstance(target_type, type) and target_type is tuple):
+        if args:
+            if len(args) == 2 and args[1] is Ellipsis:
+                return _dejsonfy_sequence(data, args[0], tuple, _type_map=_type_map,
+                                          _path=_path, _allowed_modules=_allowed_modules)
+            elif Ellipsis not in args:
+                return _dejsonfy_positional_tuple(data, args, _type_map=_type_map,
+                                                  _path=_path, _allowed_modules=_allowed_modules)
+        if isinstance(data, (list, tuple)):
+            return tuple(data)
+        return data
+
+    if origin is set or (isinstance(target_type, type) and target_type is set):
+        element_type = args[0] if args else None
+        return _dejsonfy_sequence(data, element_type, set, _type_map=_type_map,
+                                  _path=_path, _allowed_modules=_allowed_modules)
+
+    if origin is dict or (isinstance(target_type, type) and target_type is dict):
+        key_type = args[0] if len(args) >= 1 else None
+        value_type = args[1] if len(args) >= 2 else None
+        return _dejsonfy_mapping(data, key_type, value_type, target_type,
+                                 _type_map=_type_map, _path=_path, _allowed_modules=_allowed_modules)
+
+    try:
+        if attr.has(target_type):
+            return _dejsonfy_structured(data, target_type, target=target,
+                                        _type_map=_type_map, _path=_path, _allowed_modules=_allowed_modules)
+    except Exception:
+        pass
+
+    try:
+        if dataclasses.is_dataclass(target_type) and isinstance(target_type, type):
+            return _dejsonfy_structured(data, target_type, target=target,
+                                        _type_map=_type_map, _path=_path, _allowed_modules=_allowed_modules)
+    except Exception:
+        pass
+
+    if isinstance(target_type, type) and issubclass(target_type, tuple) and hasattr(target_type, "_fields"):
+        return _dejsonfy_namedtuple(data, target_type, _type_map=_type_map,
+                                    _path=_path, _allowed_modules=_allowed_modules)
+
+    if isinstance(target_type, type) and hasattr(target_type, "__slots__"):
+        return _dejsonfy_slots(data, target_type, target=target,
+                               _type_map=_type_map, _path=_path, _allowed_modules=_allowed_modules)
+
+    if isinstance(target_type, type) and isinstance(data, dict):
+        return _dejsonfy_plain_object(data, target_type, target=target,
+                                      _type_map=_type_map, _path=_path, _allowed_modules=_allowed_modules)
+
+    return data
 
 
 def iter_all_json_strs(json_obj_iter, process_func=None, indent=None, ensure_ascii=False, **kwargs):
@@ -1054,6 +1757,9 @@ def jsonfy(
         is_artifact=False,
         overwrite: bool = True,
         ensure_ascii: bool = False,
+        save_type: Union[None, bool, str] = None,
+        type_file_path: str = None,
+        parts_type_map: Dict[Type, Union[dict, "PartsKeyPath"]] = None,
 ):
     """
     Converts an object to a JSON-serializable form, optionally extracting
@@ -1121,6 +1827,14 @@ def jsonfy(
             If False, parts files accumulate. Defaults to True.
         ensure_ascii (bool, optional): Passed to _serialize_value for parts content.
             Defaults to False.
+        save_type (Union[None, bool, str], optional): Controls type metadata embedding.
+            None/False = no metadata (default), True/"inline" = embed __type__/__module__
+            in every non-primitive dict, "separate" = write companion .types.json file.
+        type_file_path (str, optional): Custom path for the .types.json file when
+            save_type="separate". Defaults to {parts_root_path}.types.json.
+        parts_type_map (Dict[Type, Union[dict, PartsKeyPath]], optional): Dict mapping
+            Python types to extraction config. Automatically extracts fields whose values
+            are instances of the mapped types into separate parts files.
 
     Returns:
         The converted (and possibly parts-extracted) object, or None if obj was None.
@@ -1138,8 +1852,13 @@ def jsonfy(
             if isinstance(_check_val, is_artifact):
                 parts_key_paths = '*'
 
-    # Capture original type before dict conversion (for artifacts_as_parts)
-    _original_type = type(obj) if artifacts_as_parts else None
+    # Capture original type/object before dict conversion
+    _has_artifact_types = (
+        hasattr(type(obj), "__artifact_types__")
+        and type(obj).__artifact_types__
+    )
+    _original_type = type(obj) if (artifacts_as_parts or _has_artifact_types) else None
+    _original_obj_for_type = obj if (save_type or parts_type_map or _has_artifact_types or artifacts_as_parts) else None
 
     if converter is not None:
         if callable(converter) and not isinstance(converter, (JsonConverter, str)):
@@ -1164,23 +1883,81 @@ def jsonfy(
     if artifacts_as_parts:
         groups = None if artifacts_as_parts is True else artifacts_as_parts
 
-        # Determine the type to inspect for @artifact_field decorators.
-        # When parts_key_path_root is set, the actual item lives at that path
-        # (e.g. log_data['item']), so resolve the type from there.
         _artifact_type = _original_type
-        if parts_key_path_root and has_path(obj, parts_key_path_root):
-            _artifact_type = type(get_at_path(obj, parts_key_path_root))
+        if parts_key_path_root and _original_obj_for_type is not None:
+            _inner_orig = getattr(_original_obj_for_type, parts_key_path_root, None) if hasattr(_original_obj_for_type, parts_key_path_root) else None
+            if _inner_orig is None and has_path(_original_obj_for_type, parts_key_path_root):
+                _inner_orig = get_at_path(_original_obj_for_type, parts_key_path_root)
+            if _inner_orig is not None:
+                _artifact_type = type(_inner_orig)
 
         artifact_entries = get_key_paths_for_artifacts(_artifact_type, groups=groups)
 
         if artifact_entries:
             if parts_key_paths:
-                # Deduplicate: explicit parts_key_paths take precedence over artifact entries
                 explicit_keys = {
                     _normalize_extract_path_entry(e)[0] for e in parts_key_paths
                 }
                 artifact_entries = [e for e in artifact_entries if e.key not in explicit_keys]
             parts_key_paths = artifact_entries + (list(parts_key_paths) if parts_key_paths else [])
+
+    # Build parts_type_map from @artifact_type decorators
+    if _has_artifact_types and _original_obj_for_type is not None:
+        _artifact_type_map = {}
+        _artifact_type_cls = _original_type
+        if parts_key_path_root:
+            _inner_obj = getattr(_original_obj_for_type, parts_key_path_root, None) if hasattr(_original_obj_for_type, parts_key_path_root) else None
+            if _inner_obj is not None and hasattr(type(_inner_obj), "__artifact_types__"):
+                _artifact_type_cls = type(_inner_obj)
+        for entry in getattr(_artifact_type_cls, "__artifact_types__", []):
+            _artifact_type_map[entry["target_type"]] = {
+                "ext": entry.get("ext"),
+                "alias": entry.get("alias"),
+                "subfolder": entry.get("subfolder"),
+            }
+        if _artifact_type_map:
+            if parts_type_map:
+                merged = dict(_artifact_type_map)
+                merged.update(parts_type_map)
+                parts_type_map = merged
+            else:
+                parts_type_map = _artifact_type_map
+
+    # Inject or collect type metadata
+    if save_type and _original_obj_for_type is not None:
+        if save_type is True or save_type == "inline":
+            _inject_type_metadata(_original_obj_for_type, obj)
+        elif save_type == "separate" and (parts_root_path or type_file_path):
+            _type_map = _collect_type_metadata(_original_obj_for_type, obj)
+            _write_type_file(_type_map, parts_root_path, type_file_path)
+
+    # Collect type-driven parts entries
+    if parts_type_map and _original_obj_for_type is not None and isinstance(obj, dict):
+        _walk_orig = _original_obj_for_type
+        _walk_conv = obj
+        if parts_key_path_root:
+            _walk_orig = getattr(_original_obj_for_type, parts_key_path_root, None) if hasattr(_original_obj_for_type, parts_key_path_root) else None
+            if _walk_orig is None:
+                try:
+                    _walk_orig = get_at_path(_original_obj_for_type, parts_key_path_root)
+                except (KeyError, AttributeError, TypeError, IndexError):
+                    _walk_orig = None
+            _walk_conv = get_at_path(obj, parts_key_path_root) if has_path(obj, parts_key_path_root) else None
+        if _walk_orig is not None and _walk_conv is not None:
+            type_driven_entries = _collect_type_driven_parts(
+                _walk_orig, _walk_conv, parts_type_map
+            )
+        else:
+            type_driven_entries = []
+        if type_driven_entries:
+            if parts_key_paths:
+                explicit_keys = {
+                    _normalize_extract_path_entry(e)[0] for e in parts_key_paths
+                }
+                type_driven_entries = [
+                    e for e in type_driven_entries if e.key not in explicit_keys
+                ]
+            parts_key_paths = (list(parts_key_paths) if parts_key_paths else []) + type_driven_entries
 
     # Ensure nested objects at parts_key_path_root are dict-converted
     # so has_path/get_at_path can navigate into them during extraction.
