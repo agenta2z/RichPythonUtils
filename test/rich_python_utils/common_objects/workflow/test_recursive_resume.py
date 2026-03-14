@@ -27,7 +27,7 @@ from attr import attrs, attrib
 from rich_python_utils.common_objects.workflow.workflow import Workflow, CheckpointState
 from rich_python_utils.common_objects.workflow.common.resumable import CheckpointMode
 from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
-from rich_python_utils.io_utils.json_io import artifact_type, artifact_field
+from rich_python_utils.io_utils.artifact import artifact_type, artifact_field
 from rich_python_utils.io_utils.pickle_io import pickle_save, pickle_load
 
 

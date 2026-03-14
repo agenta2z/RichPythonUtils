@@ -16,7 +16,7 @@ from rich_python_utils.common_objects.workflow.common.step_result_save_options i
 from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
 from rich_python_utils.common_objects.workflow.common.worknode_base import WorkNodeBase
 from rich_python_utils.common_utils.async_utils import call_maybe_async
-from rich_python_utils.io_utils.json_io import artifact_type
+from rich_python_utils.io_utils.artifact import artifact_type
 from rich_python_utils.io_utils.pickle_io import _get_field_names
 
 
