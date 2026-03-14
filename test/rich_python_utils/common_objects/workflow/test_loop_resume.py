@@ -197,9 +197,10 @@ class TestCrashAndResumeInLoop:
         with pytest.raises(RuntimeError, match="crash on second b call"):
             wf._run(1)
 
-        # Check checkpoint was saved
-        checkpoint_path = os.path.join(save_dir, "step___wf_checkpoint__.pkl")
-        assert os.path.exists(checkpoint_path), "Checkpoint should exist after first loop iteration"
+        # Check checkpoint was saved (new parts mode: directory with main.pkl inside)
+        checkpoint_dir = os.path.join(save_dir, "step___wf_checkpoint__")
+        assert os.path.isdir(checkpoint_dir), "Checkpoint directory should exist after first loop iteration"
+        assert os.path.exists(os.path.join(checkpoint_dir, "main.pkl")), "main.pkl should exist in checkpoint dir"
 
         # Resume — should not re-execute completed iterations
         call_log.clear()
@@ -413,9 +414,13 @@ class TestCheckpointFileDeletedFallback:
         wf._run(5)
 
         # Delete checkpoint but keep seq files
-        ckpt_path = os.path.join(save_dir, "step___wf_checkpoint__.pkl")
-        if os.path.exists(ckpt_path):
-            os.remove(ckpt_path)
+        # Remove checkpoint (may be a directory in parts mode or a file in legacy mode)
+        ckpt_dir = os.path.join(save_dir, "step___wf_checkpoint__")
+        ckpt_file = os.path.join(save_dir, "step___wf_checkpoint__.pkl")
+        if os.path.isdir(ckpt_dir):
+            shutil.rmtree(ckpt_dir)
+        elif os.path.exists(ckpt_file):
+            os.remove(ckpt_file)
 
         # Resume — should fall back to backward scan with glob fallback
         loop_count[0] = 0
@@ -465,10 +470,14 @@ class TestCheckpointResultFileDeletedFallback:
         )
         wf._run(5)
 
-        # Delete all seq result files but keep checkpoint
+        # Delete all seq result files/dirs but keep checkpoint
         for f in os.listdir(save_dir):
             if '___seq' in f:
-                os.remove(os.path.join(save_dir, f))
+                full_path = os.path.join(save_dir, f)
+                if os.path.isdir(full_path):
+                    shutil.rmtree(full_path)
+                else:
+                    os.remove(full_path)
 
         # Resume — checkpoint exists but can't load result → falls back
         loop_count[0] = 0
@@ -876,13 +885,18 @@ class TestResultPassDownModeWithLoopResume:
 
 
 class TestBackwardScanFallbackFindsSeqFiles:
-    """Test 16: Backward scan glob fallback finds ___seqN files."""
+    """Test 16: Backward scan glob fallback finds ___seqN files (parts dirs)."""
 
     def test_glob_fallback(self, save_dir):
+        step_a_calls = [0]
+        step_b_calls = [0]
+
         def step_a(x):
+            step_a_calls[0] += 1
             return x + 1
 
         def step_b(x):
+            step_b_calls[0] += 1
             return x * 2
 
         loop_count = [0]
@@ -910,16 +924,23 @@ class TestBackwardScanFallbackFindsSeqFiles:
         wf._run(5)
 
         # Delete checkpoint but keep ___seqN files
-        ckpt_path = os.path.join(save_dir, "step___wf_checkpoint__.pkl")
-        if os.path.exists(ckpt_path):
-            os.remove(ckpt_path)
+        # Remove checkpoint (may be a directory in parts mode or a file in legacy mode)
+        ckpt_dir = os.path.join(save_dir, "step___wf_checkpoint__")
+        ckpt_file = os.path.join(save_dir, "step___wf_checkpoint__.pkl")
+        if os.path.isdir(ckpt_dir):
+            shutil.rmtree(ckpt_dir)
+        elif os.path.exists(ckpt_file):
+            os.remove(ckpt_file)
 
-        # Verify seq files exist
-        seq_files = [f for f in os.listdir(save_dir) if '___seq' in f]
-        assert len(seq_files) > 0, "Should have ___seqN files"
+        # Verify seq results exist (may be directories in parts mode)
+        seq_entries = [f for f in os.listdir(save_dir) if '___seq' in f]
+        assert len(seq_entries) > 0, "Should have ___seqN entries"
 
-        # Resume — glob fallback should find them
+        # Resume — glob fallback should find them and skip re-execution
         loop_count[0] = 0
+        step_a_calls[0] = 0
+        step_b_calls[0] = 0
+
         wf2 = ResumableWorkflow(
             steps=steps,
             save_dir=save_dir,
@@ -929,6 +950,16 @@ class TestBackwardScanFallbackFindsSeqFiles:
         )
         result = wf2._run(5)
         assert result is not None
+
+        # The backward scan should have found the highest seq result and
+        # loaded it, so at least one step should NOT have been re-executed.
+        # step_b has the highest seq number (last step), so if the glob
+        # found step_b___seqN, step_b should have been skipped entirely
+        # (its result was loaded from disk).
+        assert step_b_calls[0] == 0, (
+            f"step_b should have been skipped via glob fallback but was "
+            f"called {step_b_calls[0]} times"
+        )
 
 
 # ===========================================================================
@@ -1077,10 +1108,13 @@ class TestAsyncNonPicklableStateRaises:
 @pytest.mark.asyncio
 class TestAsyncGlobFallback:
     async def test_glob_fallback(self, save_dir):
+        step_b_calls = [0]
+
         def step_a(x):
             return x + 1
 
         def step_b(x):
+            step_b_calls[0] += 1
             return x * 2
 
         loop_count = [0]
@@ -1100,11 +1134,17 @@ class TestAsyncGlobFallback:
         )
         await wf._arun(5)
 
-        ckpt_path = os.path.join(save_dir, "step___wf_checkpoint__.pkl")
-        if os.path.exists(ckpt_path):
-            os.remove(ckpt_path)
+        # Remove checkpoint (may be a directory in parts mode or a file in legacy mode)
+        ckpt_dir = os.path.join(save_dir, "step___wf_checkpoint__")
+        ckpt_file = os.path.join(save_dir, "step___wf_checkpoint__.pkl")
+        if os.path.isdir(ckpt_dir):
+            shutil.rmtree(ckpt_dir)
+        elif os.path.exists(ckpt_file):
+            os.remove(ckpt_file)
 
         loop_count[0] = 0
+        step_b_calls[0] = 0
+
         wf2 = ResumableWorkflow(
             steps=steps, save_dir=save_dir,
             result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
@@ -1113,3 +1153,9 @@ class TestAsyncGlobFallback:
         )
         result = await wf2._arun(5)
         assert result is not None
+
+        # step_b should have been skipped — its result was loaded from disk
+        assert step_b_calls[0] == 0, (
+            f"step_b should have been skipped via glob fallback but was "
+            f"called {step_b_calls[0]} times"
+        )

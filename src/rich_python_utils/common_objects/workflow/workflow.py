@@ -16,6 +16,13 @@ from rich_python_utils.common_objects.workflow.common.step_result_save_options i
 from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
 from rich_python_utils.common_objects.workflow.common.worknode_base import WorkNodeBase
 from rich_python_utils.common_utils.async_utils import call_maybe_async
+from rich_python_utils.io_utils.json_io import artifact_type
+from rich_python_utils.io_utils.pickle_io import _get_field_names
+
+
+# Forward reference: CheckpointState is defined after Workflow to avoid circular dependency.
+# It is only used in jsonfy mode.
+CheckpointState = None  # replaced below after Workflow class definition
 
 
 @attrs(slots=False)
@@ -211,14 +218,14 @@ class Workflow(WorkNodeBase, ABC):
 
     def _save_checkpoint(self, checkpoint_dict, *args, **kwargs):
         """Save a workflow checkpoint, delegating to _save_result for subclass compat."""
-        checkpoint_path = self._get_result_path("__wf_checkpoint__", *args, **kwargs)
+        checkpoint_path = self._resolve_result_path("__wf_checkpoint__", *args, **kwargs)
         self._save_result(checkpoint_dict, output_path=checkpoint_path)
 
     def _try_load_checkpoint(self, *args, **kwargs) -> Optional[dict]:
         """Try loading a checkpoint. Returns None on any failure (falls back to backward scan)."""
         try:
             ckpt_id = "__wf_checkpoint__"
-            ckpt_path = self._get_result_path(ckpt_id, *args, **kwargs)
+            ckpt_path = self._resolve_result_path(ckpt_id, *args, **kwargs)
             exists = self._exists_result(result_id=ckpt_id, result_path=ckpt_path)
             if not exists:
                 return None
@@ -228,8 +235,32 @@ class Workflow(WorkNodeBase, ABC):
                     ckpt_path if isinstance(exists, bool) else exists
                 ),
             )
+            # Handle CheckpointState wrapper (jsonfy mode)
+            if CheckpointState is not None and isinstance(ckpt, CheckpointState):
+                ckpt = {
+                    "version": ckpt.version,
+                    "exec_seq": ckpt.exec_seq,
+                    "step_index": ckpt.step_index,
+                    "result_id": ckpt.result_id,
+                    "next_step_index": ckpt.next_step_index,
+                    "loop_counts": ckpt.loop_counts,
+                    "state": ckpt.state,
+                }
             if not isinstance(ckpt, dict) or "next_step_index" not in ckpt:
                 return None
+            # Normalize loop_counts: jsonfy converts int-keyed dicts to
+            # [{key: k, value: v}, ...] lists; convert back to dict.
+            lc = ckpt.get("loop_counts", {})
+            if isinstance(lc, list):
+                ckpt["loop_counts"] = {
+                    item["key"]: item["value"]
+                    for item in lc
+                    if isinstance(item, dict) and "key" in item
+                }
+            # Re-setup child workflows after loading
+            ckpt_state = ckpt.get("state")
+            if ckpt_state is not None:
+                self._setup_child_workflows(ckpt_state, *args, **kwargs)
             return ckpt
         except Exception:
             return None
@@ -240,21 +271,34 @@ class Workflow(WorkNodeBase, ABC):
 
         Shared by both _run() and _arun() to avoid duplication.
         """
-        # Validate state picklability on first checkpoint only.
-        # _save_checkpoint → _save_result will pickle the whole dict anyway;
-        # this pre-check gives a clear error message.
+        # Setup child workflows before saving so they have inherited config
+        self._setup_child_workflows(state, *args, **kwargs)
+
+        # Validate serializability on first checkpoint only.
         if not getattr(self, '_state_picklability_verified', False):
-            try:
-                pickle.dumps(state)
-            except Exception as e:
-                raise TypeError(
-                    f"Workflow state is not picklable and cannot be checkpointed "
-                    f"for loop resume. Either make state picklable or set "
-                    f"enable_result_save=False. Original error: {e}"
-                ) from e
+            if self.checkpoint_mode == 'jsonfy':
+                try:
+                    from rich_python_utils.io_utils.json_io import jsonfy
+                    jsonfy(state)
+                except Exception as e:
+                    raise TypeError(
+                        f"Workflow state is not jsonfy-serializable and cannot be "
+                        f"checkpointed. Either make state serializable, use "
+                        f"checkpoint_mode='pickle', or set enable_result_save=False. "
+                        f"Original error: {e}"
+                    ) from e
+            else:
+                try:
+                    pickle.dumps(state)
+                except Exception as e:
+                    raise TypeError(
+                        f"Workflow state is not picklable and cannot be checkpointed "
+                        f"for loop resume. Either make state picklable or set "
+                        f"enable_result_save=False. Original error: {e}"
+                    ) from e
             self._state_picklability_verified = True
 
-        self._save_checkpoint({
+        checkpoint_dict = {
             "version": 1,
             "exec_seq": self._exec_seq,
             "step_index": step_index,
@@ -262,7 +306,150 @@ class Workflow(WorkNodeBase, ABC):
             "next_step_index": next_step_index,
             "loop_counts": dict(self._loop_counts),
             "state": state,
-        }, *args, **kwargs)
+        }
+
+        if self.checkpoint_mode == 'jsonfy' and CheckpointState is not None:
+            checkpoint_dict = CheckpointState(**checkpoint_dict)
+
+        self._save_checkpoint(checkpoint_dict, *args, **kwargs)
+
+    @staticmethod
+    def _glob_seq_results(step_result_path):
+        """Find ___seqN results for a step, matching file, directory, and jsonfy formats.
+
+        Returns the path of the highest-numbered seq result, or None if none found.
+        Handles:
+        - Legacy .pkl files (step_name___seq1.pkl)
+        - Parts directories (step_name___seq1/ with main.pkl)
+        - Jsonfy .json files (step_name___seq1.pkl.json)
+        """
+        base_dir = os.path.dirname(step_result_path)
+        base_name_parts = os.path.basename(step_result_path).rsplit('.', 1)
+        stem = base_name_parts[0]
+
+        # Try file pattern first (legacy: step_name___seq1.pkl)
+        pattern = os.path.join(base_dir, f"{stem}___seq*")
+        if len(base_name_parts) > 1:
+            pattern += f".{base_name_parts[1]}"
+        matches = glob.glob(pattern)
+        # Filter out .json files from the file pattern (they need separate handling)
+        matches = [m for m in matches if not m.endswith('.json')]
+
+        if not matches:
+            # Try directory pattern (parts mode: step_name___seq1/)
+            dir_pattern = os.path.join(base_dir, f"{stem}___seq*")
+            matches = [
+                m for m in glob.glob(dir_pattern)
+                if os.path.isdir(m) and os.path.exists(
+                    os.path.join(m, "main.pkl")
+                )
+            ]
+
+        if not matches:
+            # Try jsonfy pattern (step_name___seq1.pkl.json)
+            json_pattern = os.path.join(base_dir, f"{stem}___seq*")
+            if len(base_name_parts) > 1:
+                json_pattern += f".{base_name_parts[1]}.json"
+            else:
+                json_pattern += ".json"
+            matches = [m for m in glob.glob(json_pattern) if os.path.isfile(m)]
+
+        if not matches:
+            return None
+
+        matches.sort(
+            key=lambda p: int(re.search(r'___seq(\d+)', p).group(1))
+        )
+        return matches[-1]
+
+    # ------------------------------------------------------------------
+    # Child Workflow discovery and setup (recursive resume)
+    # ------------------------------------------------------------------
+
+    def _find_child_workflows_in(self, source):
+        """Find child Workflow instances in a source object using artifact metadata.
+
+        Checks both type(self).__artifact_types__ (Pattern A: decorator on
+        parent Workflow class) and type(source).__artifact_types__ (Pattern B:
+        decorator on state class), merging and deduplicating.
+
+        Returns:
+            dict: {field_name: (workflow_instance, artifact_entry)}
+        """
+        if source is None:
+            return {}
+
+        # Merge artifact_types from both self and source
+        all_entries = []
+        for cls in [type(self), type(source)]:
+            entries = getattr(cls, '__artifact_types__', None)
+            if entries:
+                all_entries.extend(entries)
+        if not all_entries:
+            return {}
+
+        # Deduplicate by target_type
+        seen_types = set()
+        unique_entries = []
+        for entry in all_entries:
+            tt = entry['target_type']
+            if tt not in seen_types:
+                seen_types.add(tt)
+                unique_entries.append(entry)
+
+        children = {}
+        for entry in unique_entries:
+            target_type = entry['target_type']
+            if not (isinstance(target_type, type) and issubclass(target_type, Workflow)):
+                continue
+            if isinstance(source, dict):
+                for key, val in source.items():
+                    if isinstance(val, target_type):
+                        children[key] = (val, entry)
+            else:
+                for attr_name in _get_field_names(source):
+                    val = getattr(source, attr_name, None)
+                    if isinstance(val, target_type):
+                        children[attr_name] = (val, entry)
+        return children
+
+    def _setup_child_workflows(self, state, *args, **kwargs):
+        """Discover and configure child Workflow instances for recursive resume.
+
+        Scans both direct attributes of self and the state object for child
+        Workflows. For each child, sets _result_root_override and propagates
+        checkpoint settings.
+        """
+        if state is None:
+            return
+
+        # Check if either self or state has artifact metadata
+        has_metadata = (
+            getattr(type(self), '__artifact_types__', None) or
+            getattr(type(state), '__artifact_types__', None)
+        )
+        if not has_metadata:
+            return
+
+        parent_result_dir = os.path.dirname(
+            self._resolve_result_path("__wf_checkpoint__", *args, **kwargs)
+        )
+
+        all_children = {}
+        all_children.update(self._find_child_workflows_in(self))
+        all_children.update(self._find_child_workflows_in(state))
+
+        for attr_name, (child, entry) in all_children.items():
+            subfolder = entry.get('subfolder')
+            if subfolder:
+                child_dir = os.path.join(parent_result_dir, subfolder, attr_name)
+            else:
+                child_dir = os.path.join(parent_result_dir, attr_name)
+            os.makedirs(child_dir, exist_ok=True)
+            child._result_root_override = child_dir
+            child.enable_result_save = self.enable_result_save
+            child.resume_with_saved_results = self.resume_with_saved_results
+            child.checkpoint_mode = self.checkpoint_mode
 
     def _get_step_identifier(self, step: Callable, index: int) -> Dict[str, Any]:
         """Get serializable identifier for a step callable.
@@ -347,6 +534,9 @@ class Workflow(WorkNodeBase, ABC):
         if not self._steps:
             return
 
+        # Setup child workflows for recursive resume
+        self._setup_child_workflows(self._state, *args, **kwargs)
+
         # Detect if any step uses loop_back_to — needed by both resume and save blocks.
         _has_loops = self._has_loop_steps()
 
@@ -376,7 +566,7 @@ class Workflow(WorkNodeBase, ABC):
                     _ckpt_result_id = _checkpoint["result_id"]
                     step_result = self._load_result(
                         result_id=_ckpt_result_id,
-                        result_path_or_preloaded_result=self._get_result_path(
+                        result_path_or_preloaded_result=self._resolve_result_path(
                             _ckpt_result_id, *args, **kwargs
                         ),
                     )
@@ -402,30 +592,19 @@ class Workflow(WorkNodeBase, ABC):
 
                 for i in range(saved_step_results_back_search_start_index, -1, -1):
                     result_id = self._get_step_name(self._steps[i], i) or i
-                    step_result_path = self._get_result_path(result_id, *args, **kwargs)
+                    step_result_path = self._resolve_result_path(result_id, *args, **kwargs)
                     exists_step_result_or_preloaded_step_result = self._exists_result(
                         result_id=result_id, result_path=step_result_path
                     )
 
-                    # Glob fallback for ___seqN files when loops are active
+                    # Glob fallback for ___seqN results when loops are active
                     if _has_loops and not (
                         exists_step_result_or_preloaded_step_result is not None
                         and exists_step_result_or_preloaded_step_result is not False
                     ):
-                        base_path = step_result_path
-                        base_dir = os.path.dirname(base_path)
-                        base_name_parts = os.path.basename(base_path).rsplit('.', 1)
-                        pattern = os.path.join(base_dir, f"{base_name_parts[0]}___seq*")
-                        if len(base_name_parts) > 1:
-                            pattern += f".{base_name_parts[1]}"
-                        matches = glob.glob(pattern)
-                        if matches:
-                            matches.sort(
-                                key=lambda p: int(
-                                    re.search(r'___seq(\d+)', p).group(1)
-                                )
-                            )
-                            step_result_path = matches[-1]
+                        seq_path = self._glob_seq_results(step_result_path)
+                        if seq_path is not None:
+                            step_result_path = seq_path
                             exists_step_result_or_preloaded_step_result = True
 
                     if (
@@ -513,7 +692,7 @@ class Workflow(WorkNodeBase, ABC):
                         if i > 0 and result_save_on_error_enabled:
                             self._save_result(
                                 prev_step_result,
-                                output_path=self._get_result_path(
+                                output_path=self._resolve_result_path(
                                     step_name or i, *args, **kwargs
                                 ),
                             )
@@ -556,7 +735,7 @@ class Workflow(WorkNodeBase, ABC):
                         _current_result_id = step_name or i
                     self._save_result(
                         step_result,
-                        output_path=self._get_result_path(
+                        output_path=self._resolve_result_path(
                             _current_result_id, *args, **kwargs
                         ),
                     )
@@ -622,6 +801,9 @@ class Workflow(WorkNodeBase, ABC):
         if not self._steps:
             return
 
+        # Setup child workflows for recursive resume
+        self._setup_child_workflows(self._state, *args, **kwargs)
+
         # Detect if any step uses loop_back_to — needed by both resume and save blocks.
         _has_loops = self._has_loop_steps()
 
@@ -642,7 +824,7 @@ class Workflow(WorkNodeBase, ABC):
                     _ckpt_result_id = _checkpoint["result_id"]
                     step_result = self._load_result(
                         result_id=_ckpt_result_id,
-                        result_path_or_preloaded_result=self._get_result_path(
+                        result_path_or_preloaded_result=self._resolve_result_path(
                             _ckpt_result_id, *args, **kwargs
                         ),
                     )
@@ -668,30 +850,19 @@ class Workflow(WorkNodeBase, ABC):
 
                 for i in range(saved_step_results_back_search_start_index, -1, -1):
                     result_id = self._get_step_name(self._steps[i], i) or i
-                    step_result_path = self._get_result_path(result_id, *args, **kwargs)
+                    step_result_path = self._resolve_result_path(result_id, *args, **kwargs)
                     exists_step_result_or_preloaded_step_result = self._exists_result(
                         result_id=result_id, result_path=step_result_path
                     )
 
-                    # Glob fallback for ___seqN files when loops are active
+                    # Glob fallback for ___seqN results when loops are active
                     if _has_loops and not (
                         exists_step_result_or_preloaded_step_result is not None
                         and exists_step_result_or_preloaded_step_result is not False
                     ):
-                        base_path = step_result_path
-                        base_dir = os.path.dirname(base_path)
-                        base_name_parts = os.path.basename(base_path).rsplit('.', 1)
-                        pattern = os.path.join(base_dir, f"{base_name_parts[0]}___seq*")
-                        if len(base_name_parts) > 1:
-                            pattern += f".{base_name_parts[1]}"
-                        matches = glob.glob(pattern)
-                        if matches:
-                            matches.sort(
-                                key=lambda p: int(
-                                    re.search(r'___seq(\d+)', p).group(1)
-                                )
-                            )
-                            step_result_path = matches[-1]
+                        seq_path = self._glob_seq_results(step_result_path)
+                        if seq_path is not None:
+                            step_result_path = seq_path
                             exists_step_result_or_preloaded_step_result = True
 
                     if (
@@ -776,7 +947,7 @@ class Workflow(WorkNodeBase, ABC):
                         if i > 0 and result_save_on_error_enabled:
                             self._save_result(
                                 prev_step_result,
-                                output_path=self._get_result_path(
+                                output_path=self._resolve_result_path(
                                     step_name or i, *args, **kwargs
                                 ),
                             )
@@ -817,7 +988,7 @@ class Workflow(WorkNodeBase, ABC):
                         _current_result_id = step_name or i
                     self._save_result(
                         step_result,
-                        output_path=self._get_result_path(
+                        output_path=self._resolve_result_path(
                             _current_result_id, *args, **kwargs
                         ),
                     )
@@ -875,4 +1046,29 @@ class Workflow(WorkNodeBase, ABC):
             return await call_maybe_async(self._handle_abort, exc, step_result, state)
 
         return step_result
+
+
+# --- CheckpointState (jsonfy-mode only) ---
+# Defined after Workflow to use it as @artifact_type target.
+
+@artifact_type(Workflow, type='json', group='workflows')
+@attrs(slots=False)
+class CheckpointState:
+    """Wrapper for checkpoint state dict with artifact metadata for jsonfy mode.
+
+    Only instantiated when checkpoint_mode='jsonfy'; pickle mode saves
+    raw dicts directly via pickle_save(..., enable_parts=True).
+    """
+    version = attrib(default=1)
+    exec_seq = attrib(default=0)
+    step_index = attrib(default=0)
+    result_id = attrib(default=None)
+    next_step_index = attrib(default=0)
+    loop_counts = attrib(factory=dict)
+    state = attrib(default=None)
+
+
+# Update the module-level forward reference used by _try_load_checkpoint and _save_loop_checkpoint.
+# This replaces the None sentinel defined at the top of the module.
+globals()['CheckpointState'] = CheckpointState
 

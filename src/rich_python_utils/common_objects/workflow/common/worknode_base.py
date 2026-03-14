@@ -237,7 +237,7 @@ class WorkNodeBase(Serializable, Debuggable, Resumable, PostProcessable, ABC):
     def load_result(self, *args, **kwargs) -> Tuple[bool, Any]:
         if self.resume_with_saved_results:
             # load saved post-processed result
-            result_path = self._get_result_path(self.name, *args, **kwargs)
+            result_path = self._resolve_result_path(self.name, *args, **kwargs)
             if self._exists_result(self.name, result_path):
                 result = self._load_result(self.name, result_path)
                 if self.ignore_stop_flag_from_saved_results:
