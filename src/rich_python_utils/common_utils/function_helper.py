@@ -326,6 +326,7 @@ def execute_with_retry(
         retry_on_exceptions: List[type] = None,
         output_validator: Callable[..., bool] = None,
         pre_condition: Callable[..., bool] = None,
+        on_retry_callback: Callable = None,
         args: List = None,
         kwargs: Dict[str, Any] = None,
         default_return_or_raise: Union[Any, Exception] = None
@@ -346,6 +347,8 @@ def execute_with_retry(
             Should return True if the output is valid. If False, triggers a retry. Defaults to None.
         pre_condition (Callable[..., bool]): A guard callable checked before each execution attempt.
             If it returns False, execution stops and returns default_return_or_raise. Defaults to None.
+        on_retry_callback (Callable): Optional callback invoked on each retry attempt. Called with
+            (attempt, exception) before the retry wait. Defaults to None.
         args (List): Positional arguments to pass to the function (also passed to pre_condition). Defaults to None.
         kwargs (Dict[str, Any]): Keyword arguments to pass to the function (also passed to pre_condition). Defaults to None.
         default_return_or_raise (Union[Any, Exception]): Value to return or exception to raise if all retries fail or pre_condition is False. Defaults to None.
@@ -439,6 +442,9 @@ def execute_with_retry(
         if execution_failed:
             if attempts >= max_retry:
                 break
+
+            if on_retry_callback is not None:
+                on_retry_callback(attempts, last_exception)
 
             warnings.warn(
                 f"Attempts {attempts} of '{func}' failed due to error '{last_exception}'. Retry in {min_retry_wait} to {max_retry_wait} seconds.")

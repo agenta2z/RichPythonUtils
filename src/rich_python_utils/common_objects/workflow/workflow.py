@@ -1,9 +1,11 @@
 import glob
+import json
 import os
 import pickle
 import re
 import shutil
 from abc import ABC
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, Optional, Sequence, Callable, Union
 
@@ -312,6 +314,77 @@ class Workflow(WorkNodeBase, ABC):
             checkpoint_dict = CheckpointState(**checkpoint_dict)
 
         self._save_checkpoint(checkpoint_dict, *args, **kwargs)
+
+    def _save_step_in_progress_marker(
+        self, step_index, step_name, state, *args, **kwargs
+    ):
+        """Write a pre-execution marker before running a step.
+
+        The marker is a lightweight JSON file placed alongside the checkpoint.
+        If the process crashes mid-step, the marker persists on disk, allowing
+        the next resume to detect that the step was attempted but never finished.
+        """
+        try:
+            checkpoint_path = self._resolve_result_path(
+                "__wf_checkpoint__", *args, **kwargs
+            )
+            if not checkpoint_path:
+                return
+            marker_path = os.path.join(
+                os.path.dirname(checkpoint_path),
+                "__wf_step_in_progress__.json",
+            )
+            os.makedirs(os.path.dirname(marker_path), exist_ok=True)
+            marker = {
+                "step_index": step_index,
+                "step_name": step_name,
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "attempt": self._step_attempt_counts.get(step_index, 0),
+            }
+            with open(marker_path, "w") as f:
+                json.dump(marker, f, indent=2)
+        except Exception:
+            pass  # Non-fatal: marker is best-effort
+
+    def _clear_step_in_progress_marker(self, *args, **kwargs):
+        """Remove the pre-execution marker after successful step completion."""
+        try:
+            checkpoint_path = self._resolve_result_path(
+                "__wf_checkpoint__", *args, **kwargs
+            )
+            if not checkpoint_path:
+                return
+            marker_path = os.path.join(
+                os.path.dirname(checkpoint_path),
+                "__wf_step_in_progress__.json",
+            )
+            os.remove(marker_path)
+        except Exception:
+            pass
+
+    def _load_step_in_progress_marker(self, *args, **kwargs) -> Optional[dict]:
+        """Load the pre-execution marker on resume.
+
+        Returns:
+            Marker dict with step_index, step_name, started_at, attempt;
+            or None if no marker exists.
+        """
+        try:
+            checkpoint_path = self._resolve_result_path(
+                "__wf_checkpoint__", *args, **kwargs
+            )
+            if not checkpoint_path:
+                return None
+            marker_path = os.path.join(
+                os.path.dirname(checkpoint_path),
+                "__wf_step_in_progress__.json",
+            )
+            if os.path.isfile(marker_path):
+                with open(marker_path) as f:
+                    return json.load(f)
+        except Exception:
+            pass
+        return None
 
     @staticmethod
     def _glob_seq_results(step_result_path):
@@ -648,16 +721,42 @@ class Workflow(WorkNodeBase, ABC):
         self._state_picklability_verified = False
         _last_saved_result_id = None
 
+        # Step-in-progress tracking.
+        # _step_attempt_counts accumulates across resume cycles (must persist
+        # if already populated from a prior run's marker), while the per-run
+        # flags are always reset so each run starts without stale state.
+        if not hasattr(self, "_step_attempt_counts"):
+            self._step_attempt_counts = {}
+        self._step_was_previously_attempted = False
+        self._previous_attempt_info = None
+
         # Determine starting step index.
         if _checkpoint_next_i is not None:
             i = _checkpoint_next_i
         else:
             i = start_step_i + 1
 
+        # Detect partial step execution from prior run
+        if _has_loops and _checkpoint is not None:
+            marker = self._load_step_in_progress_marker(*args, **kwargs)
+            if marker and marker.get("step_index") == i:
+                self._step_attempt_counts[i] = marker.get("attempt", 1)
+                self._step_was_previously_attempted = True
+                self._previous_attempt_info = marker
+
         try:  # OUTER try: catches WorkflowAborted → _handle_abort
             while i < len(self._steps):
                 this_step = self._steps[i]
                 step_name = self._get_step_name(this_step, i)
+
+                # Write pre-execution marker before running step
+                if _has_loops:
+                    self._step_attempt_counts[i] = (
+                        self._step_attempt_counts.get(i, 0) + 1
+                    )
+                    self._save_step_in_progress_marker(
+                        i, step_name, state, *args, **kwargs
+                    )
 
                 try:  # INNER try: per-step error handling
                     # Handle input arguments to the step:
@@ -766,6 +865,12 @@ class Workflow(WorkNodeBase, ABC):
                                     i, target_i, _last_saved_result_id,
                                     state, *args, **kwargs
                                 )
+                            if _has_loops:
+                                self._clear_step_in_progress_marker(
+                                    *args, **kwargs
+                                )
+                                self._step_was_previously_attempted = False
+                                self._previous_attempt_info = None
                             i = target_i
                             continue  # jump back, skip _on_step_complete
                         else:
@@ -787,6 +892,10 @@ class Workflow(WorkNodeBase, ABC):
                         i, i + 1, _last_saved_result_id,
                         state, *args, **kwargs
                     )
+                if _has_loops:
+                    self._clear_step_in_progress_marker(*args, **kwargs)
+                    self._step_was_previously_attempted = False
+                    self._previous_attempt_info = None
 
                 i += 1
 
@@ -905,16 +1014,42 @@ class Workflow(WorkNodeBase, ABC):
         self._state_picklability_verified = False
         _last_saved_result_id = None
 
+        # Step-in-progress tracking.
+        # _step_attempt_counts accumulates across resume cycles (must persist
+        # if already populated from a prior run's marker), while the per-run
+        # flags are always reset so each run starts without stale state.
+        if not hasattr(self, "_step_attempt_counts"):
+            self._step_attempt_counts = {}
+        self._step_was_previously_attempted = False
+        self._previous_attempt_info = None
+
         # Determine starting step index.
         if _checkpoint_next_i is not None:
             i = _checkpoint_next_i
         else:
             i = start_step_i + 1
 
+        # Detect partial step execution from prior run
+        if _has_loops and _checkpoint is not None:
+            marker = self._load_step_in_progress_marker(*args, **kwargs)
+            if marker and marker.get("step_index") == i:
+                self._step_attempt_counts[i] = marker.get("attempt", 1)
+                self._step_was_previously_attempted = True
+                self._previous_attempt_info = marker
+
         try:  # OUTER try: catches WorkflowAborted → _handle_abort
             while i < len(self._steps):
                 this_step = self._steps[i]
                 step_name = self._get_step_name(this_step, i)
+
+                # Write pre-execution marker before running step
+                if _has_loops:
+                    self._step_attempt_counts[i] = (
+                        self._step_attempt_counts.get(i, 0) + 1
+                    )
+                    self._save_step_in_progress_marker(
+                        i, step_name, state, *args, **kwargs
+                    )
 
                 try:  # INNER try: per-step error handling
                     if i > 0:
@@ -1019,6 +1154,12 @@ class Workflow(WorkNodeBase, ABC):
                                     i, target_i, _last_saved_result_id,
                                     state, *args, **kwargs
                                 )
+                            if _has_loops:
+                                self._clear_step_in_progress_marker(
+                                    *args, **kwargs
+                                )
+                                self._step_was_previously_attempted = False
+                                self._previous_attempt_info = None
                             i = target_i
                             continue  # jump back, skip _on_step_complete
                         else:
@@ -1039,6 +1180,10 @@ class Workflow(WorkNodeBase, ABC):
                         i, i + 1, _last_saved_result_id,
                         state, *args, **kwargs
                     )
+                if _has_loops:
+                    self._clear_step_in_progress_marker(*args, **kwargs)
+                    self._step_was_previously_attempted = False
+                    self._previous_attempt_info = None
 
                 i += 1
 

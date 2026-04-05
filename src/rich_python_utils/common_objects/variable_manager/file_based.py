@@ -742,6 +742,77 @@ class FileBasedVariableManager(VariableManager):
 
     # endregion
 
+    # region Override / Sidecar Layer
+
+    def _init_override_layer(self) -> None:
+        """Initialize scoped override/alias state if not already done."""
+        if not hasattr(self, "_scoped_overrides"):
+            self._scoped_overrides: Dict[Tuple[str, str], Dict[str, object]] = {}
+        if not hasattr(self, "_scoped_aliases"):
+            self._scoped_aliases: Dict[Tuple[str, str], Dict[str, str]] = {}
+        if not hasattr(self, "_scoped_yaml_sidecars"):
+            self._scoped_yaml_sidecars: Dict[Tuple[str, str], Dict[str, object]] = {}
+
+    def _cascade_scopes(
+        self,
+        root_space: str,
+        vtype: str,
+    ) -> List[Tuple[str, str]]:
+        """Generate scope cascade order from most-specific to least-specific (global).
+
+        Returns scopes from most-specific to least-specific (global).
+        """
+        scopes: List[Tuple[str, str]] = []
+        if root_space and vtype:
+            scopes.append((root_space, vtype))
+        if root_space:
+            scopes.append((root_space, ""))
+        scopes.append(("", ""))
+        return scopes
+
+    def load_yaml_sidecar(
+        self,
+        yaml_path,
+        *,
+        variable_root_space: str = "",
+        variable_type: str = "",
+    ) -> Dict:
+        """Load variables from a YAML sidecar file into a scoped layer.
+
+        Processes __alias__ entries and stores the rest as variables.
+
+        Args:
+            yaml_path: Path to the .variables.yaml file.
+            variable_root_space: Scope root space (default "" = global).
+            variable_type: Scope type (default "" = global).
+
+        Returns:
+            The loaded YAML dict (without __alias__ key).
+        """
+        import yaml
+
+        self._init_override_layer()
+        path = Path(yaml_path) if not isinstance(yaml_path, Path) else yaml_path
+        if not path.is_file():
+            return {}
+
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+
+        scope = (variable_root_space, variable_type)
+
+        # Extract and process __alias__ entries into scoped dict
+        if "__alias__" in data:
+            scoped_aliases = self._scoped_aliases.setdefault(scope, {})
+            for alias_name, target_path in data["__alias__"].items():
+                scoped_aliases[alias_name] = target_path
+            del data["__alias__"]
+
+        self._scoped_yaml_sidecars.setdefault(scope, {}).update(data)
+        return data
+
+    # endregion
+
     # region Formatter Integration
 
     def _get_variable_extractor(

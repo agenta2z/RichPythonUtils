@@ -287,6 +287,63 @@ class WorkGraphNode(Node, WorkNodeBase):
         else:
             return outputs
 
+    def _loop_state_id(self):
+        """Result ID for the loop state marker."""
+        return f"{self.name}___loop_state"
+
+    def _loop_iter_id(self, iteration):
+        """Result ID for a per-iteration result."""
+        return f"{self.name}___iter{iteration}"
+
+    def _save_loop_iteration(
+        self,
+        iteration,
+        result,
+        next_args,
+        next_kwargs,
+        resolve_args=(),
+        resolve_kwargs=None,
+    ):
+        """Save per-iteration data using existing Resumable infrastructure."""
+        iter_data = {
+            "result": result,
+            "next_args": next_args,
+            "next_kwargs": next_kwargs,
+        }
+        result_path = self._resolve_result_path(
+            self._loop_iter_id(iteration), *resolve_args, **(resolve_kwargs or {})
+        )
+        self._save_result(iter_data, result_path)
+
+    def _save_loop_state(
+        self, last_completed_iteration, completed, resolve_args=(), resolve_kwargs=None
+    ):
+        """Save loop state marker."""
+        state = {
+            "last_completed_iteration": last_completed_iteration,
+            "completed": completed,
+        }
+        result_path = self._resolve_result_path(
+            self._loop_state_id(), *resolve_args, **(resolve_kwargs or {})
+        )
+        self._save_result(state, result_path)
+
+    def _load_loop_state(self, resolve_args=(), resolve_kwargs=None):
+        """Load loop state marker. Returns None if no loop state exists."""
+        result_path = self._resolve_result_path(
+            self._loop_state_id(), *resolve_args, **(resolve_kwargs or {})
+        )
+        if self._exists_result(self._loop_state_id(), result_path):
+            return self._load_result(self._loop_state_id(), result_path)
+        return None
+
+    def _load_loop_iteration(self, iteration, resolve_args=(), resolve_kwargs=None):
+        """Load per-iteration data."""
+        result_path = self._resolve_result_path(
+            self._loop_iter_id(iteration), *resolve_args, **(resolve_kwargs or {})
+        )
+        return self._load_result(self._loop_iter_id(iteration), result_path)
+
     def _handle_next_nodes_selector(self, result) -> tuple:
         """
         Handle NextNodesSelector return value.

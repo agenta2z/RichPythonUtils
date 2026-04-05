@@ -51,6 +51,12 @@ Example (manual - with explicit VariableLoader):
 from rich_python_utils.string_utils.formatting.template_manager.template_manager import (
     TemplateManager,
 )
+from rich_python_utils.string_utils.formatting.template_manager.sop_manager import (
+    SOP,
+    SOPManager,
+    SOPPhase,
+    SOPSubsection,
+)
 from rich_python_utils.string_utils.formatting.template_manager.variable_manager import (
     AmbiguousVariableError,
     CircularReferenceError,
@@ -66,4 +72,8 @@ __all__ = [
     "AmbiguousVariableError",
     "CircularReferenceError",
     "MaxDepthExceededError",
+    "SOP",
+    "SOPManager",
+    "SOPPhase",
+    "SOPSubsection",
 ]

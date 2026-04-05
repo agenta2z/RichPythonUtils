@@ -13,6 +13,7 @@ with functools.partial, descriptors, __call__-based objects, and decorated/wrapp
 
 import asyncio
 import inspect
+import logging
 import random
 from typing import Any, Callable, Dict, Sequence, Tuple
 
@@ -140,6 +141,14 @@ async def async_execute_with_retry(
             return result
         except retry_on_exceptions as e:
             last_exception = e
+
+            logging.getLogger(__name__).info(
+                "Retry attempt %d/%d after %s: %s",
+                attempt + 1,
+                max_retry,
+                type(e).__name__,
+                str(e)[:200],
+            )
 
             if on_retry_callback:
                 await maybe_await(on_retry_callback(attempt, e))
