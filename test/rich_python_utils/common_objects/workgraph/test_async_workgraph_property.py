@@ -902,9 +902,9 @@ class TestWorkGraphConcurrencyLimiting:
             max_size=3,
         ),
         input_val=input_strategy,
-        # Use max_concurrency >= num branches + 1 to avoid deadlock
-        # (root holds semaphore while downstream branches also need it)
-        max_conc=st.integers(min_value=4, max_value=8),
+        # Callee-side semaphore gating: any max_concurrency value is safe
+        # (each node acquires/releases around its own computation only)
+        max_conc=st.integers(min_value=1, max_value=8),
     )
     async def test_concurrency_limit_fan_out(self, root_factor, branch_factors, input_val, max_conc):
         """A fan-out graph produces the same result with max_concurrency=K
@@ -949,9 +949,9 @@ class TestWorkGraphConcurrencyLimiting:
             max_size=3,
         ),
         input_val=input_strategy,
-        # Use max_concurrency >= num_start_nodes + 1 to avoid deadlock
-        # (start node holds semaphore while downstream also needs it)
-        max_conc=st.integers(min_value=4, max_value=8),
+        # Callee-side semaphore gating: any max_concurrency value is safe
+        # (each node acquires/releases around its own computation only)
+        max_conc=st.integers(min_value=1, max_value=8),
     )
     async def test_concurrency_limit_multi_start_with_chains(self, start_factors, input_val, max_conc):
         """Multiple start nodes each with their own downstream chain produce

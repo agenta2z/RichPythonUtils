@@ -777,65 +777,74 @@ class WorkGraphNode(Node, WorkNodeBase):
             if stop_flag == WorkGraphStopFlags.Continue:
                 is_loaded_from_saved_result, result = self.load_result(*args, **kwargs)
                 if not is_loaded_from_saved_result:
+                    # Acquire semaphore for computation only (callee-side gating).
+                    # Released before downstream propagation to avoid nested-lock
+                    # deadlock in diamond graphs (fan-out → fan-in).
+                    if semaphore:
+                        await semaphore.acquire()
                     try:
-                        rel_args, rel_kwargs = get_relevant_args(
-                            func=self.value,
-                            all_var_args_relevant_if_func_support_var_args=True,
-                            all_named_args_relevant_if_func_support_named_args=True,
-                            args=args,
-                            **kwargs
-                        )
+                        try:
+                            rel_args, rel_kwargs = get_relevant_args(
+                                func=self.value,
+                                all_var_args_relevant_if_func_support_var_args=True,
+                                all_named_args_relevant_if_func_support_named_args=True,
+                                args=args,
+                                **kwargs
+                            )
 
-                        result = await async_execute_with_retry(
-                            func=self.value,
-                            max_retry=self.max_repeat,
-                            min_retry_wait=self.min_repeat_wait,
-                            max_retry_wait=self.max_repeat_wait,
-                            retry_on_exceptions=self.retry_on_exceptions,
-                            output_validator=self.output_validator,
-                            pre_condition=self.repeat_condition,
-                            args=rel_args,
-                            kwargs=rel_kwargs,
-                            default_return_or_raise=self._get_fallback_result(*args, **kwargs),
-                        )
-                    except Exception as err:
-                        import traceback
-                        self.log_error(
-                            {
-                                'name': self.name,
-                                'executor': self.value,
-                                'args': args,
-                                'kwargs': kwargs,
-                                'exception_type': type(err).__name__,
-                                'exception_message': str(err),
-                                'traceback': traceback.format_exc()
-                            },
-                            'NodeExecutionFailed',
-                        )
-                        raise err
+                            result = await async_execute_with_retry(
+                                func=self.value,
+                                max_retry=self.max_repeat,
+                                min_retry_wait=self.min_repeat_wait,
+                                max_retry_wait=self.max_repeat_wait,
+                                retry_on_exceptions=self.retry_on_exceptions,
+                                output_validator=self.output_validator,
+                                pre_condition=self.repeat_condition,
+                                args=rel_args,
+                                kwargs=rel_kwargs,
+                                default_return_or_raise=self._get_fallback_result(*args, **kwargs),
+                            )
+                        except Exception as err:
+                            import traceback
+                            self.log_error(
+                                {
+                                    'name': self.name,
+                                    'executor': self.value,
+                                    'args': args,
+                                    'kwargs': kwargs,
+                                    'exception_type': type(err).__name__,
+                                    'exception_message': str(err),
+                                    'traceback': traceback.format_exc()
+                                },
+                                'NodeExecutionFailed',
+                            )
+                            raise err
 
-                    # Handle NextNodesSelector return value
-                    include_self, include_others, result = self._handle_next_nodes_selector(result)
+                        # Handle NextNodesSelector return value
+                        include_self, include_others, result = self._handle_next_nodes_selector(result)
 
-                    stop_flag, result = WorkGraphStopFlags.separate_stop_flag_from_result(result)
+                        stop_flag, result = WorkGraphStopFlags.separate_stop_flag_from_result(result)
 
-                    # Post-process hooks via call_maybe_async
-                    _result = await call_maybe_async(self._post_process, result, *args, **kwargs)
-                    if _result is not None:
-                        result = _result
-
-                    if self.enable_optional_post_process:
-                        _result = await call_maybe_async(self._optional_post_process, result, *args, **kwargs)
+                        # Post-process hooks via call_maybe_async
+                        _result = await call_maybe_async(self._post_process, result, *args, **kwargs)
                         if _result is not None:
                             result = _result
 
-                    # Save results if configured
-                    if (
-                            self.enable_result_save is True or
-                            self.enable_result_save == StepResultSaveOptions.Always
-                    ):
-                        result_path = self._get_result_path(self.name, *args, **kwargs)
-                        self._save_result(result, result_path)
+                        if self.enable_optional_post_process:
+                            _result = await call_maybe_async(self._optional_post_process, result, *args, **kwargs)
+                            if _result is not None:
+                                result = _result
+
+                        # Save results if configured
+                        if (
+                                self.enable_result_save is True or
+                                self.enable_result_save == StepResultSaveOptions.Always
+                        ):
+                            result_path = self._get_result_path(self.name, *args, **kwargs)
+                            self._save_result(result, result_path)
+                    finally:
+                        if semaphore:
+                            semaphore.release()
 
             # Propagate the result to downstream nodes concurrently
             if self.next:
@@ -854,26 +863,19 @@ class WorkGraphNode(Node, WorkNodeBase):
                         # Capture loop variables explicitly to avoid closure-over-loop-variable bug
                         nargs_copy = tuple(nargs)
                         nkwargs_copy = dict(nkwargs)
-                        if semaphore:
-                            async def _run_ds(i, n, a, kw, sem):
-                                async with sem:
-                                    return await n.arun(
-                                        *a,
-                                        _output_idx=(downstream_results, i),
-                                        _graph_depth=graph_depth + 1,
-                                        _semaphore=sem,
-                                        **kw
-                                    )
-                            tasks.append(_run_ds(idx, node, nargs_copy, nkwargs_copy, semaphore))
-                        else:
-                            async def _run_ds(i, n, a, kw):
-                                return await n.arun(
-                                    *a,
-                                    _output_idx=(downstream_results, i),
-                                    _graph_depth=graph_depth + 1,
-                                    **kw
-                                )
-                            tasks.append(_run_ds(idx, node, nargs_copy, nkwargs_copy))
+                        # Don't gate downstream propagation with the semaphore —
+                        # each downstream node acquires it for its own computation
+                        # inside its _arun(). This prevents nested-lock deadlock
+                        # in diamond graphs.
+                        async def _run_ds(i, n, a, kw):
+                            return await n.arun(
+                                *a,
+                                _output_idx=(downstream_results, i),
+                                _graph_depth=graph_depth + 1,
+                                _semaphore=semaphore,
+                                **kw
+                            )
+                        tasks.append(_run_ds(idx, node, nargs_copy, nkwargs_copy))
                     elif stop_flag == WorkGraphStopFlags.AbstainResult:
                         # Notify downstream nodes of abstention
                         tasks.append(node.arun(stop_flag))
@@ -1713,18 +1715,15 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
                 return WorkGraphStopFlags.Continue
             if terminate_event.is_set():
                 return WorkGraphStopFlags.Continue
-            if semaphore:
-                async with semaphore:
-                    flag = await node.arun(
-                        *args, **kwargs,
-                        _output_idx=(output, idx),
-                        _semaphore=semaphore
-                    )
-            else:
-                flag = await node.arun(
-                    *args, **kwargs,
-                    _output_idx=(output, idx)
-                )
+            # Pass semaphore to the node so it can acquire/release around its
+            # own computation only (callee-side gating). This avoids the nested
+            # semaphore deadlock that occurs when the caller holds a slot while
+            # the node's downstream propagation tries to acquire another slot.
+            flag = await node.arun(
+                *args, **kwargs,
+                _output_idx=(output, idx),
+                _semaphore=semaphore
+            )
             if flag == WorkGraphStopFlags.Terminate:
                 terminate_event.set()
             return flag
