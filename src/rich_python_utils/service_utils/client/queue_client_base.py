@@ -1,4 +1,4 @@
-# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 
 """Abstract base for queue-based clients that connect to a SessionAwareServer.
 

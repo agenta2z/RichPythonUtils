@@ -1,4 +1,4 @@
-# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 
 """SOPManager — parse, validate, and render Standard Operating Procedures.
 
