@@ -749,14 +749,17 @@ class Workflow(WorkNodeBase, ABC):
                 this_step = self._steps[i]
                 step_name = self._get_step_name(this_step, i)
 
-                # Write pre-execution marker before running step
+                # Write pre-execution marker before running step.
+                # Only write when result saving is enabled — if checkpointing
+                # is disabled, no markers should be written to disk.
                 if _has_loops:
                     self._step_attempt_counts[i] = (
                         self._step_attempt_counts.get(i, 0) + 1
                     )
-                    self._save_step_in_progress_marker(
-                        i, step_name, state, *args, **kwargs
-                    )
+                    if self.enable_result_save and self.enable_result_save is not False:
+                        self._save_step_in_progress_marker(
+                            i, step_name, state, *args, **kwargs
+                        )
 
                 try:  # INNER try: per-step error handling
                     # Handle input arguments to the step:
@@ -1042,14 +1045,17 @@ class Workflow(WorkNodeBase, ABC):
                 this_step = self._steps[i]
                 step_name = self._get_step_name(this_step, i)
 
-                # Write pre-execution marker before running step
+                # Write pre-execution marker before running step.
+                # Only write when result saving is enabled — if checkpointing
+                # is disabled, no markers should be written to disk.
                 if _has_loops:
                     self._step_attempt_counts[i] = (
                         self._step_attempt_counts.get(i, 0) + 1
                     )
-                    self._save_step_in_progress_marker(
-                        i, step_name, state, *args, **kwargs
-                    )
+                    if self.enable_result_save and self.enable_result_save is not False:
+                        self._save_step_in_progress_marker(
+                            i, step_name, state, *args, **kwargs
+                        )
 
                 try:  # INNER try: per-step error handling
                     if i > 0:
