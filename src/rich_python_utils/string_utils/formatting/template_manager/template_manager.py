@@ -1,9 +1,18 @@
 import copy
 from itertools import product
-from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Union, TYPE_CHECKING
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    TYPE_CHECKING,
+    Union,
+)
 
 from attr import attrib, attrs
-
 from rich_python_utils.common_utils.key_helper import (
     create_3component_key,
     create_spaced_key,
@@ -11,11 +20,13 @@ from rich_python_utils.common_utils.key_helper import (
 )
 from rich_python_utils.common_utils.map_helper import get_by_spaced_key
 from rich_python_utils.io_utils.text_io import read_all_text_
-from rich_python_utils.string_utils.formatting.jinja2_format import (
-    format_template as jinjia_template_format,
-)
 from rich_python_utils.string_utils.formatting.handlebars_format import (
+    extract_variables as handlebars_extract_variables,
     format_template as handlebars_template_format,
+)
+from rich_python_utils.string_utils.formatting.jinja2_format import (
+    extract_variables as jinja2_extract_variables,
+    format_template as jinjia_template_format,
 )
 
 if TYPE_CHECKING:
@@ -96,6 +107,11 @@ class TemplateManager:
         handlebars_template_format: ["*.hbs", "*.handlebars"],
     }
 
+    BUILTIN_VARIABLE_EXTRACTORS = {
+        jinjia_template_format: jinja2_extract_variables,
+        handlebars_template_format: handlebars_extract_variables,
+    }
+
     default_template: str = attrib(default="")
     templates: Optional[Union[str, Mapping]] = attrib(default=None)
     active_template_type: Optional[str] = attrib(default="main")
@@ -110,7 +126,12 @@ class TemplateManager:
     component_version_field: str = attrib(default="version")
     component_content_field: str = attrib(default="content")
     template_file_patterns: Union[str, List[str], None] = attrib(default="default")
-    predefined_variables: Optional[Union[bool, "VariableLoader", Mapping]] = attrib(default=None)
+    predefined_variables: Optional[Union[bool, "VariableLoader", Mapping]] = attrib(
+        default=None
+    )
+    enable_templated_feed: bool = attrib(default=False)
+    template_variable_extractor: Union[str, Callable, None] = attrib(default="default")
+    cross_space_root: Optional[str] = attrib(default=None)
 
     def __attrs_post_init__(self):
         """
@@ -122,7 +143,9 @@ class TemplateManager:
                         isn't a string, making path construction impossible.
         """
         # Store the original templates path before processing for VariableLoader
-        self._original_templates_path = self.templates if isinstance(self.templates, str) else None
+        self._original_templates_path = (
+            self.templates if isinstance(self.templates, str) else None
+        )
 
         # Resolve template_file_patterns
         if self.template_file_patterns == "default":
@@ -131,6 +154,14 @@ class TemplateManager:
             )
         elif not self.template_file_patterns:
             self.template_file_patterns = None
+
+        # Resolve template_variable_extractor
+        if self.template_variable_extractor == "default":
+            self.template_variable_extractor = self.BUILTIN_VARIABLE_EXTRACTORS.get(
+                self.template_formatter
+            )
+        elif not self.template_variable_extractor:
+            self.template_variable_extractor = None
 
         # If a default_template is provided, read it from disk if it's a path;
         # otherwise treat it as raw text.
@@ -175,17 +206,55 @@ class TemplateManager:
 
         if self.predefined_variables is True:
             # Auto-create VariableLoader using the original templates path
-            from .variable_manager import VariableLoader
+            try:
+                from .variable_manager import VariableLoader
+            except ImportError:
+                raise NotImplementedError(
+                    "VariableLoader is not available in the migrated environment. "
+                    "Pass predefined_variables as a dict or False instead."
+                )
             if self._original_templates_path:
-                self._variable_loader = VariableLoader(template_dir=self._original_templates_path)
+                config_kwargs = {}
+                if self.cross_space_root:
+                    from .variable_manager import VariableLoaderConfig
+                    config_kwargs["config"] = VariableLoaderConfig(
+                        cross_space_root=self.cross_space_root
+                    )
+                self._variable_loader = VariableLoader(
+                    template_dir=self._original_templates_path,
+                    **config_kwargs,
+                )
+                # Load root .variables.yaml sidecar if available
+                from pathlib import Path as _Path
+                root_yaml = _Path(self._original_templates_path) / ".variables.yaml"
+                if root_yaml.is_file():
+                    self._variable_loader.load_yaml_sidecar(root_yaml)
+                # Load cross-space YAML sidecar if available
+                if self.cross_space_root:
+                    from pathlib import Path as _Path
+                    cross_root = _Path(self.cross_space_root)
+                    for yaml_candidate in [
+                        cross_root / ".variables.yaml",
+                    ]:
+                        if yaml_candidate.is_file():
+                            self._variable_loader.load_yaml_sidecar(yaml_candidate)
             else:
                 raise ValueError(
                     "predefined_variables=True requires templates to be a path string, "
                     "not a dict or other type"
                 )
-        elif self.predefined_variables is not None and self.predefined_variables is not False:
+        elif (
+            self.predefined_variables is not None
+            and self.predefined_variables is not False
+        ):
             # Check if it's a VariableLoader instance or a Mapping
-            from .variable_manager import VariableLoader
+            try:
+                from .variable_manager import VariableLoader
+            except ImportError:
+                raise NotImplementedError(
+                    "VariableLoader is not available in the migrated environment. "
+                    "Pass predefined_variables as a dict or False instead."
+                )
             if isinstance(self.predefined_variables, VariableLoader):
                 self._variable_loader = self.predefined_variables
             elif isinstance(self.predefined_variables, Mapping):
@@ -197,12 +266,12 @@ class TemplateManager:
                 )
 
     def switch(
-            self,
-            active_template_type: str = None,
-            active_template_root_space: str = None,
-            template_version: str = None,
-            default_template_name: str = None,
-            predefined_variables: Optional[Union[bool, "VariableLoader", Mapping]] = None,
+        self,
+        active_template_type: str = None,
+        active_template_root_space: str = None,
+        template_version: str = None,
+        default_template_name: str = None,
+        predefined_variables: Optional[Union[bool, "VariableLoader", Mapping]] = None,
     ):
         _copy: TemplateManager = copy.copy(self)
         if active_template_type is not None:
@@ -226,15 +295,29 @@ class TemplateManager:
             _copy._static_predefined_vars = None
 
             if predefined_variables is True:
-                from .variable_manager import VariableLoader
+                try:
+                    from .variable_manager import VariableLoader
+                except ImportError:
+                    raise NotImplementedError(
+                        "VariableLoader is not available in the migrated environment. "
+                        "Pass predefined_variables as a dict or False instead."
+                    )
                 if self._original_templates_path:
-                    _copy._variable_loader = VariableLoader(template_dir=self._original_templates_path)
+                    _copy._variable_loader = VariableLoader(
+                        template_dir=self._original_templates_path
+                    )
                 else:
                     raise ValueError(
                         "predefined_variables=True requires templates to be a path string"
                     )
             elif predefined_variables is not False:
-                from .variable_manager import VariableLoader
+                try:
+                    from .variable_manager import VariableLoader
+                except ImportError:
+                    raise NotImplementedError(
+                        "VariableLoader is not available in the migrated environment. "
+                        "Pass predefined_variables as a dict or False instead."
+                    )
                 if isinstance(predefined_variables, VariableLoader):
                     _copy._variable_loader = predefined_variables
                 elif isinstance(predefined_variables, Mapping):
@@ -274,11 +357,13 @@ class TemplateManager:
         """
         # Use provided overrides or fall back to instance defaults
         _active_template_type = (
-            active_template_type if active_template_type is not None
+            active_template_type
+            if active_template_type is not None
             else self.active_template_type
         )
         _active_template_root_space = (
-            active_template_root_space if active_template_root_space is not None
+            active_template_root_space
+            if active_template_root_space is not None
             else self.active_template_root_space
         )
 
@@ -296,7 +381,9 @@ class TemplateManager:
             resolved_space_key = _resolve_template_space_key_with_root_space_and_type(
                 main_space_key
             )
-            result, _ = self._try_versioned_and_unversioned_lookup(resolved_space_key, item_key)
+            result, _ = self._try_versioned_and_unversioned_lookup(
+                resolved_space_key, item_key
+            )
             return result
 
         if self.templates:
@@ -311,8 +398,12 @@ class TemplateManager:
             # Fallback through parent spaces
             if template is None and unresolved_template_space_key is not None:
                 temp_space_key = unresolved_template_space_key
-                while template is None and self.template_key_parts_sep in temp_space_key:
-                    temp_space_key = temp_space_key[:temp_space_key.rfind(self.template_key_parts_sep)]
+                while (
+                    template is None and self.template_key_parts_sep in temp_space_key
+                ):
+                    temp_space_key = temp_space_key[
+                        : temp_space_key.rfind(self.template_key_parts_sep)
+                    ]
                     template = _try_get_template(temp_space_key, template_name)
 
             # Fallback: remove unresolved space
@@ -336,15 +427,15 @@ class TemplateManager:
             True if the component is versioned, False otherwise
         """
         return (
-                isinstance(component_value, list)
-                and len(component_value) > 0
-                and isinstance(component_value[0], dict)
-                and self.component_version_field in component_value[0]
-                and self.component_content_field in component_value[0]
+            isinstance(component_value, list)
+            and len(component_value) > 0
+            and isinstance(component_value[0], dict)
+            and self.component_version_field in component_value[0]
+            and self.component_content_field in component_value[0]
         )
 
     def _separate_versioned_components(
-            self, template_components: Mapping[str, Any]
+        self, template_components: Mapping[str, Any]
     ) -> tuple[Dict[str, List[Dict[str, Any]]], Dict[str, Any]]:
         """
         Separate template components into versioned and non-versioned components.
@@ -368,15 +459,15 @@ class TemplateManager:
 
     @staticmethod
     def _format_version_combination(
-            template: str,
-            formatter: Callable,
-            component_names: List[str],
-            version_combination: tuple,
-            non_versioned_components: Dict[str, Any],
-            kwargs: Dict[str, Any],
-            feed: Optional[Mapping],
-            post_process: Optional[Callable[[str], str]],
-            component_content_field: str,
+        template: str,
+        formatter: Callable,
+        component_names: List[str],
+        version_combination: tuple,
+        non_versioned_components: Dict[str, Any],
+        kwargs: Dict[str, Any],
+        feed: Optional[Mapping],
+        post_process: Optional[Callable[[str], str]],
+        component_content_field: str,
     ) -> str:
         """
         Static helper to format a single version combination.
@@ -412,14 +503,14 @@ class TemplateManager:
 
     @staticmethod
     def _generate_all_version_combinations(
-            template: str,
-            formatter: Callable,
-            versioned_components: Dict[str, List[Dict[str, Any]]],
-            non_versioned_components: Dict[str, Any],
-            kwargs: Dict[str, Any],
-            feed: Optional[Mapping],
-            post_process: Optional[Callable[[str], str]],
-            component_content_field: str,
+        template: str,
+        formatter: Callable,
+        versioned_components: Dict[str, List[Dict[str, Any]]],
+        non_versioned_components: Dict[str, Any],
+        kwargs: Dict[str, Any],
+        feed: Optional[Mapping],
+        post_process: Optional[Callable[[str], str]],
+        component_content_field: str,
     ) -> Iterator[str]:
         """
         Static generator for all version combinations.
@@ -523,11 +614,7 @@ class TemplateManager:
 
         return template_value, components_path
 
-    def _try_versioned_and_unversioned_lookup(
-        self,
-        space_key: str,
-        template_name: str
-    ):
+    def _try_versioned_and_unversioned_lookup(self, space_key: str, template_name: str):
         """
         Try to lookup template with version suffix first, then without.
 
@@ -553,7 +640,9 @@ class TemplateManager:
             return self._get_template_and_components_key(space_key, template_name)
 
         # Version is set - try versioned then unversioned for specific template
-        versioned_name = f"{template_name}{self.template_version_sep}{self.template_version}"
+        versioned_name = (
+            f"{template_name}{self.template_version_sep}{self.template_version}"
+        )
         template, components_key = self._get_template_without_default_fallback(
             space_key, versioned_name
         )
@@ -573,16 +662,37 @@ class TemplateManager:
         versioned_default_name = f"{self.default_template_name}{self.template_version_sep}{self.template_version}"
         return self._get_template_and_components_key(space_key, versioned_default_name)
 
+    def _resolve_templated_feed(self, merged_feed: dict) -> dict:
+        """Resolve feed values that reference other feed values via template syntax.
+
+        Delegates to the engine-independent resolve_templated_feed utility,
+        using this TemplateManager's configured extractor and formatter.
+        """
+        extractor = self.template_variable_extractor
+        formatter = self.template_formatter
+        if extractor is None or formatter is None:
+            return merged_feed
+
+        from rich_python_utils.string_utils.formatting.common import (
+            resolve_templated_feed,
+        )
+
+        return resolve_templated_feed(
+            merged_feed,
+            extract_variables=extractor,
+            render_template=lambda tmpl, ctx: formatter(tmpl, feed=ctx),
+        )
+
     def __call__(
-            self,
-            template_key: Any = None,
-            feed: Mapping = None,
-            post_process: Callable[[str], str] = None,
-            formatter: Callable = None,
-            active_template_type: str = None,
-            active_template_root_space: str = None,
-            skip_predefined: bool = False,
-            **kwargs,
+        self,
+        template_key: Any = None,
+        feed: Mapping = None,
+        post_process: Callable[[str], str] = None,
+        formatter: Callable = None,
+        active_template_type: str = None,
+        active_template_root_space: str = None,
+        skip_predefined: bool = False,
+        **kwargs,
     ) -> Union[str, Iterator[str]]:
         """
         Renders the template identified by `template_key`, or uses the default template if
@@ -1021,6 +1131,14 @@ class TemplateManager:
                         template_type=active_template_type or "main",
                         version=self.template_version,
                     )
+                # Also include YAML sidecar variables (loaded via load_yaml_sidecar).
+                # These have lower priority than file-based resolved vars.
+                yaml_vars = self._variable_loader.get_all_variables(
+                    variable_root_space=active_template_root_space or "",
+                    variable_type=active_template_type or "main",
+                )
+                if yaml_vars:
+                    predefined_vars = {**yaml_vars, **predefined_vars}
             elif self._static_predefined_vars is not None:
                 predefined_vars = dict(self._static_predefined_vars)
 
@@ -1032,6 +1150,10 @@ class TemplateManager:
         # Replace kwargs with merged, and clear feed since it's now in merged_kwargs
         kwargs = merged_kwargs
         feed = None
+
+        # Resolve templated feed values if enabled
+        if self.enable_templated_feed:
+            kwargs = self._resolve_templated_feed(kwargs)
 
         def _resolve_template_space_key_with_root_space_and_type(main_space_key):
             return create_3component_key(
@@ -1046,7 +1168,9 @@ class TemplateManager:
             resolved_space_key = _resolve_template_space_key_with_root_space_and_type(
                 main_space_key
             )
-            return self._try_versioned_and_unversioned_lookup(resolved_space_key, item_key)
+            return self._try_versioned_and_unversioned_lookup(
+                resolved_space_key, item_key
+            )
 
         if self.templates:
             # Step 1: Parse the template_key into (space_key, item_key) tuple
@@ -1088,20 +1212,29 @@ class TemplateManager:
             # Fallback 6: Use system default_template object
 
             def _fallback_search_for_template():
-                nonlocal template, unresolved_template_space_key, template_components_key, active_template_root_space, active_template_type
+                nonlocal \
+                    template, \
+                    unresolved_template_space_key, \
+                    template_components_key, \
+                    active_template_root_space, \
+                    active_template_type
                 if template is None:
                     # Fallback Level 1: Search in progressively higher parent spaces
                     # Example: "a/b/c" -> "a/b" -> "a" -> None
                     if unresolved_template_space_key is not None:
                         while (
-                                template is None
-                                and self.template_key_parts_sep in unresolved_template_space_key
+                            template is None
+                            and self.template_key_parts_sep
+                            in unresolved_template_space_key
                         ):
                             # Remove the last segment to move to parent space
                             # E.g., "action_agent/sub_space" becomes "action_agent"
                             unresolved_template_space_key = (
                                 unresolved_template_space_key[
-                                :unresolved_template_space_key.rfind(self.template_key_parts_sep)]
+                                    : unresolved_template_space_key.rfind(
+                                        self.template_key_parts_sep
+                                    )
+                                ]
                             )
                             template, template_components_key = _try_get_template(
                                 unresolved_template_space_key, template_name

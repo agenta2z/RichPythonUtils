@@ -28,7 +28,7 @@ def get_common_helpers() -> Dict[str, Any]:
     }
 
 
-def _extract_variables(template: str) -> Set[str]:
+def extract_variables(template: str) -> Set[str]:
     """
     Extract variable names from a Python str.format template string.
 
@@ -42,25 +42,25 @@ def _extract_variables(template: str) -> Set[str]:
         Set[str]: Set of variable names found in the template
 
     Examples:
-        >>> sorted(_extract_variables("Hello {name}!"))
+        >>> sorted(extract_variables("Hello {name}!"))
         ['name']
 
-        >>> sorted(_extract_variables("{name} is {age} years old."))
+        >>> sorted(extract_variables("{name} is {age} years old."))
         ['age', 'name']
 
-        >>> sorted(_extract_variables("{user.name} at {user.email}"))
+        >>> sorted(extract_variables("{user.name} at {user.email}"))
         ['user']
 
-        >>> sorted(_extract_variables("{count:03d} items at ${price:.2f}"))
+        >>> sorted(extract_variables("{count:03d} items at ${price:.2f}"))
         ['count', 'price']
 
-        >>> sorted(_extract_variables("{name!r} and {value!s}"))
+        >>> sorted(extract_variables("{name!r} and {value!s}"))
         ['name', 'value']
 
-        >>> sorted(_extract_variables("No variables here"))
+        >>> sorted(extract_variables("No variables here"))
         []
 
-        >>> sorted(_extract_variables("Escaped {{braces}} and {real}"))
+        >>> sorted(extract_variables("Escaped {{braces}} and {real}"))
         ['real']
     """
     variables = set()
@@ -144,7 +144,7 @@ def compile_template(
         Validation failed: Missing required variables in template: {'name'}
     """
     # Validate template syntax by attempting to parse it
-    variables_found = _extract_variables(template)
+    variables_found = extract_variables(template)
 
     # Validate required variables if provided
     if required_variables is not None:
@@ -314,7 +314,7 @@ def validate_table_and_compile_template(
     """
     # Extract variables from the template
     try:
-        required_variables = list(_extract_variables(prompt))
+        required_variables = list(extract_variables(prompt))
     except Exception as e:
         raise ValueError(f"Failed to parse Python format template: {str(e)}")
 

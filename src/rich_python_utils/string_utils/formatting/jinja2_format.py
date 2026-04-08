@@ -111,6 +111,34 @@ def compile_template(
     return jinja_template
 
 
+def extract_variables(template: str) -> Set[str]:
+    """Extract variable names from a Jinja2 template string.
+
+    Uses Jinja2's AST parser to find undeclared variables.
+    Returns empty set for non-template strings or invalid syntax.
+
+    Args:
+        template: A Jinja2 template string.
+
+    Returns:
+        Set of variable names found in the template.
+
+    Examples:
+        >>> sorted(extract_variables("Hello {{ name }}!"))
+        ['name']
+        >>> sorted(extract_variables("{{ a }} and {{ b }}"))
+        ['a', 'b']
+        >>> sorted(extract_variables("No variables here"))
+        []
+    """
+    try:
+        env = Environment()
+        ast = env.parse(template)
+        return meta.find_undeclared_variables(ast)
+    except Exception:
+        return set()
+
+
 def format_template(
         template: str,
         feed: Optional[Mapping[str, Any]] = None,

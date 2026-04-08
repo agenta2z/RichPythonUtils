@@ -2630,11 +2630,48 @@ explode_map_as_tuples = partial(explode_map, mapping_class=tuple)
 # region mapping merge
 
 
+def _deep_merge_two(base: Dict, override: Dict, **kwargs) -> Dict:
+    """Recursively merge *override* into *base* (returns a new dict).
+
+    Behavior per value type when both dicts share a key:
+      - dict + dict:  recurse (always, when recursive=True)
+      - list + list:  concatenate if concatenate_lists=True, else override wins
+      - set  + set:   union if union_sets=True, else override wins
+      - int  + int:   sum if sum_counters=True, else override wins
+      - otherwise:    override wins
+    """
+    concatenate_lists = kwargs.get("concatenate_lists", False)
+    union_sets = kwargs.get("union_sets", False)
+    sum_counters = kwargs.get("sum_counters", False)
+
+    result = dict(base)
+    for key, override_val in override.items():
+        if key in result:
+            base_val = result[key]
+            if isinstance(base_val, dict) and isinstance(override_val, dict):
+                result[key] = _deep_merge_two(base_val, override_val, **kwargs)
+            elif concatenate_lists and isinstance(base_val, list) and isinstance(override_val, list):
+                result[key] = base_val + override_val
+            elif union_sets and isinstance(base_val, set) and isinstance(override_val, set):
+                result[key] = base_val | override_val
+            elif sum_counters and isinstance(base_val, (int, float)) and isinstance(override_val, (int, float)):
+                result[key] = base_val + override_val
+            else:
+                result[key] = override_val
+        else:
+            result[key] = override_val
+    return result
+
+
 def merge_mappings(
     mappings: Iterable[Union[Dict, Mapping]],
     in_place: bool = False,
     use_tqdm: bool = False,
     tqdm_msg: str = None,
+    recursive: bool = False,
+    concatenate_lists: bool = False,
+    union_sets: bool = False,
+    sum_counters: bool = False,
 ) -> Mapping:
     """
     Merges multiple mappings into one.
@@ -2646,6 +2683,14 @@ def merge_mappings(
                   otherwise, returns a new dictionary with merged data.
         use_tqdm: If True, wraps the iterator with tqdm for progress display.
         tqdm_msg: Optional message for tqdm progress bar.
+        recursive: If True, recursively merge nested dicts instead of
+            overriding. When False (default), behaves like dict.update().
+        concatenate_lists: If True (requires recursive=True), concatenate
+            list values instead of overriding.
+        union_sets: If True (requires recursive=True), union set values
+            instead of overriding.
+        sum_counters: If True (requires recursive=True), sum numeric values
+            instead of overriding.
 
     Returns:
         A merged mapping, either modifying the first dictionary in `mappings`
@@ -2669,6 +2714,12 @@ def merge_mappings(
         {1: 'bar'}
         >>> d1  # Should remain unchanged
         {1: 'foo'}
+
+        >>> merge_mappings([{'a': [1]}, {'a': [2]}], recursive=True, concatenate_lists=True)
+        {'a': [1, 2]}
+
+        >>> merge_mappings([{'x': {'a': 1}}, {'x': {'b': 2}}], recursive=True)
+        {'x': {'a': 1, 'b': 2}}
     """
     mappings = iter(mappings)
     if use_tqdm:
@@ -2679,7 +2730,16 @@ def merge_mappings(
         d = dict(d)
 
     for _d in mappings:
-        d.update(_d)
+        if recursive:
+            d = _deep_merge_two(
+                d,
+                dict(_d),
+                concatenate_lists=concatenate_lists,
+                union_sets=union_sets,
+                sum_counters=sum_counters,
+            )
+        else:
+            d.update(_d)
     return d
 
 
@@ -3421,6 +3481,131 @@ def obj_walk_through(
             if should_recurse is not None and not should_recurse(child_path, child):
                 continue
             yield from obj_walk_through(child, should_recurse, _prefix=child_path, _visited=_visited)
+
+
+# endregion
+
+
+# region Fuzzy path resolution
+
+
+def _generate_split_candidates(parts, longest_first=True):
+    """Generate all possible dot-path candidates from a list of parts.
+
+    For parts ["a", "b", "c"], generates:
+    - "a.b.c" (all split — deepest)
+    - "a.b_c" (merge last two)
+    - "a_b.c" (merge first two)
+    - "a_b_c" (no split — shallowest)
+
+    Args:
+        parts: List of string parts from splitting the key.
+        longest_first: If True, deepest paths come first.
+
+    Returns:
+        List of dot-separated path strings.
+    """
+    if len(parts) <= 1:
+        return ["_".join(parts)]
+
+    n = len(parts)
+    candidates = []
+    for mask in range(1 << (n - 1)):
+        segments = [parts[0]]
+        for i in range(1, n):
+            if mask & (1 << (i - 1)):
+                segments.append(parts[i])
+            else:
+                segments[-1] = segments[-1] + "_" + parts[i]
+        candidates.append(".".join(segments))
+
+    candidates.sort(key=lambda c: c.count("."), reverse=longest_first)
+    return candidates
+
+
+def resolve_fuzzy_path(data, key, path_part_sep="_", longest_first=True):
+    """Resolve a separator-delimited key to a dot-path in a nested dict.
+
+    Tries all possible split points and returns the first matching path.
+
+    Args:
+        data: Nested dict to search.
+        key: The key to resolve (e.g., "employee_mindset").
+        path_part_sep: Separator in the key (default "_").
+        longest_first: If True, tries deepest paths first.
+
+    Returns:
+        The resolved dot-path string, or None if no match found.
+
+    Examples:
+        >>> data = {"employee": {"mindset": {"paradigm": "..."}}}
+        >>> resolve_fuzzy_path(data, "employee_mindset")
+        'employee.mindset'
+        >>> resolve_fuzzy_path(data, "employee_mindset_paradigm")
+        'employee.mindset.paradigm'
+    """
+    parts = key.split(path_part_sep)
+    if len(parts) <= 1:
+        return key if has_path(data, key) else None
+
+    for candidate in _generate_split_candidates(parts, longest_first=longest_first):
+        if has_path(data, candidate):
+            return candidate
+    return None
+
+
+def get_at_path_fuzzy(data, path, default=MISSING, path_part_sep="_", match_mode="longest"):
+    """Get a value using fuzzy underscore-to-dot path resolution.
+
+    Like get_at_path but tries all possible split points of an
+    underscore-separated key to find a matching nested path.
+
+    Args:
+        data: Nested dict/list structure.
+        path: An underscore-separated key (e.g., "employee_mindset").
+        default: Value to return if no match found.
+        path_part_sep: Separator in the path (default "_").
+        match_mode: "longest" (deepest path first) or "shortest".
+
+    Returns:
+        The value at the resolved path, or default.
+    """
+    resolved = resolve_fuzzy_path(
+        data, path, path_part_sep=path_part_sep,
+        longest_first=(match_mode == "longest"),
+    )
+    if resolved is not None:
+        return get_at_path(data, resolved, default=default)
+    if default is MISSING:
+        raise KeyError(f"No fuzzy match for {path!r} in data")
+    return default
+
+
+def set_at_path_fuzzy(data, path, value, path_part_sep="_", match_mode="longest", create_if_missing=True):
+    """Set a value using fuzzy underscore-to-dot path resolution.
+
+    Like set_at_path but resolves underscore-separated keys to nested paths.
+    If no existing path matches and create_if_missing is True, sets as a
+    top-level key.
+
+    Args:
+        data: Nested dict structure.
+        path: An underscore-separated key (e.g., "employee_mindset").
+        value: Value to set.
+        path_part_sep: Separator in the path (default "_").
+        match_mode: "longest" (deepest path first) or "shortest".
+        create_if_missing: If True and no match found, create as top-level key.
+    """
+    resolved = resolve_fuzzy_path(
+        data, path, path_part_sep=path_part_sep,
+        longest_first=(match_mode == "longest"),
+    )
+    if resolved is not None:
+        set_at_path(data, resolved, value)
+    elif create_if_missing:
+        data[path] = value
+    else:
+        raise KeyError(f"No fuzzy match for {path!r} in data")
 
 
 # endregion

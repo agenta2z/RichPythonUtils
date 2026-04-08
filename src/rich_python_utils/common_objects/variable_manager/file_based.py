@@ -130,7 +130,9 @@ class FileBasedVariableManager(VariableManager):
             The variable content as a string, or None if not found.
         """
         # Determine whether to compose
-        should_compose = compose if compose is not None else self.config.compose_on_access
+        should_compose = (
+            compose if compose is not None else self.config.compose_on_access
+        )
 
         # Get cascade paths for file lookup
         cascade_paths = self._get_cascade_paths(variable_root_space, variable_type)
@@ -327,7 +329,11 @@ class FileBasedVariableManager(VariableManager):
         """
         # Determine cascade parameters
         if cascade:
-            space = variable_root_space if variable_root_space is not None else self.variable_root_space
+            space = (
+                variable_root_space
+                if variable_root_space is not None
+                else self.variable_root_space
+            )
             vtype = variable_type if variable_type is not None else self.variable_type
         else:
             space = ""
@@ -476,12 +482,14 @@ class FileBasedVariableManager(VariableManager):
                     parent = parent.parent
             # If current_level_path not provided, use variable_type level
             if variable_type and variable_root_space:
-                return [get_vars_path(self.base_path / variable_root_space / variable_type)]
+                return [
+                    get_vars_path(self.base_path / variable_root_space / variable_type)
+                ]
             elif variable_root_space:
                 return [get_vars_path(self.base_path / variable_root_space)]
             return [get_vars_path(self.base_path)]
 
-        # Default: cascade (variable_type -> variable_root_space -> global)
+        # Default: cascade (variable_type -> variable_root_space -> global -> cross-space)
         paths = []
         if variable_type and variable_root_space:
             paths.append(
@@ -490,6 +498,13 @@ class FileBasedVariableManager(VariableManager):
         if variable_root_space:
             paths.append(get_vars_path(self.base_path / variable_root_space))
         paths.append(get_vars_path(self.base_path))
+
+        # Cross-space fallback: check a parent/shared root directory
+        cross_space = self.config.cross_space_root
+        if cross_space:
+            cross_path = Path(cross_space)
+            if cross_path != self.base_path and cross_path.is_dir():
+                paths.append(get_vars_path(cross_path))
 
         return paths
 
@@ -519,29 +534,51 @@ class FileBasedVariableManager(VariableManager):
             matches_at_level = []
 
             for path_variant in possible_paths:
-                # Build version resolution order
-                file_variants = []
+                # Build version resolution order — split into versioned and unversioned
+                versioned_variants = []
                 if version and self.config.enable_overrides:
-                    file_variants.append(
+                    versioned_variants.append(
                         f"{path_variant}.{version}{self.config.override_suffix}"
                     )
                 if self.config.enable_overrides:
-                    file_variants.append(f"{path_variant}{self.config.override_suffix}")
+                    versioned_variants.append(
+                        f"{path_variant}{self.config.override_suffix}"
+                    )
                 if version:
-                    file_variants.append(f"{path_variant}.{version}")
-                file_variants.append(path_variant)
+                    versioned_variants.append(f"{path_variant}.{version}")
 
-                # Check each version variant for this path
+                # Phase 1: Check versioned file variants (including overrides)
                 found_for_this_variant = False
-                for file_variant in file_variants:
+                for file_variant in versioned_variants:
                     for ext in self.config.file_extensions:
                         file_path = cascade_path / f"{file_variant}{ext}"
                         if file_path.exists():
                             matches_at_level.append((file_path, variable_name))
                             found_for_this_variant = True
-                            break  # First extension wins for this variant
+                            break
                     if found_for_this_variant:
-                        break  # First version variant wins
+                        break
+
+                # Phase 2: Folder-based fallback for versioned variables
+                if not found_for_this_variant and version:
+                    folder_path = cascade_path / path_variant / version
+                    if folder_path.is_dir():
+                        resolved = self._resolve_variable_folder(folder_path)
+                        if resolved is not None:
+                            matches_at_level.append((resolved, variable_name))
+                            found_for_this_variant = True
+
+                # Phase 3: Unversioned file fallback
+                if not found_for_this_variant:
+                    for ext in self.config.file_extensions:
+                        file_path = cascade_path / f"{path_variant}{ext}"
+                        if file_path.exists():
+                            matches_at_level.append((file_path, variable_name))
+                            found_for_this_variant = True
+                            break
+
+                if found_for_this_variant:
+                    break
 
             # Check ambiguity at this cascade level
             if len(matches_at_level) > 1:
@@ -553,8 +590,87 @@ class FileBasedVariableManager(VariableManager):
 
         return None, None
 
+    def _resolve_variable_folder(self, folder_path: Path) -> Optional[Path]:
+        """Resolve a variable from a folder containing variant files.
+
+        Resolution order:
+        1. A file named "default" (with any configured extension)
+        2. A .config.yaml file with a "default" key naming the file
+        3. If exactly one content file exists, use it (unambiguous)
+        4. Otherwise raise AmbiguousVariableError
+        """
+        # 1. Check for "default" named file
+        for ext in self.config.file_extensions:
+            default_file = folder_path / f"default{ext}"
+            if default_file.is_file():
+                return default_file
+
+        # 2. Check for .config.yaml with "default" key
+        config_file = folder_path / ".config.yaml"
+        if config_file.is_file():
+            import yaml
+
+            try:
+                config_data = yaml.safe_load(config_file.read_text(encoding="utf-8"))
+            except Exception:
+                config_data = None
+            if isinstance(config_data, dict) and "default" in config_data:
+                default_name = config_data["default"]
+                for ext in self.config.file_extensions:
+                    target = folder_path / f"{default_name}{ext}"
+                    if target.is_file():
+                        return target
+
+        # 3. Collect all content files (exclude dotfiles like .config.yaml)
+        content_files = [
+            f
+            for f in folder_path.iterdir()
+            if f.is_file() and not f.name.startswith(".")
+        ]
+        if len(content_files) == 1:
+            return content_files[0]
+        if len(content_files) > 1:
+            raise AmbiguousVariableError(
+                str(folder_path.name),
+                [str(f) for f in content_files],
+            )
+
+        # Empty folder
+        return None
+
     def _read_file_content(self, file_path: Path) -> str:
-        """Read file content with optional caching."""
+        """Read file content with optional caching.
+
+        If file_path is a directory, looks for .config.yaml with a 'default'
+        key and resolves to the default variant file within the directory.
+        """
+        # Handle directory-type variables (variant directories)
+        if file_path.is_dir():
+            config_file = file_path / ".config.yaml"
+            if config_file.is_file():
+                try:
+                    import yaml
+                    with open(config_file) as f:
+                        config = yaml.safe_load(f) or {}
+                    default_variant = config.get("default", "")
+                    if default_variant:
+                        # Search for the default variant in subdirectories
+                        for sub in sorted(file_path.iterdir()):
+                            if sub.is_dir():
+                                candidate = sub / f"{default_variant}.j2"
+                                if candidate.is_file():
+                                    file_path = candidate
+                                    break
+                                candidate = sub / f"{default_variant}.jinja2"
+                                if candidate.is_file():
+                                    file_path = candidate
+                                    break
+                except Exception:
+                    pass
+            # If still a directory after resolution, return empty
+            if file_path.is_dir():
+                return ""
+
         path_str = str(file_path)
 
         if self.config.cache_content and path_str in self._content_cache:
@@ -610,7 +726,9 @@ class FileBasedVariableManager(VariableManager):
 
         # Check max depth
         if len(resolution_stack) > self.config.max_recursion_depth:
-            raise MaxDepthExceededError(resolution_stack, self.config.max_recursion_depth)
+            raise MaxDepthExceededError(
+                resolution_stack, self.config.max_recursion_depth
+            )
 
         # Get cascade paths based on scope
         cascade_paths = self._get_cascade_paths(
@@ -742,77 +860,6 @@ class FileBasedVariableManager(VariableManager):
 
     # endregion
 
-    # region Override / Sidecar Layer
-
-    def _init_override_layer(self) -> None:
-        """Initialize scoped override/alias state if not already done."""
-        if not hasattr(self, "_scoped_overrides"):
-            self._scoped_overrides: Dict[Tuple[str, str], Dict[str, object]] = {}
-        if not hasattr(self, "_scoped_aliases"):
-            self._scoped_aliases: Dict[Tuple[str, str], Dict[str, str]] = {}
-        if not hasattr(self, "_scoped_yaml_sidecars"):
-            self._scoped_yaml_sidecars: Dict[Tuple[str, str], Dict[str, object]] = {}
-
-    def _cascade_scopes(
-        self,
-        root_space: str,
-        vtype: str,
-    ) -> List[Tuple[str, str]]:
-        """Generate scope cascade order from most-specific to least-specific (global).
-
-        Returns scopes from most-specific to least-specific (global).
-        """
-        scopes: List[Tuple[str, str]] = []
-        if root_space and vtype:
-            scopes.append((root_space, vtype))
-        if root_space:
-            scopes.append((root_space, ""))
-        scopes.append(("", ""))
-        return scopes
-
-    def load_yaml_sidecar(
-        self,
-        yaml_path,
-        *,
-        variable_root_space: str = "",
-        variable_type: str = "",
-    ) -> Dict:
-        """Load variables from a YAML sidecar file into a scoped layer.
-
-        Processes __alias__ entries and stores the rest as variables.
-
-        Args:
-            yaml_path: Path to the .variables.yaml file.
-            variable_root_space: Scope root space (default "" = global).
-            variable_type: Scope type (default "" = global).
-
-        Returns:
-            The loaded YAML dict (without __alias__ key).
-        """
-        import yaml
-
-        self._init_override_layer()
-        path = Path(yaml_path) if not isinstance(yaml_path, Path) else yaml_path
-        if not path.is_file():
-            return {}
-
-        with open(path) as f:
-            data = yaml.safe_load(f) or {}
-
-        scope = (variable_root_space, variable_type)
-
-        # Extract and process __alias__ entries into scoped dict
-        if "__alias__" in data:
-            scoped_aliases = self._scoped_aliases.setdefault(scope, {})
-            for alias_name, target_path in data["__alias__"].items():
-                scoped_aliases[alias_name] = target_path
-            del data["__alias__"]
-
-        self._scoped_yaml_sidecars.setdefault(scope, {}).update(data)
-        return data
-
-    # endregion
-
     # region Formatter Integration
 
     def _get_variable_extractor(
@@ -861,18 +908,14 @@ class FileBasedVariableManager(VariableManager):
             from rich_python_utils.string_utils.formatting import handlebars_format
 
             extractors = {
-                VariableSyntax.HANDLEBARS: handlebars_format._extract_variables,
+                VariableSyntax.HANDLEBARS: handlebars_format.extract_variables,
             }
 
             # Try to import other formatters
             try:
                 from rich_python_utils.string_utils.formatting import jinja2_format
 
-                extractors[VariableSyntax.JINJA2] = (
-                    lambda t: jinja2_format.compile_template(t, return_variables=True)[
-                        1
-                    ]
-                )
+                extractors[VariableSyntax.JINJA2] = jinja2_format.extract_variables
             except ImportError:
                 pass
 
@@ -882,7 +925,7 @@ class FileBasedVariableManager(VariableManager):
                 )
 
                 extractors[VariableSyntax.PYTHON_FORMAT] = (
-                    python_str_format._extract_variables
+                    python_str_format.extract_variables
                 )
             except ImportError:
                 pass
@@ -893,7 +936,7 @@ class FileBasedVariableManager(VariableManager):
                 )
 
                 extractors[VariableSyntax.TEMPLATE] = (
-                    string_template_format._extract_variables
+                    string_template_format.extract_variables
                 )
             except ImportError:
                 pass
@@ -946,25 +989,41 @@ class FileBasedVariableManager(VariableManager):
         try:
             from rich_python_utils.string_utils.formatting import handlebars_format
 
-            formatters: Dict[VariableSyntax, Callable[[str, Mapping[str, str]], str]] = {
-                VariableSyntax.HANDLEBARS: lambda t, v: handlebars_format.format_template(t, v),
+            formatters: Dict[
+                VariableSyntax, Callable[[str, Mapping[str, str]], str]
+            ] = {
+                VariableSyntax.HANDLEBARS: lambda t,
+                v: handlebars_format.format_template(t, v),
             }
 
             try:
                 from rich_python_utils.string_utils.formatting import jinja2_format
-                formatters[VariableSyntax.JINJA2] = lambda t, v: jinja2_format.format_template(t, v)
+
+                formatters[VariableSyntax.JINJA2] = (
+                    lambda t, v: jinja2_format.format_template(t, v)
+                )
             except ImportError:
                 pass
 
             try:
-                from rich_python_utils.string_utils.formatting import python_str_format
-                formatters[VariableSyntax.PYTHON_FORMAT] = lambda t, v: python_str_format.format_template(t, v)
+                from rich_python_utils.string_utils.formatting import (
+                    python_str_format,
+                )
+
+                formatters[VariableSyntax.PYTHON_FORMAT] = (
+                    lambda t, v: python_str_format.format_template(t, v)
+                )
             except ImportError:
                 pass
 
             try:
-                from rich_python_utils.string_utils.formatting import string_template_format
-                formatters[VariableSyntax.TEMPLATE] = lambda t, v: string_template_format.format_template(t, v)
+                from rich_python_utils.string_utils.formatting import (
+                    string_template_format,
+                )
+
+                formatters[VariableSyntax.TEMPLATE] = (
+                    lambda t, v: string_template_format.format_template(t, v)
+                )
             except ImportError:
                 pass
 
@@ -972,5 +1031,333 @@ class FileBasedVariableManager(VariableManager):
 
         except ImportError:
             return None
+
+    # endregion
+
+    # region Override & Alias API
+
+    def _init_override_layer(self) -> None:
+        """Initialize scoped override/alias state if not already done."""
+        if not hasattr(self, "_scoped_overrides"):
+            self._scoped_overrides: Dict[Tuple[str, str], Dict[str, object]] = {}
+        if not hasattr(self, "_scoped_aliases"):
+            self._scoped_aliases: Dict[Tuple[str, str], Dict[str, str]] = {}
+        if not hasattr(self, "_scoped_yaml_sidecars"):
+            self._scoped_yaml_sidecars: Dict[Tuple[str, str], Dict[str, object]] = {}
+
+    def _cascade_scopes(
+        self,
+        root_space: str,
+        vtype: str,
+    ) -> List[Tuple[str, str]]:
+        """Generate scope cascade order matching System A's _get_cascade_paths() logic.
+
+        Returns scopes from most-specific to least-specific (global).
+        """
+        scopes: List[Tuple[str, str]] = []
+        if root_space and vtype:
+            scopes.append((root_space, vtype))
+        if root_space:
+            scopes.append((root_space, ""))
+        scopes.append(("", ""))
+        return scopes
+
+    def _resolve_alias_cascaded(
+        self,
+        key: str,
+        root_space: str,
+        vtype: str,
+    ) -> str:
+        """Resolve alias by cascading through scoped alias dicts."""
+        self._init_override_layer()
+        for scope in self._cascade_scopes(root_space, vtype):
+            aliases = self._scoped_aliases.get(scope, {})
+            if key in aliases:
+                return aliases[key]
+        return key
+
+    # -- Backward-compatible properties for external callers --
+    # These return the global scope ("", "") dict. Used by
+    # prompt_rendering.py:144 (`hasattr(vm, '_overrides') and vm._overrides`)
+
+    @property
+    def _overrides(self) -> Dict[str, object]:
+        """Backward compat: returns global scope overrides dict."""
+        self._init_override_layer()
+        return self._scoped_overrides.setdefault(("", ""), {})
+
+    @property
+    def _aliases(self) -> Dict[str, str]:
+        """Backward compat: returns global scope aliases dict."""
+        self._init_override_layer()
+        return self._scoped_aliases.setdefault(("", ""), {})
+
+    @property
+    def _yaml_sidecar(self) -> Dict[str, object]:
+        """Backward compat: returns global scope yaml sidecar dict."""
+        self._init_override_layer()
+        return self._scoped_yaml_sidecars.setdefault(("", ""), {})
+
+    # -- Public API --
+
+    def load_yaml_sidecar(
+        self,
+        yaml_path,
+        *,
+        variable_root_space: str = "",
+        variable_type: str = "",
+    ) -> Dict:
+        """Load variables from a YAML sidecar file into a scoped layer.
+
+        Processes __alias__ entries and stores the rest as variables.
+
+        Args:
+            yaml_path: Path to the .variables.yaml file.
+            variable_root_space: Scope root space (default "" = global).
+            variable_type: Scope type (default "" = global).
+
+        Returns:
+            The loaded YAML dict (without __alias__ key).
+        """
+        import yaml
+
+        self._init_override_layer()
+        path = Path(yaml_path) if not isinstance(yaml_path, Path) else yaml_path
+        if not path.is_file():
+            return {}
+
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+
+        scope = (variable_root_space, variable_type)
+
+        # Extract and process __alias__ entries into scoped dict
+        if "__alias__" in data:
+            scoped_aliases = self._scoped_aliases.setdefault(scope, {})
+            for alias_name, target_path in data["__alias__"].items():
+                scoped_aliases[alias_name] = target_path
+            del data["__alias__"]
+
+        self._scoped_yaml_sidecars.setdefault(scope, {}).update(data)
+        return data
+
+    @property
+    def aliases(self) -> Dict[str, str]:
+        """Return the merged alias registry (global first, specific wins)."""
+        self._init_override_layer()
+        merged: Dict[str, str] = {}
+        # Merge all scopes — later entries override earlier
+        for scope in sorted(self._scoped_aliases.keys()):
+            merged.update(self._scoped_aliases[scope])
+        return merged
+
+    def set(
+        self,
+        key: str,
+        value: object,
+        *,
+        variable_root_space: str = "",
+        variable_type: str = "",
+        override: bool = True,
+    ) -> None:
+        """Set a variable value with alias and fuzzy path resolution.
+
+        Args:
+            key: Variable name. Alias-resolved (cascaded), then fuzzy underscore
+                 matching is applied against the yaml_sidecar data.
+            value: Value to set. For alias targets that are dicts, if value
+                   matches a sub-key, the sub-key's value is selected.
+            variable_root_space: Scope root space (default "" = global).
+            variable_type: Scope type (default "" = global).
+            override: If True (default), overrides existing or creates new.
+                      If False, raises KeyError if variable already exists.
+        """
+        from rich_python_utils.common_utils.map_helper import (
+            get_at_path,
+            has_path,
+            resolve_fuzzy_path,
+        )
+
+        self._init_override_layer()
+        scope = (variable_root_space, variable_type)
+
+        # Step 1: Cascade-resolve alias
+        resolved_path = self._resolve_alias_cascaded(
+            key, variable_root_space, variable_type
+        )
+
+        # Step 2: If alias target is a dict and value is a sub-key, select sub-value
+        # Cascade through yaml sidecars to find the target dict
+        if resolved_path != key:
+            for s in self._cascade_scopes(variable_root_space, variable_type):
+                sidecar = self._scoped_yaml_sidecars.get(s, {})
+                if has_path(sidecar, resolved_path):
+                    target = get_at_path(sidecar, resolved_path)
+                    if (
+                        isinstance(target, dict)
+                        and isinstance(value, str)
+                        and value in target
+                    ):
+                        actual_value = target[value]
+                        scoped_overrides = self._scoped_overrides.setdefault(scope, {})
+                        if not override and resolved_path in scoped_overrides:
+                            raise KeyError(f"Variable {resolved_path!r} already set")
+                        scoped_overrides[resolved_path] = actual_value
+                        return
+                    break  # Found the target (not a sub-key match) — stop cascading
+
+        # Step 3: Try fuzzy underscore path resolution against yaml sidecars
+        if "_" in resolved_path:
+            for s in self._cascade_scopes(variable_root_space, variable_type):
+                sidecar = self._scoped_yaml_sidecars.get(s, {})
+                fuzzy_match = resolve_fuzzy_path(
+                    sidecar, resolved_path, path_part_sep="_"
+                )
+                if fuzzy_match:
+                    resolved_path = fuzzy_match
+                    break
+
+        # Step 4: Check override=False guard
+        scoped_overrides = self._scoped_overrides.setdefault(scope, {})
+        if not override and resolved_path in scoped_overrides:
+            raise KeyError(f"Variable {resolved_path!r} already set")
+
+        # Step 5: Store the override in the correct scope
+        scoped_overrides[resolved_path] = value
+
+    def clear(
+        self,
+        key: str,
+        *,
+        variable_root_space: str = "",
+        variable_type: str = "",
+    ) -> None:
+        """Remove a set/overridden variable, reverting to source value."""
+        self._init_override_layer()
+        resolved_path = self._resolve_alias_cascaded(
+            key, variable_root_space, variable_type
+        )
+        scope = (variable_root_space, variable_type)
+        scoped_overrides = self._scoped_overrides.get(scope, {})
+        scoped_overrides.pop(resolved_path, None)
+
+    def clear_all(self) -> None:
+        """Remove all set/overridden variables across ALL scopes."""
+        self._init_override_layer()
+        self._scoped_overrides.clear()
+
+    def get_effective_value(
+        self,
+        key: str,
+        default: object = None,
+        *,
+        variable_root_space: str = "",
+        variable_type: str = "",
+        skip_overrides: bool = False,
+    ) -> object:
+        """Get the effective value for a key, checking overrides first.
+
+        Resolution priority (per cascade scope):
+          overrides > yaml_sidecar > file-based.
+
+        Args:
+            key: Variable name (alias-resolved, fuzzy matched).
+            default: Default value if not found anywhere.
+            variable_root_space: Scope root space (default "" = global).
+            variable_type: Scope type (default "" = global).
+            skip_overrides: If True, skip overrides and return the source value.
+                Useful for getting original content for UI display.
+
+        Returns:
+            The effective value.
+        """
+        from rich_python_utils.common_utils.map_helper import (
+            get_at_path,
+            has_path,
+            resolve_fuzzy_path,
+        )
+
+        self._init_override_layer()
+
+        # Cascade-resolve alias
+        resolved = self._resolve_alias_cascaded(key, variable_root_space, variable_type)
+
+        # Cascade through scopes
+        for scope in self._cascade_scopes(variable_root_space, variable_type):
+            # Check overrides (highest priority)
+            if not skip_overrides:
+                scoped_overrides = self._scoped_overrides.get(scope, {})
+                if resolved in scoped_overrides:
+                    return scoped_overrides[resolved]
+
+            # Check yaml_sidecar
+            sidecar = self._scoped_yaml_sidecars.get(scope, {})
+            if "." in resolved:
+                if has_path(sidecar, resolved):
+                    return get_at_path(sidecar, resolved)
+            if resolved in sidecar:
+                return sidecar[resolved]
+
+            # Try fuzzy resolution against this scope's sidecar
+            if "_" in resolved:
+                fuzzy = resolve_fuzzy_path(sidecar, resolved, path_part_sep="_")
+                if fuzzy:
+                    return get_at_path(sidecar, fuzzy)
+
+        # Fall back to file-based resolution (System A — already space-aware)
+        file_value = self.get_variable(key)
+        if file_value is not None:
+            return file_value
+
+        return default
+
+    def get_all_variables(
+        self,
+        *,
+        variable_root_space: str = "",
+        variable_type: str = "",
+    ) -> Dict[str, object]:
+        """Get all variables as a nested dict, with overrides applied.
+
+        Merges yaml sidecars across cascade scopes (global first, specific wins),
+        then applies overrides on top.
+
+        Args:
+            variable_root_space: Scope root space (default "" = global).
+            variable_type: Scope type (default "" = global).
+        """
+        from copy import deepcopy
+
+        from rich_python_utils.common_utils.map_helper import set_at_path
+
+        self._init_override_layer()
+
+        # Merge yaml sidecars: global first, then more specific scopes on top
+        result: Dict[str, object] = {}
+        for scope in reversed(self._cascade_scopes(variable_root_space, variable_type)):
+            sidecar = self._scoped_yaml_sidecars.get(scope, {})
+            if sidecar:
+                sidecar_copy = deepcopy(sidecar)
+                for k, v in sidecar_copy.items():
+                    if (
+                        k in result
+                        and isinstance(result[k], dict)
+                        and isinstance(v, dict)
+                    ):
+                        # Deep merge nested dicts
+                        result[k] = {**result[k], **v}
+                    else:
+                        result[k] = v
+
+        # Apply overrides: global first, then more specific scopes on top
+        for scope in reversed(self._cascade_scopes(variable_root_space, variable_type)):
+            scoped_overrides = self._scoped_overrides.get(scope, {})
+            for path, value in scoped_overrides.items():
+                if "." in path:
+                    set_at_path(result, path, value)
+                else:
+                    result[path] = value
+
+        return result
 
     # endregion

@@ -89,7 +89,8 @@ class VariableManagerConfig:
     override_suffix: str = ".override"
     cache_content: bool = True
     file_extensions: List[str] = field(
-        default_factory=lambda: [".hbs", ".j2", ".txt", ""]
+        default_factory=lambda: [".hbs", ".j2", ".jinja2", ".jinja", ".txt", ""]
     )
     max_recursion_depth: int = 50
     compose_on_access: bool = True
+    cross_space_root: Optional[str] = None

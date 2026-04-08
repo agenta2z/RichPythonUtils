@@ -315,17 +315,18 @@ class TestAmbiguousVariable:
         """Return the path to the ambiguous fixtures directory."""
         return Path(__file__).parent / "fixtures_ambiguous"
 
-    def test_ambiguous_variable_error(self, ambiguous_fixtures_dir):
-        """Test that ambiguous paths raise AmbiguousVariableError."""
+    def test_nested_path_wins_over_flat_file(self, ambiguous_fixtures_dir):
+        """Test that nested path takes priority over flat file (no ambiguity error).
+
+        With 3-phase resolution and underscore-to-slash splitting,
+        ambig/test.hbs (deeper path) resolves before ambig_test.hbs (flat file).
+        """
         loader = VariableLoader(template_dir=str(ambiguous_fixtures_dir))
         template = "{{ambig_test}}"
-        with pytest.raises(AmbiguousVariableError) as excinfo:
-            loader.resolve_from_template(
-                template, template_root_space="test", template_type="main"
-            )
-        assert "ambig_test" in str(excinfo.value)
-        # Should mention both matching paths
-        assert "ambig/test" in str(excinfo.value) or "ambig_test" in str(excinfo.value)
+        result = loader.resolve_from_template(
+            template, template_root_space="test", template_type="main"
+        )
+        assert "Content from ambig/test.hbs" in result["ambig_test"]
 
 
 class TestMaxDepth:

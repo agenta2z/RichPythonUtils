@@ -66,13 +66,13 @@ def compile_template(
     handlebars_template = compiler.compile(template)
 
     if return_variables:
-        variables_found = _extract_variables(template)
+        variables_found = extract_variables(template)
         return handlebars_template, variables_found
     else:
         return handlebars_template
 
 
-def _extract_variables(template: str) -> Set[str]:
+def extract_variables(template: str) -> Set[str]:
     """
     Extract variable names from a Handlebars template string.
 

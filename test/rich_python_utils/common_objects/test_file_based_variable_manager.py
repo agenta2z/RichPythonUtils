@@ -1,15 +1,16 @@
 """Tests for FileBasedVariableManager and related classes."""
 
-import pytest
+import unittest
 from pathlib import Path
 
-from rich_python_utils.common_objects import (
+import pytest
+from rich_python_utils.common_objects.variable_manager import (
+    AmbiguousVariableError,
+    CircularReferenceError,
     FileBasedVariableManager,
+    KeyDiscoveryMode,
     VariableManagerConfig,
     VariableSyntax,
-    KeyDiscoveryMode,
-    CircularReferenceError,
-    AmbiguousVariableError,
 )
 
 
@@ -169,7 +170,10 @@ class TestCascadeParameter:
             variable_root_space="production",
         )
         # Override to staging
-        assert manager.get("database_host", variable_root_space="staging") == "staging-db.example.com"
+        assert (
+            manager.get("database_host", variable_root_space="staging")
+            == "staging-db.example.com"
+        )
 
     def test_override_variable_type(self, mock_dir):
         """Test overriding class-level type."""
@@ -178,7 +182,10 @@ class TestCascadeParameter:
             variable_root_space="production",
         )
         # Override to add type
-        assert manager.get("database_host", variable_type="api") == "prod-api-db.example.com"
+        assert (
+            manager.get("database_host", variable_type="api")
+            == "prod-api-db.example.com"
+        )
 
 
 class TestComposeOnAccess:
@@ -424,3 +431,652 @@ class TestKeyDiscoveryMode:
         assert manager._discovered_keys is None
         _ = list(manager)  # Trigger discovery
         assert manager._discovered_keys is not None
+
+
+class TestFolderBasedResolution(unittest.TestCase):
+    """Tests for subfolder-based variable resolution."""
+
+    def _make_dir(self):
+        import tempfile
+
+        d = tempfile.mkdtemp()
+        self._tmp_dirs.append(d)
+        return Path(d)
+
+    def setUp(self):
+        self._tmp_dirs = []
+
+    def tearDown(self):
+        import shutil
+
+        for d in self._tmp_dirs:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_config_yaml_default(self):
+        """Folder with .config.yaml pointing to 'modeling' resolves modeling.jinja2."""
+        tmp = self._make_dir()
+        folder = tmp / "task_preamble" / "v1"
+        folder.mkdir(parents=True)
+        (folder / ".config.yaml").write_text("default: modeling")
+        (folder / "modeling.txt").write_text("ML opportunities")
+        (folder / "generic.txt").write_text("Generic opportunities")
+
+        manager = FileBasedVariableManager(base_path=str(tmp))
+        result = manager.resolve_from_content("{{task_preamble}}", version="v1")
+        self.assertEqual(result["task_preamble"], "ML opportunities")
+
+    def test_default_file_wins_over_config(self):
+        """default.jinja2 takes priority over .config.yaml."""
+        tmp = self._make_dir()
+        folder = tmp / "my_var" / "v1"
+        folder.mkdir(parents=True)
+        (folder / "default.txt").write_text("default content")
+        (folder / ".config.yaml").write_text("default: other")
+        (folder / "other.txt").write_text("other content")
+
+        manager = FileBasedVariableManager(base_path=str(tmp))
+        result = manager.resolve_from_content("{{my_var}}", version="v1")
+        self.assertEqual(result["my_var"], "default content")
+
+    def test_single_file_folder(self):
+        """Folder with exactly one content file resolves without config."""
+        tmp = self._make_dir()
+        folder = tmp / "my_var" / "v1"
+        folder.mkdir(parents=True)
+        (folder / "only.txt").write_text("only content")
+
+        manager = FileBasedVariableManager(base_path=str(tmp))
+        result = manager.resolve_from_content("{{my_var}}", version="v1")
+        self.assertEqual(result["my_var"], "only content")
+
+    def test_ambiguous_folder_raises_error(self):
+        """Folder with 2+ files and no default raises AmbiguousVariableError."""
+        tmp = self._make_dir()
+        folder = tmp / "my_var" / "v1"
+        folder.mkdir(parents=True)
+        (folder / "a.txt").write_text("A")
+        (folder / "b.txt").write_text("B")
+
+        manager = FileBasedVariableManager(base_path=str(tmp))
+        with self.assertRaises(AmbiguousVariableError):
+            manager.resolve_from_content("{{my_var}}", version="v1")
+
+    def test_empty_folder_falls_through(self):
+        """Empty folder falls through to unversioned file."""
+        tmp = self._make_dir()
+        folder = tmp / "my_var" / "v1"
+        folder.mkdir(parents=True)
+        (tmp / "my_var.txt").write_text("unversioned")
+
+        manager = FileBasedVariableManager(base_path=str(tmp))
+        result = manager.resolve_from_content("{{my_var}}", version="v1")
+        self.assertEqual(result["my_var"], "unversioned")
+
+    def test_folder_wins_over_unversioned_file(self):
+        """Versioned folder takes priority over unversioned flat file."""
+        tmp = self._make_dir()
+        folder = tmp / "my_var" / "v1"
+        folder.mkdir(parents=True)
+        (folder / "default.txt").write_text("folder content")
+        (tmp / "my_var.txt").write_text("unversioned fallback")
+
+        manager = FileBasedVariableManager(base_path=str(tmp))
+        result = manager.resolve_from_content("{{my_var}}", version="v1")
+        self.assertEqual(result["my_var"], "folder content")
+
+    def test_file_wins_over_folder(self):
+        """Versioned flat file takes priority over folder."""
+        tmp = self._make_dir()
+        (tmp / "my_var.v1.txt").write_text("flat file wins")
+        folder = tmp / "my_var" / "v1"
+        folder.mkdir(parents=True)
+        (folder / "default.txt").write_text("folder content")
+
+        manager = FileBasedVariableManager(base_path=str(tmp))
+        result = manager.resolve_from_content("{{my_var}}", version="v1")
+        self.assertEqual(result["my_var"], "flat file wins")
+
+    def test_no_version_ignores_folder(self):
+        """Non-versioned resolution never triggers folder fallback."""
+        tmp = self._make_dir()
+        folder = tmp / "my_var" / "v1"
+        folder.mkdir(parents=True)
+        (folder / "default.txt").write_text("folder content")
+        (tmp / "my_var.txt").write_text("global")
+
+        manager = FileBasedVariableManager(base_path=str(tmp))
+        result = manager.resolve_from_content("{{my_var}}")
+        self.assertEqual(result["my_var"], "global")
+
+    def test_underscore_split_folder(self):
+        """Underscore-split path variant resolves via folder."""
+        tmp = self._make_dir()
+        folder = tmp / "task_preamble" / "uc"
+        folder.mkdir(parents=True)
+        (folder / ".config.yaml").write_text("default: modeling")
+        (folder / "modeling.txt").write_text("modeling content")
+
+        manager = FileBasedVariableManager(base_path=str(tmp))
+        result = manager.resolve_from_content("{{task_preamble}}", version="uc")
+        self.assertEqual(result["task_preamble"], "modeling content")
+
+    def test_config_yaml_missing_target_file(self):
+        """Config points to non-existent file, falls through to single-file."""
+        tmp = self._make_dir()
+        folder = tmp / "my_var" / "v1"
+        folder.mkdir(parents=True)
+        (folder / ".config.yaml").write_text("default: missing")
+        (folder / "only.txt").write_text("only content")
+
+        manager = FileBasedVariableManager(base_path=str(tmp))
+        result = manager.resolve_from_content("{{my_var}}", version="v1")
+        self.assertEqual(result["my_var"], "only content")
+
+    def test_dotfiles_excluded_from_content_files(self):
+        """Dotfiles like .config.yaml are not counted as content files."""
+        tmp = self._make_dir()
+        folder = tmp / "my_var" / "v1"
+        folder.mkdir(parents=True)
+        (folder / ".config.yaml").write_text("some: config")
+        (folder / ".hidden").write_text("hidden")
+        (folder / "only.txt").write_text("only content")
+
+        manager = FileBasedVariableManager(base_path=str(tmp))
+        result = manager.resolve_from_content("{{my_var}}", version="v1")
+        self.assertEqual(result["my_var"], "only content")
+
+
+# ============================================================
+# Phase 1: Tests for Override/Sidecar/Alias API (current flat behavior)
+# ============================================================
+
+
+@pytest.fixture
+def sidecar_dir(tmp_path):
+    """Create a directory with a YAML sidecar file mimicking .initial.variables.yaml."""
+    yaml_content = """\
+employee:
+  name: RankEvolve
+  role: an AI scientist
+  mindset:
+    paradigm_shifting: |
+      - Challenge every assumption
+      - Survey state-of-the-art across adjacent fields
+    incremental: |
+      - Start with profiling and bottleneck analysis
+      - Propose minimal, targeted changes
+
+__alias__:
+  strategy: employee.mindset
+"""
+    (tmp_path / ".initial.variables.yaml").write_text(yaml_content)
+    return tmp_path
+
+
+class TestOverrideAndAliasAPI:
+    """Tests for the Override/Sidecar/Alias API (lines 976-1150 of file_based.py)."""
+
+    def test_load_yaml_sidecar_basic(self, sidecar_dir):
+        """Verify yaml data is loaded into _yaml_sidecar."""
+        vm = FileBasedVariableManager(base_path=str(sidecar_dir))
+        data = vm.load_yaml_sidecar(sidecar_dir / ".initial.variables.yaml")
+
+        assert "employee" in data
+        assert data["employee"]["name"] == "RankEvolve"
+        assert "__alias__" not in data
+
+    def test_load_yaml_sidecar_alias_extraction(self, sidecar_dir):
+        """Verify __alias__ section extracted into _aliases dict."""
+        vm = FileBasedVariableManager(base_path=str(sidecar_dir))
+        vm.load_yaml_sidecar(sidecar_dir / ".initial.variables.yaml")
+
+        assert vm.aliases == {"strategy": "employee.mindset"}
+
+    def test_load_yaml_sidecar_nonexistent_file(self, sidecar_dir):
+        """Nonexistent file returns empty dict."""
+        vm = FileBasedVariableManager(base_path=str(sidecar_dir))
+        data = vm.load_yaml_sidecar(sidecar_dir / "nonexistent.yaml")
+        assert data == {}
+
+    def test_set_with_alias_and_subkey(self, sidecar_dir):
+        """set("strategy", "paradigm_shifting") resolves alias + sub-key selection."""
+        vm = FileBasedVariableManager(base_path=str(sidecar_dir))
+        vm.load_yaml_sidecar(sidecar_dir / ".initial.variables.yaml")
+
+        vm.set("strategy", "paradigm_shifting")
+
+        effective = vm.get_effective_value("strategy")
+        assert "Challenge every assumption" in effective
+        assert effective != "paradigm_shifting"
+
+    def test_set_raw_value_when_not_subkey(self, sidecar_dir):
+        """set("strategy", "custom text") stores raw value when not a sub-key."""
+        vm = FileBasedVariableManager(base_path=str(sidecar_dir))
+        vm.load_yaml_sidecar(sidecar_dir / ".initial.variables.yaml")
+
+        vm.set("strategy", "My custom strategy text")
+
+        effective = vm.get_effective_value("strategy")
+        assert effective == "My custom strategy text"
+
+    def test_set_override_false_guard(self, sidecar_dir):
+        """set(key, value, override=False) raises KeyError if already set."""
+        vm = FileBasedVariableManager(base_path=str(sidecar_dir))
+        vm.load_yaml_sidecar(sidecar_dir / ".initial.variables.yaml")
+
+        vm.set("strategy", "paradigm_shifting")
+        with pytest.raises(KeyError):
+            vm.set("strategy", "incremental", override=False)
+
+    def test_get_effective_value_priority(self, sidecar_dir):
+        """Resolution priority: overrides > yaml_sidecar."""
+        vm = FileBasedVariableManager(base_path=str(sidecar_dir))
+        vm.load_yaml_sidecar(sidecar_dir / ".initial.variables.yaml")
+
+        assert vm.get_effective_value("employee")["name"] == "RankEvolve"
+
+        vm.set("employee", {"name": "CustomName"})
+        assert vm.get_effective_value("employee") == {"name": "CustomName"}
+
+    def test_get_effective_value_default(self, sidecar_dir):
+        """Returns default when key not found anywhere."""
+        vm = FileBasedVariableManager(base_path=str(sidecar_dir))
+        result = vm.get_effective_value("nonexistent", default="fallback")
+        assert result == "fallback"
+
+    def test_get_all_variables_merge(self, sidecar_dir):
+        """get_all_variables() returns yaml_sidecar data."""
+        vm = FileBasedVariableManager(base_path=str(sidecar_dir))
+        vm.load_yaml_sidecar(sidecar_dir / ".initial.variables.yaml")
+
+        all_vars = vm.get_all_variables()
+        assert all_vars["employee"]["name"] == "RankEvolve"
+        assert "paradigm_shifting" in all_vars["employee"]["mindset"]
+
+    def test_get_all_variables_dot_path_override(self, sidecar_dir):
+        """Override with dot-path merges correctly into nested structure."""
+        vm = FileBasedVariableManager(base_path=str(sidecar_dir))
+        vm.load_yaml_sidecar(sidecar_dir / ".initial.variables.yaml")
+
+        vm.set("strategy", "paradigm_shifting")
+
+        all_vars = vm.get_all_variables()
+        assert isinstance(all_vars["employee"]["mindset"], str)
+        assert "Challenge every assumption" in all_vars["employee"]["mindset"]
+        assert all_vars["employee"]["name"] == "RankEvolve"
+
+    def test_get_all_variables_returns_deep_copy(self, sidecar_dir):
+        """Mutating returned dict does not affect internal state."""
+        vm = FileBasedVariableManager(base_path=str(sidecar_dir))
+        vm.load_yaml_sidecar(sidecar_dir / ".initial.variables.yaml")
+
+        vars1 = vm.get_all_variables()
+        vars1["employee"]["name"] = "MUTATED"
+        vars2 = vm.get_all_variables()
+        assert vars2["employee"]["name"] == "RankEvolve"
+
+    def test_clear_specific_key(self, sidecar_dir):
+        """clear() removes a single override, revealing yaml_sidecar value."""
+        vm = FileBasedVariableManager(base_path=str(sidecar_dir))
+        vm.load_yaml_sidecar(sidecar_dir / ".initial.variables.yaml")
+
+        vm.set("strategy", "paradigm_shifting")
+        assert isinstance(vm.get_effective_value("strategy"), str)
+
+        vm.clear("strategy")
+        result = vm.get_effective_value("strategy")
+        assert isinstance(result, dict)
+
+
+# ============================================================
+# Phase 5: Tests for Scoped Override/Sidecar/Alias API
+# ============================================================
+
+
+@pytest.fixture
+def multi_scope_dir(tmp_path):
+    """Create directory with YAML sidecars for multiple scopes."""
+    (tmp_path / ".variables.yaml").write_text("""\
+app_name: GlobalApp
+settings:
+  debug: false
+  timeout: 30
+
+__alias__:
+  mode: settings.debug
+""")
+
+    conv_dir = tmp_path / "conversation" / "main"
+    conv_dir.mkdir(parents=True)
+    (conv_dir / ".initial.variables.yaml").write_text("""\
+employee:
+  name: RankEvolve
+  mindset:
+    paradigm_shifting: |
+      - Challenge every assumption
+    incremental: |
+      - Start with profiling
+
+__alias__:
+  strategy: employee.mindset
+""")
+
+    plan_dir = tmp_path / "plan" / "main"
+    plan_dir.mkdir(parents=True)
+    (plan_dir / ".initial.variables.yaml").write_text("""\
+employee:
+  name: PlanAgent
+  mindset:
+    aggressive: |
+      - Move fast and break things
+    conservative: |
+      - Measure twice, cut once
+
+__alias__:
+  strategy: employee.mindset
+""")
+
+    return tmp_path
+
+
+class TestScopedOverrideAndAlias:
+    """Tests for the space-aware Override/Sidecar/Alias API."""
+
+    def test_scoped_yaml_sidecar_isolation(self, multi_scope_dir):
+        """Loading different yamls for different scopes — no collision."""
+        vm = FileBasedVariableManager(base_path=str(multi_scope_dir))
+
+        vm.load_yaml_sidecar(multi_scope_dir / ".variables.yaml")
+        vm.load_yaml_sidecar(
+            multi_scope_dir / "conversation" / "main" / ".initial.variables.yaml",
+            variable_root_space="conversation",
+            variable_type="main",
+        )
+        vm.load_yaml_sidecar(
+            multi_scope_dir / "plan" / "main" / ".initial.variables.yaml",
+            variable_root_space="plan",
+            variable_type="main",
+        )
+
+        conv_vars = vm.get_all_variables(
+            variable_root_space="conversation",
+            variable_type="main",
+        )
+        assert conv_vars["employee"]["name"] == "RankEvolve"
+
+        plan_vars = vm.get_all_variables(
+            variable_root_space="plan",
+            variable_type="main",
+        )
+        assert plan_vars["employee"]["name"] == "PlanAgent"
+
+        global_vars = vm.get_all_variables()
+        assert global_vars["app_name"] == "GlobalApp"
+        assert "employee" not in global_vars
+
+    def test_scoped_override_isolation(self, multi_scope_dir):
+        """Overrides in different scopes don't interfere."""
+        vm = FileBasedVariableManager(base_path=str(multi_scope_dir))
+
+        vm.load_yaml_sidecar(
+            multi_scope_dir / "conversation" / "main" / ".initial.variables.yaml",
+            variable_root_space="conversation",
+            variable_type="main",
+        )
+        vm.load_yaml_sidecar(
+            multi_scope_dir / "plan" / "main" / ".initial.variables.yaml",
+            variable_root_space="plan",
+            variable_type="main",
+        )
+
+        vm.set(
+            "strategy",
+            "paradigm_shifting",
+            variable_root_space="conversation",
+            variable_type="main",
+        )
+        vm.set(
+            "strategy", "conservative", variable_root_space="plan", variable_type="main"
+        )
+
+        conv_val = vm.get_effective_value(
+            "strategy",
+            variable_root_space="conversation",
+            variable_type="main",
+        )
+        assert "Challenge every assumption" in conv_val
+
+        plan_val = vm.get_effective_value(
+            "strategy",
+            variable_root_space="plan",
+            variable_type="main",
+        )
+        assert "Measure twice" in plan_val
+
+    def test_cascade_override_resolution(self, multi_scope_dir):
+        """More specific scope wins: (root_space, type) > (root_space, "") > ("", "")."""
+        vm = FileBasedVariableManager(base_path=str(multi_scope_dir))
+
+        vm.set("color", "blue")
+        vm.set("color", "green", variable_root_space="plan")
+        vm.set("color", "red", variable_root_space="plan", variable_type="main")
+
+        assert (
+            vm.get_effective_value(
+                "color",
+                variable_root_space="plan",
+                variable_type="main",
+            )
+            == "red"
+        )
+
+    def test_cascade_fallback_to_space_level(self, multi_scope_dir):
+        """Space-level falls through when type-specific not set."""
+        vm = FileBasedVariableManager(base_path=str(multi_scope_dir))
+
+        vm.set("color", "blue")
+        vm.set("color", "green", variable_root_space="plan")
+
+        assert (
+            vm.get_effective_value(
+                "color",
+                variable_root_space="plan",
+                variable_type="backup1",
+            )
+            == "green"
+        )
+
+    def test_cascade_fallback_to_global(self, multi_scope_dir):
+        """Global fallback when nothing more specific."""
+        vm = FileBasedVariableManager(base_path=str(multi_scope_dir))
+        vm.set("color", "blue")
+
+        assert (
+            vm.get_effective_value(
+                "color",
+                variable_root_space="analysis",
+                variable_type="main",
+            )
+            == "blue"
+        )
+
+    def test_cascade_yaml_sidecar_resolution(self, multi_scope_dir):
+        """Specific scope sidecar data wins over global via deep merge."""
+        vm = FileBasedVariableManager(base_path=str(multi_scope_dir))
+
+        vm.load_yaml_sidecar(multi_scope_dir / ".variables.yaml")
+        vm.load_yaml_sidecar(
+            multi_scope_dir / "conversation" / "main" / ".initial.variables.yaml",
+            variable_root_space="conversation",
+            variable_type="main",
+        )
+
+        conv_vars = vm.get_all_variables(
+            variable_root_space="conversation",
+            variable_type="main",
+        )
+        assert conv_vars["employee"]["name"] == "RankEvolve"
+        assert conv_vars["app_name"] == "GlobalApp"
+
+    def test_get_all_variables_deep_merge(self, multi_scope_dir):
+        """Cascade merge is DEEP — nested dicts from global are preserved."""
+        vm = FileBasedVariableManager(base_path=str(multi_scope_dir))
+
+        vm.load_yaml_sidecar(multi_scope_dir / ".variables.yaml")
+        vm.load_yaml_sidecar(
+            multi_scope_dir / "conversation" / "main" / ".initial.variables.yaml",
+            variable_root_space="conversation",
+            variable_type="main",
+        )
+
+        conv_vars = vm.get_all_variables(
+            variable_root_space="conversation",
+            variable_type="main",
+        )
+        assert conv_vars["settings"]["timeout"] == 30
+        assert conv_vars["employee"]["name"] == "RankEvolve"
+
+    def test_skip_overrides(self, multi_scope_dir):
+        """skip_overrides=True returns source value even when override exists."""
+        vm = FileBasedVariableManager(base_path=str(multi_scope_dir))
+        vm.load_yaml_sidecar(
+            multi_scope_dir / "conversation" / "main" / ".initial.variables.yaml",
+            variable_root_space="conversation",
+            variable_type="main",
+        )
+
+        vm.set(
+            "strategy",
+            "paradigm_shifting",
+            variable_root_space="conversation",
+            variable_type="main",
+        )
+
+        with_override = vm.get_effective_value(
+            "strategy",
+            variable_root_space="conversation",
+            variable_type="main",
+        )
+        assert isinstance(with_override, str)
+        assert "Challenge every assumption" in with_override
+
+        source = vm.get_effective_value(
+            "strategy",
+            variable_root_space="conversation",
+            variable_type="main",
+            skip_overrides=True,
+        )
+        assert isinstance(source, dict)
+        assert "paradigm_shifting" in source
+
+    def test_backward_compat_property_overrides(self, multi_scope_dir):
+        """vm._overrides returns global scope dict (backward compat)."""
+        vm = FileBasedVariableManager(base_path=str(multi_scope_dir))
+
+        vm.set("color", "blue")
+
+        assert "color" in vm._overrides
+        assert vm._overrides["color"] == "blue"
+
+        vm.set("color", "red", variable_root_space="plan", variable_type="main")
+        assert vm._overrides["color"] == "blue"
+
+    def test_backward_compat_property_yaml_sidecar(self, multi_scope_dir):
+        """vm._yaml_sidecar returns global scope dict."""
+        vm = FileBasedVariableManager(base_path=str(multi_scope_dir))
+        vm.load_yaml_sidecar(multi_scope_dir / ".variables.yaml")
+        vm.load_yaml_sidecar(
+            multi_scope_dir / "conversation" / "main" / ".initial.variables.yaml",
+            variable_root_space="conversation",
+            variable_type="main",
+        )
+
+        assert "app_name" in vm._yaml_sidecar
+        assert "employee" not in vm._yaml_sidecar
+
+    def test_backward_compat_hasattr_overrides(self, multi_scope_dir):
+        """hasattr(vm, '_overrides') works (used by prompt_rendering.py:144)."""
+        vm = FileBasedVariableManager(base_path=str(multi_scope_dir))
+
+        assert hasattr(vm, "_overrides")
+        assert vm._overrides == {}
+
+        vm.set("x", "y")
+        assert vm._overrides
+
+    def test_no_scope_params_equals_global(self, multi_scope_dir):
+        """Calling methods without scope params uses global scope."""
+        vm = FileBasedVariableManager(base_path=str(multi_scope_dir))
+        vm.load_yaml_sidecar(multi_scope_dir / ".variables.yaml")
+
+        vm.set("color", "blue")
+        assert vm.get_effective_value("color") == "blue"
+        assert (
+            vm.get_effective_value(
+                "color",
+                variable_root_space="",
+                variable_type="",
+            )
+            == "blue"
+        )
+
+    def test_clear_scoped(self, multi_scope_dir):
+        """clear() in one scope doesn't affect other scopes."""
+        vm = FileBasedVariableManager(base_path=str(multi_scope_dir))
+
+        vm.set("color", "blue")
+        vm.set("color", "red", variable_root_space="plan", variable_type="main")
+
+        vm.clear("color", variable_root_space="plan", variable_type="main")
+
+        assert (
+            vm.get_effective_value(
+                "color",
+                variable_root_space="plan",
+                variable_type="main",
+            )
+            == "blue"
+        )
+        assert vm.get_effective_value("color") == "blue"
+
+    def test_clear_all_clears_everything(self, multi_scope_dir):
+        """clear_all() clears ALL scopes."""
+        vm = FileBasedVariableManager(base_path=str(multi_scope_dir))
+
+        vm.set("color", "blue")
+        vm.set("color", "red", variable_root_space="plan", variable_type="main")
+        vm.set(
+            "color", "green", variable_root_space="conversation", variable_type="main"
+        )
+
+        vm.clear_all()
+
+        assert vm.get_effective_value("color") is None
+        assert (
+            vm.get_effective_value(
+                "color",
+                variable_root_space="plan",
+                variable_type="main",
+            )
+            is None
+        )
+        assert (
+            vm.get_effective_value(
+                "color",
+                variable_root_space="conversation",
+                variable_type="main",
+            )
+            is None
+        )
+
+    def test_clear_all_overrides(self, sidecar_dir):
+        """clear_all() empties all overrides."""
+        vm = FileBasedVariableManager(base_path=str(sidecar_dir))
+        vm.load_yaml_sidecar(sidecar_dir / ".initial.variables.yaml")
+
+        vm.set("strategy", "paradigm_shifting")
+        vm.set("employee", "override_value")
+        vm.clear_all()
+
+        result = vm.get_effective_value("strategy")
+        assert isinstance(result, dict)
