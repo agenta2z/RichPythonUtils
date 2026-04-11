@@ -235,14 +235,32 @@ class WorkNodeBase(Serializable, Debuggable, Resumable, PostProcessable, ABC):
         raise NotImplementedError
 
     def load_result(self, *args, **kwargs) -> Tuple[bool, Any]:
-        if self.resume_with_saved_results:
-            # load saved post-processed result
+        from rich_python_utils.common_objects.workflow.common.step_result_save_options import ResumeMode
+
+        resume = self.resume_with_saved_results
+        # Backward compat: bool → ResumeMode
+        if resume is True:
+            resume = ResumeMode.Always
+        elif resume is False or resume is None:
+            return False, None
+
+        if resume == ResumeMode.Never:
+            return False, None
+
+        if resume == ResumeMode.SkipResumable:
+            if getattr(self, "worker_manages_resume", False):
+                return False, None
+
+        # Always or SkipResumable (non-resumable worker): try loading checkpoint
+        try:
             result_path = self._resolve_result_path(self.name, *args, **kwargs)
             if self._exists_result(self.name, result_path):
                 result = self._load_result(self.name, result_path)
                 if self.ignore_stop_flag_from_saved_results:
                     result = WorkGraphStopFlags.remove_stop_flag_from_result(result)
                 return True, result
+        except NotImplementedError:
+            pass
 
         return False, None
 

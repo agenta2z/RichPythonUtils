@@ -15,7 +15,8 @@ from rich_python_utils.algorithms.graph.node import Node
 from rich_python_utils.common_objects.debuggable import Debuggable
 from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
 from rich_python_utils.common_objects.workflow.common.step_result_save_options import (
-    StepResultSaveOptions
+    StepResultSaveOptions,
+    ResumeMode,
 )
 from rich_python_utils.common_objects.workflow.common.worknode_base import (
     WorkNodeBase, WorkGraphStopFlags, NextNodesSelector
@@ -176,6 +177,14 @@ class WorkGraphNode(Node, WorkNodeBase):
     max_repeat: int = attrib(default=1, kw_only=True)
     repeat_condition: Optional[Callable[..., bool]] = attrib(default=None, kw_only=True)
     fallback_result: Any = attrib(default=None, kw_only=True)
+    # Optional group name for per-group concurrency limiting in WorkGraph.
+    # Nodes in the same group share a semaphore when group_max_concurrency is set.
+    group: Optional[str] = attrib(default=None, kw_only=True)
+    # When True, the wrapped worker manages its own resume/checkpointing (e.g.,
+    # PTI, nested BTA). Used by ResumeMode.SkipResumable and
+    # StepResultSaveOptions.SkipResumable to decide whether to skip node-level
+    # save/load and let the worker handle it internally.
+    worker_manages_resume: bool = attrib(default=False, kw_only=True)
     min_repeat_wait: float = attrib(default=0, kw_only=True)
     max_repeat_wait: float = attrib(default=0, kw_only=True)
     retry_on_exceptions: Optional[List[type]] = attrib(default=None, kw_only=True)
@@ -185,6 +194,27 @@ class WorkGraphNode(Node, WorkNodeBase):
         super().__attrs_post_init__()
         if isinstance(self.value, Debuggable):
             self.value.set_parent_debuggable(self)
+
+    def _should_save_result(self) -> bool:
+        """Check if this node's result should be saved after execution.
+
+        Handles ``StepResultSaveOptions.SkipResumable``: saves only when the
+        wrapped worker does NOT manage its own checkpointing.
+        Returns False if ``_get_result_path`` is not implemented (no checkpoint
+        directory configured).
+        """
+        save = self.enable_result_save
+        if save is True or save == StepResultSaveOptions.Always:
+            return True
+        if save == StepResultSaveOptions.SkipResumable:
+            if self.worker_manages_resume:
+                return False
+            try:
+                self._get_result_path(self.name)
+                return True
+            except NotImplementedError:
+                return False
+        return False
 
     def _post_adding_next_process(self, next_node):
         from rich_python_utils.common_objects.debuggable import Debuggable
@@ -465,10 +495,7 @@ class WorkGraphNode(Node, WorkNodeBase):
         has_self_edge = self in (self.next or [])
 
         # Warn if self-loop node has result saving enabled - this breaks self-loop on resume
-        if has_self_edge and (
-            self.enable_result_save is True or
-            self.enable_result_save == StepResultSaveOptions.Always
-        ):
+        if has_self_edge and self._should_save_result():
             self.log_warning(
                 {
                     'node_name': self.name,
@@ -576,10 +603,7 @@ class WorkGraphNode(Node, WorkNodeBase):
                             result = _result
 
                     # Save results if configured to do so
-                    if (
-                            self.enable_result_save is True or
-                            self.enable_result_save == StepResultSaveOptions.Always
-                    ):
+                    if self._should_save_result():
                         result_path = self._get_result_path(self.name, *args, **kwargs)
                         self._save_result(result, result_path)
 
@@ -703,7 +727,12 @@ class WorkGraphNode(Node, WorkNodeBase):
         # endregion
 
         # Pop _semaphore early so it doesn't leak into get_relevant_args or node execution
-        semaphore = kwargs.pop('_semaphore', None)
+        _semaphore_or_map = kwargs.pop('_semaphore', None)
+        # Support per-group semaphores: if _semaphore is a dict, select by node.group
+        if isinstance(_semaphore_or_map, dict):
+            semaphore = _semaphore_or_map.get(self.group) or _semaphore_or_map.get(None)
+        else:
+            semaphore = _semaphore_or_map
 
         # region Multi-parent input collection using asyncio.Queue
         num_real_parents = sum(1 for p in (self.previous or []) if p is not self)
@@ -732,10 +761,7 @@ class WorkGraphNode(Node, WorkNodeBase):
         has_self_edge = self in (self.next or [])
 
         # Warn if self-loop node has result saving enabled
-        if has_self_edge and (
-            self.enable_result_save is True or
-            self.enable_result_save == StepResultSaveOptions.Always
-        ):
+        if has_self_edge and self._should_save_result():
             self.log_warning(
                 {
                     'node_name': self.name,
@@ -836,10 +862,7 @@ class WorkGraphNode(Node, WorkNodeBase):
                                 result = _result
 
                         # Save results if configured
-                        if (
-                                self.enable_result_save is True or
-                                self.enable_result_save == StepResultSaveOptions.Always
-                        ):
+                        if self._should_save_result():
                             result_path = self._get_result_path(self.name, *args, **kwargs)
                             self._save_result(result, result_path)
                     finally:
@@ -872,7 +895,7 @@ class WorkGraphNode(Node, WorkNodeBase):
                                 *a,
                                 _output_idx=(downstream_results, i),
                                 _graph_depth=graph_depth + 1,
-                                _semaphore=semaphore,
+                                _semaphore=_semaphore_or_map,
                                 **kw
                             )
                         tasks.append(_run_ds(idx, node, nargs_copy, nkwargs_copy))
@@ -1123,6 +1146,11 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
     # When set, creates an asyncio.Semaphore(max_concurrency) to limit concurrent node execution.
     # Ignored by the sync _run() path.
     max_concurrency: Optional[int] = attrib(default=None, kw_only=True)
+    # Per-group concurrency limits. When set, creates per-group asyncio.Semaphores.
+    # Nodes with a matching group name will use their group's semaphore.
+    # Nodes without a group (group=None) use the global max_concurrency semaphore.
+    # Example: {"research": 5, "investigation": 2}
+    group_max_concurrency: Optional[Dict[str, int]] = attrib(default=None, kw_only=True)
 
     def __attrs_post_init__(self):
         super().__attrs_post_init__()
@@ -1705,7 +1733,20 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
         node_info = [None] * len(self.start_nodes)  # [(node, is_loaded), ...]
 
         terminate_event = asyncio.Event()
-        semaphore = asyncio.Semaphore(self.max_concurrency) if self.max_concurrency else None
+        # Build semaphore(s) for concurrency limiting
+        if self.group_max_concurrency:
+            # Per-group semaphores: dict mapping group_name -> Semaphore
+            semaphore = {
+                group_name: asyncio.Semaphore(limit)
+                for group_name, limit in self.group_max_concurrency.items()
+            }
+            # Add global semaphore for ungrouped nodes (group=None)
+            if self.max_concurrency:
+                semaphore[None] = asyncio.Semaphore(self.max_concurrency)
+        elif self.max_concurrency:
+            semaphore = asyncio.Semaphore(self.max_concurrency)
+        else:
+            semaphore = None
 
         async def _run_start_node(idx, node):
             is_loaded, result = node.load_result(*args, **kwargs)
