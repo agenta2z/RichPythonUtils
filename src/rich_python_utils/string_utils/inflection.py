@@ -1,7 +1,7 @@
 import re
 from typing import Union
 
-from rich_python_utils.general_utils.nlp_utility.common import Languages
+from rich_python_utils.nlp_utils.common import Languages
 
 
 def get_token_inflection_regex(

@@ -1,4 +1,5 @@
 import itertools
+import uuid
 import warnings
 from itertools import zip_longest, chain, product, islice, repeat
 from typing import Iterator, Union, Tuple, List, Type, Iterable, Callable, Optional, Mapping, Sequence, Set, Dict, Any
@@ -1778,5 +1779,21 @@ def tqdm_wrap(
     elif tqdm_msg and verbose:
         print(tqdm_msg)
     return _it
+
+# endregion
+
+
+# region Naming Helpers
+
+def with_uuid(it, prefix='', suffix=''):
+    yield from ((prefix + str(uuid.uuid4()) + suffix, x) for x in it)
+
+
+def with_names(it, name_format: str = None, name_prefix='', name_suffix=''):
+    if name_format is None or name_format == 'uuid':
+        return with_uuid(it=it, prefix=name_prefix, suffix=name_suffix)
+    else:
+        for i, x in enumerate(it):
+            yield name_prefix + name_format.format(i) + name_suffix, x
 
 # endregion

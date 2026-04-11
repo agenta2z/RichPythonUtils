@@ -7,7 +7,7 @@ from rich_python_utils.common_utils.map_helper import get__, get_keys
 from rich_python_utils.common_utils.typing_helper import make_set_, is_str
 from rich_python_utils.string_utils.misc import get_human_int_str
 from rich_python_utils.string_utils.prefix_suffix import solve_name_conflict
-from rich_python_utils.general_utils.nlp_utility.punctuations import remove_punctuation_except_for_hyphen
+from rich_python_utils.nlp_utils.punctuations import remove_punctuation_except_for_hyphen
 from rich_python_utils.string_utils.split import birsplit
 
 
@@ -263,7 +263,7 @@ def args2str(
         the argument string description.
 
     Examples:
-        >>> from rich_python_utils.general_utils.arg_utility.arg_parse import get_parsed_args
+        >>> from rich_python_utils.common_utils.arg_utils.arg_parse import get_parsed_args
         >>> args = get_parsed_args(
         ...   default_batch_size=512,
         ...   default_dimension=100,

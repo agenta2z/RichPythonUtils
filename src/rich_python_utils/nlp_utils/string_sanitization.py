@@ -6,9 +6,9 @@ from typing import Union, Mapping, Iterable, List, Optional, Callable
 from attr import attrs, attrib
 from rich_python_utils.common_utils.function_helper import get_relevant_named_args
 from rich_python_utils.common_utils.typing_helper import solve_nested_singleton_tuple_list, is_str
-from rich_python_utils.general_utils.nlp_utility.common import Languages
+from rich_python_utils.nlp_utils.common import Languages
 from rich_python_utils.string_utils.prefix_suffix import remove_common_prefix_suffix, remove_prefix_suffix
-from rich_python_utils.general_utils.nlp_utility.punctuations import remove_acronym_periods_and_spaces, remove_punctuation_except_for_hyphen
+from rich_python_utils.nlp_utils.punctuations import remove_acronym_periods_and_spaces, remove_punctuation_except_for_hyphen
 from rich_python_utils.string_utils.tokenization import tokenize
 import re
 

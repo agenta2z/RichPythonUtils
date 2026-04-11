@@ -1220,7 +1220,7 @@ def info_print(tag: Any, content: Any):
         tag: Tag object (class, string, or any object)
         content: Message content
     """
-    from rich_python_utils.general_utils.general import is_class, is_basic_type
+    from rich_python_utils.common_utils.typing_helper import is_class, is_basic_type
 
     # Determine tag string
     if is_class(tag):
@@ -1252,7 +1252,7 @@ def debug_print(tag: Any, content: Any):
         tag: Tag object (class, string, or any object)
         content: Message content
     """
-    from rich_python_utils.general_utils.general import is_class, is_basic_type
+    from rich_python_utils.common_utils.typing_helper import is_class, is_basic_type
 
     # Determine tag string
     if is_class(tag):

@@ -2,10 +2,10 @@ from typing import Union, Iterable, Callable
 
 import nltk
 
-from rich_python_utils.general_utils.nlp_utility.common import (
+from rich_python_utils.nlp_utils.common import (
     Languages, get_language_for_nltk_tokenizer, get_language_for_nltk_pos_tagger, PreDefinedNlpToolNames
 )
-from rich_python_utils.general_utils.nlp_utility.part_of_speech.common import get_pos_tagger
+from rich_python_utils.nlp_utils.part_of_speech.common import get_pos_tagger
 
 
 def pos_tag_(

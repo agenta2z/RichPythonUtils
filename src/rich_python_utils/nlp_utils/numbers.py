@@ -2,10 +2,10 @@ import re
 from typing import Optional
 
 from rich_python_utils.common_utils.set_helper import compare_sets, set_one_contains_the_other
-from rich_python_utils.general_utils.nlp_utility.common import Languages
-from rich_python_utils.general_utils.nlp_utility.metrics.edit_distance import EditDistanceOptions, edit_distance
-from rich_python_utils.general_utils.nlp_utility.punctuations import remove_acronym_periods_and_spaces
-from rich_python_utils.general_utils.nlp_utility.string_sanitization import remove_common_tokens_except_for_sub_tokens
+from rich_python_utils.nlp_utils.common import Languages
+from rich_python_utils.nlp_utils.metrics.edit_distance import EditDistanceOptions, edit_distance
+from rich_python_utils.nlp_utils.punctuations import remove_acronym_periods_and_spaces
+from rich_python_utils.nlp_utils.string_sanitization import remove_common_tokens_except_for_sub_tokens
 from rich_python_utils.string_utils.regex import get_regex_match_group_indexes, iter_matches
 
 _NUMBERS_REGEX_EN = '(?P<n100>100th|100|a hundred|one hundred|hundred|hundreds|hundredth)|' \

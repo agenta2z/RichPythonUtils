@@ -4,10 +4,10 @@ from flair.models import SequenceTagger
 from flair.data import Sentence
 import nltk
 
-from rich_python_utils.general_utils.nlp_utility.common import (
+from rich_python_utils.nlp_utils.common import (
     Languages, get_language_for_nltk_tokenizer, PreDefinedNlpToolNames
 )
-from rich_python_utils.general_utils.nlp_utility.part_of_speech.common import (
+from rich_python_utils.nlp_utils.part_of_speech.common import (
     get_flair_pos_tagger_name_by_language, get_pos_tagger
 )
 

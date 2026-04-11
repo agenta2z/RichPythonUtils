@@ -38,7 +38,7 @@ from rich_python_utils.console_utils.colorama_console_utils import (
     # Color constants
     HPRINT_TITLE_COLOR, EPRINT_MESSAGE_BODY_COLOR, WPRINT_MESSAGE_BODY_COLOR,
 )
-from rich_python_utils.general_utils.external.colorama import Fore
+from rich_python_utils.external.colorama import Fore
 
 
 def demo_backtick_highlighting():

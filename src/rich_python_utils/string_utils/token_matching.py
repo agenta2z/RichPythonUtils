@@ -4,7 +4,7 @@ from typing import Union, Iterable, Tuple, Mapping
 import rich_python_utils.string_utils.regex as rex
 from rich_python_utils.common_utils.iter_helper import iter__
 from rich_python_utils.common_utils.set_helper import compare_sets
-from rich_python_utils.general_utils.nlp_utility.common import Languages
+from rich_python_utils.nlp_utils.common import Languages
 from rich_python_utils.string_utils.inflection import (
     get_token_inflection_regex,
     _construct_regex_from_token_tup
