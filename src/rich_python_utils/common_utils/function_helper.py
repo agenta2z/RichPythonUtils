@@ -1,7 +1,8 @@
+import enum
 import inspect
 import warnings
 from functools import reduce
-from time import sleep
+from time import monotonic, sleep
 from typing import Callable, List, Any, Union, Optional
 from typing import Iterable
 from typing import Mapping, Tuple, Sequence, Dict
@@ -318,6 +319,20 @@ class FuncInvocation:
         return f"{self.full_name}({args_str})"
 
 
+class FallbackMode(enum.Enum):
+    """Controls when the retry helper transitions to the next fallback callable.
+
+    This is distinct from FallbackInferMode (in agent_foundation streaming_inferencer_base),
+    which controls HOW a streaming inferencer's recovery uses a cached partial response.
+    The two enums are orthogonal and live in separate packages.
+
+    See also: FallbackInferMode in agent_foundation.common.inferencers.streaming_inferencer_base
+    """
+    NEVER = "never"           # No fallback — retry same func (today's behavior)
+    ON_EXHAUSTED = "exhausted"  # Switch after max_retry attempts of current callable
+    ON_FIRST_FAILURE = "first"  # Switch immediately on any failure of current callable
+
+
 def execute_with_retry(
         func: Callable,
         max_retry: int = 1,
@@ -329,7 +344,14 @@ def execute_with_retry(
         on_retry_callback: Callable = None,
         args: List = None,
         kwargs: Dict[str, Any] = None,
-        default_return_or_raise: Union[Any, Exception] = None
+        default_return_or_raise: Union[Any, Exception] = None,
+        *,
+        total_timeout: Union[float, None] = None,
+        attempt_timeout: Union[float, None] = None,
+        fallback_func: Union[Callable, List[Callable], None] = None,
+        fallback_mode: 'FallbackMode' = FallbackMode.NEVER,
+        fallback_on_exceptions: Union[tuple, None] = None,
+        on_fallback_callback: Union[Callable, None] = None,
 ) -> Any:
     """
     Executes a function with retry logic and optional pre-condition guard.
@@ -352,11 +374,26 @@ def execute_with_retry(
         args (List): Positional arguments to pass to the function (also passed to pre_condition). Defaults to None.
         kwargs (Dict[str, Any]): Keyword arguments to pass to the function (also passed to pre_condition). Defaults to None.
         default_return_or_raise (Union[Any, Exception]): Value to return or exception to raise if all retries fail or pre_condition is False. Defaults to None.
+        total_timeout (float | None): Wall-clock cap in seconds for the entire retry loop. None or 0 disables. Negative raises ValueError.
+        attempt_timeout (float | None): Not supported in sync mode. Raises NotImplementedError if provided.
+        fallback_func (Callable | list[Callable] | None): Alternative callable(s) to try on failure.
+            Single callable is normalized to a one-element list. Empty list is treated as None.
+        fallback_mode (FallbackMode): When to transition to next fallback. Defaults to NEVER.
+            ON_EXHAUSTED: retry current callable up to max_retry, then transition.
+            ON_FIRST_FAILURE: primary gets 1 attempt, subsequent fallbacks get full max_retry budget.
+        fallback_on_exceptions (tuple[type, ...] | None): Exception types that trigger fallback transition.
+            None means any exception triggers fallback. Non-matching exceptions propagate immediately.
+        on_fallback_callback (Callable | None): Callback invoked once per chain transition.
+            Signature: (from_func, to_func, exception, total_attempts).
 
     Returns:
         Any: The result of the function if successful, or default_return_or_raise if pre_condition is False or all retries fail.
 
     Raises:
+        NotImplementedError: If attempt_timeout is provided (sync per-attempt timeout not supported).
+        ValueError: If total_timeout is negative. If fallback_func is provided but fallback_mode is NEVER.
+            If fallback_mode is not NEVER but no fallback_func provided. If any fallback callable is async.
+        TimeoutError: If total_timeout expires during the retry loop.
         Exception: The last exception raised if all retries fail and `default_return_or_raise` is an exception,
                    or a default exception if `default_return_or_raise` is None.
 
@@ -390,13 +427,53 @@ def execute_with_retry(
         >>> execute_with_retry(increment, max_retry=10, pre_condition=allow_execution, output_validator=valid_result)
         3
     """
+    # --- Early validation of new parameters ---
+    if attempt_timeout is not None:
+        raise NotImplementedError(
+            "Sync per-attempt timeout is not supported. Use total_timeout for soft deadlines, "
+            "or move the hot path to async_execute_with_retry."
+        )
+
+    if total_timeout is not None:
+        if total_timeout < 0:
+            raise ValueError("total_timeout must be non-negative")
+        if total_timeout == 0:
+            total_timeout = None  # treat 0 as disabled
+
+    # --- Normalize fallback_func ---
+    if fallback_func is not None:
+        if callable(fallback_func):
+            fallback_func = [fallback_func]
+        elif isinstance(fallback_func, list):
+            if len(fallback_func) == 0:
+                fallback_func = None
+        # else: leave as-is, validation below will catch non-callable items
+
+    # --- Fallback input validation ---
+    if fallback_func is not None and fallback_mode == FallbackMode.NEVER:
+        raise ValueError("fallback_func provided but fallback_mode is NEVER")
+
+    if fallback_mode != FallbackMode.NEVER and (fallback_func is None):
+        raise ValueError("fallback_mode is not NEVER but no fallback_func provided")
+
+    if fallback_func is not None:
+        for fb in fallback_func:
+            if inspect.iscoroutinefunction(fb):
+                raise ValueError("Async fallback callable passed to sync execute_with_retry")
+
     if args is None:
         args = []
     if kwargs is None:
         kwargs = {}
 
+    # Compute deadline from total_timeout
+    deadline = None
+    if total_timeout is not None:
+        deadline = monotonic() + total_timeout
+
     # Handle single execution case (max_retry <= 1)
-    if max_retry <= 1:
+    # Bypass fast path when total_timeout or fallback_func is set
+    if max_retry <= 1 and deadline is None and fallback_func is None:
         # Check pre_condition before execution
         if pre_condition is not None and not pre_condition(*args, **kwargs):
             if default_return_or_raise is None:
@@ -407,64 +484,150 @@ def execute_with_retry(
                 return default_return_or_raise
         return func(*args, **kwargs)
 
-    attempts = 0
+    # --- Build callable chain ---
+    if fallback_func is not None and fallback_mode != FallbackMode.NEVER:
+        callable_chain = [func] + fallback_func
+    else:
+        callable_chain = [func]
+
+    has_fallback = len(callable_chain) > 1
+    total_attempts_across_chain = 0
+    last_exception = None
     if not min_retry_wait:
         min_retry_wait = 0
 
-    while True:
-        # Pre-condition check at start of each iteration (guard)
+    def _default_return_or_raise_terminal():
+        """Consult default_return_or_raise at terminal."""
+        nonlocal last_exception
+        if default_return_or_raise is None:
+            if has_fallback:
+                raise last_exception
+            else:
+                raise Exception("All retries failed and no default return value provided") from last_exception
+        elif isinstance(default_return_or_raise, Exception):
+            raise default_return_or_raise from last_exception
+        else:
+            return default_return_or_raise
+
+    def _check_deadline():
+        """Check if deadline has expired. Raises TimeoutError if so."""
+        nonlocal last_exception
+        if deadline is not None and monotonic() >= deadline:
+            raise TimeoutError(
+                f"execute_with_retry exceeded total_timeout={total_timeout}s"
+            ) from last_exception
+
+    def _check_pre_condition():
+        """Check pre_condition. Returns True if should stop (pre_condition is False)."""
         if pre_condition is not None and not pre_condition(*args, **kwargs):
-            # Pre-condition is False, stop and return default
-            if default_return_or_raise is None:
-                return None
-            elif isinstance(default_return_or_raise, Exception):
-                raise default_return_or_raise
-            else:
-                return default_return_or_raise
+            return True
+        return False
 
-        try:
-            result = func(*args, **kwargs)
+    def _handle_pre_condition_stop():
+        """Handle pre_condition returning False — return default_return_or_raise."""
+        if default_return_or_raise is None:
+            return None
+        elif isinstance(default_return_or_raise, Exception):
+            raise default_return_or_raise
+        else:
+            return default_return_or_raise
 
-            if output_validator and not output_validator(result):
+    for chain_idx, current_func in enumerate(callable_chain):
+        is_last_in_chain = (chain_idx == len(callable_chain) - 1)
+        is_primary = (chain_idx == 0)
+
+        # Determine max attempts for this callable in the chain
+        if is_primary and has_fallback and fallback_mode == FallbackMode.ON_FIRST_FAILURE:
+            # ON_FIRST_FAILURE: primary gets exactly 1 attempt (no retries)
+            current_max_retry = 0  # 0 retries = 1 attempt (initial + 0)
+        else:
+            # ON_EXHAUSTED or subsequent callables in ON_FIRST_FAILURE: full budget
+            current_max_retry = max_retry
+
+        attempts = 0
+        transition_exception = None
+
+        while True:
+            _check_deadline()
+
+            # Pre-condition check (per-attempt, per-callable)
+            if _check_pre_condition():
+                return _handle_pre_condition_stop()
+
+            execution_failed = False
+            try:
+                result = current_func(*args, **kwargs)
+
+                if output_validator and not output_validator(result):
+                    execution_failed = True
+                    last_exception = ValueError("Output validation failed")
+                    transition_exception = last_exception
+                    # ON_FIRST_FAILURE for primary: validator failure triggers immediate transition
+                    if is_primary and has_fallback and fallback_mode == FallbackMode.ON_FIRST_FAILURE:
+                        total_attempts_across_chain += 1
+                        break  # break inner while to transition
+                else:
+                    return result
+
+            except Exception as e:
+                if retry_on_exceptions:
+                    if not any(isinstance(e, ex) for ex in retry_on_exceptions):
+                        raise e
+
                 execution_failed = True
-                last_exception = ValueError("Output validation failed")
-            else:
-                return result
+                last_exception = e
+                transition_exception = e
 
-        except Exception as e:
-            if retry_on_exceptions:
-                if not any(isinstance(e, ex) for ex in retry_on_exceptions):
-                    raise e
+            if execution_failed:
+                total_attempts_across_chain += 1
 
-            execution_failed = True
-            last_exception = e
+                if attempts >= current_max_retry:
+                    break  # exhausted this callable's budget
 
-        if execution_failed:
-            if attempts >= max_retry:
-                break
+                if on_retry_callback is not None:
+                    on_retry_callback(attempts, last_exception)
 
-            if on_retry_callback is not None:
-                on_retry_callback(attempts, last_exception)
+                warnings.warn(
+                    f"Attempts {attempts} of '{current_func}' failed due to error '{last_exception}'. Retry in {min_retry_wait} to {max_retry_wait} seconds.")
+                attempts += 1
 
-            warnings.warn(
-                f"Attempts {attempts} of '{func}' failed due to error '{last_exception}'. Retry in {min_retry_wait} to {max_retry_wait} seconds.")
-            attempts += 1
+                # Compute sleep time and truncate to remaining budget if deadline is set
+                if not max_retry_wait:
+                    sleep_time = min_retry_wait if min_retry_wait else 0
+                else:
+                    import random
+                    sleep_time = random.uniform(min_retry_wait, max_retry_wait)
 
-            if not max_retry_wait:
-                if min_retry_wait:
-                    sleep(min_retry_wait)
-            else:
-                random_sleep(
-                    min_sleep=min_retry_wait,
-                    max_sleep=max_retry_wait
-                )
+                if deadline is not None and sleep_time > 0:
+                    remaining = deadline - monotonic()
+                    if remaining <= 0:
+                        raise TimeoutError(
+                            f"execute_with_retry exceeded total_timeout={total_timeout}s"
+                        ) from last_exception
+                    sleep_time = min(sleep_time, remaining)
 
-    if default_return_or_raise is None:
-        raise Exception("All retries failed and no default return value provided") from last_exception
-    elif isinstance(default_return_or_raise, Exception):
-        raise default_return_or_raise from last_exception
-    else:
-        return default_return_or_raise
+                if sleep_time > 0:
+                    sleep(sleep_time)
+
+        # This callable is exhausted (or ON_FIRST_FAILURE triggered transition)
+        if is_last_in_chain:
+            # Last callable exhausted — terminal
+            _check_deadline()
+            return _default_return_or_raise_terminal()
+
+        # Not last in chain — check fallback_on_exceptions filter before transitioning
+        if transition_exception is not None and fallback_on_exceptions is not None:
+            if not isinstance(transition_exception, fallback_on_exceptions):
+                # Exception doesn't match filter — propagate immediately
+                raise transition_exception
+
+        # Fire on_fallback_callback before transitioning to next callable
+        if on_fallback_callback is not None:
+            next_func = callable_chain[chain_idx + 1]
+            on_fallback_callback(current_func, next_func, transition_exception, total_attempts_across_chain)
+
+    # Should not reach here, but just in case
+    return _default_return_or_raise_terminal()
 
 
 def apply_arg(

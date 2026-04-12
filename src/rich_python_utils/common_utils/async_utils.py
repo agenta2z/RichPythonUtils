@@ -15,7 +15,10 @@ import asyncio
 import inspect
 import logging
 import random
-from typing import Any, Callable, Dict, Sequence, Tuple
+from time import monotonic
+from typing import Any, Callable, Dict, Sequence, Tuple, Union
+
+from rich_python_utils.common_utils.function_helper import FallbackMode  # noqa: F401 — re-exported
 
 
 async def maybe_await(result: Any) -> Any:
@@ -74,8 +77,16 @@ async def async_execute_with_retry(
     pre_condition: Callable[..., bool] = None,
     default_return_or_raise: Any = None,
     on_retry_callback: Callable = None,
+    *,
+    total_timeout: Union[float, None] = None,
+    attempt_timeout: Union[float, None] = None,
+    fallback_func: Union[Callable, list, None] = None,
+    fallback_mode: FallbackMode = FallbackMode.NEVER,
+    fallback_on_exceptions: Union[tuple, None] = None,
+    on_fallback_callback: Union[Callable, None] = None,
 ) -> Any:
-    """Async execute a function with retry logic, pre-condition guard, and output validation.
+    """Async execute a function with retry logic, pre-condition guard, output validation,
+    and optional fallback chain.
 
     Mirrors the sync execute_with_retry behavior with async support. Both pre_condition
     and output_validator are invoked via call_maybe_async, so they can be sync or async.
@@ -97,78 +108,269 @@ async def async_execute_with_retry(
             or when pre_condition is False.
         on_retry_callback: Callback function on each retry (can be sync or async).
             Called with (attempt_number, exception).
+        total_timeout: Wall-clock cap in seconds for the entire retry loop. None or 0 disables.
+            Negative raises ValueError.
+        attempt_timeout: Per-attempt cap in seconds via asyncio.wait_for. None disables.
+        fallback_func: Alternative callable(s) to try on failure. Single callable is normalized
+            to a one-element list. Empty list is treated as None.
+        fallback_mode: When to transition to next fallback. Defaults to NEVER.
+            ON_EXHAUSTED: retry current callable up to max_retry, then transition.
+            ON_FIRST_FAILURE: primary gets 1 attempt, subsequent fallbacks get full max_retry budget.
+        fallback_on_exceptions: Exception types that trigger fallback transition.
+            None means any exception triggers fallback. Non-matching exceptions propagate immediately.
+        on_fallback_callback: Sync or async callback invoked once per chain transition.
+            Signature: (from_func, to_func, exception, total_attempts).
 
     Returns:
         Result of the function call.
 
     Raises:
+        ValueError: If total_timeout is negative. If fallback_func is provided but
+            fallback_mode is NEVER. If fallback_mode is not NEVER but no fallback_func provided.
+        TimeoutError: If total_timeout or attempt_timeout expires and no retries remain.
         Exception: If all retries fail and default_return_or_raise is an Exception or None.
     """
+    # --- Early validation of new parameters ---
+    if total_timeout is not None:
+        if total_timeout < 0:
+            raise ValueError("total_timeout must be non-negative")
+        if total_timeout == 0:
+            total_timeout = None  # treat 0 as disabled
+
+    # --- Normalize fallback_func ---
+    if fallback_func is not None:
+        if callable(fallback_func):
+            fallback_func = [fallback_func]
+        elif isinstance(fallback_func, list):
+            if len(fallback_func) == 0:
+                fallback_func = None
+
+    # --- Fallback input validation (no async-callable check needed for async helper) ---
+    if fallback_func is not None and fallback_mode == FallbackMode.NEVER:
+        raise ValueError("fallback_func provided but fallback_mode is NEVER")
+
+    if fallback_mode != FallbackMode.NEVER and (fallback_func is None):
+        raise ValueError("fallback_mode is not NEVER but no fallback_func provided")
+
     args = args or []
     kwargs = kwargs or {}
 
+    # Compute deadline from total_timeout
+    deadline = None
+    if total_timeout is not None:
+        deadline = monotonic() + total_timeout
+
+    # --- Build callable chain ---
+    if fallback_func is not None and fallback_mode != FallbackMode.NEVER:
+        callable_chain = [func] + fallback_func
+    else:
+        callable_chain = [func]
+
+    has_fallback = len(callable_chain) > 1
+    total_attempts_across_chain = 0
     last_exception = None
-    for attempt in range(max(1, max_retry)):
-        # Pre-condition guard: check before each attempt
+
+    def _default_return_or_raise_terminal():
+        """Consult default_return_or_raise at terminal."""
+        nonlocal last_exception
+        # Normalize timeout errors before terminal
+        if isinstance(last_exception, asyncio.TimeoutError):
+            raise TimeoutError(
+                f"async_execute_with_retry exceeded timeout after exhausting chain"
+            ) from last_exception
+        if default_return_or_raise is None:
+            if has_fallback:
+                raise last_exception
+            else:
+                if last_exception:
+                    raise last_exception
+                raise RuntimeError(
+                    f"Function {func.__name__} failed after {max_retry} attempts"
+                )
+        elif isinstance(default_return_or_raise, Exception):
+            raise default_return_or_raise
+        else:
+            return default_return_or_raise
+
+    def _check_deadline():
+        """Check if deadline has expired. Raises TimeoutError if so."""
+        nonlocal last_exception
+        if deadline is not None and monotonic() >= deadline:
+            raise TimeoutError(
+                f"async_execute_with_retry exceeded total_timeout={total_timeout}s"
+            ) from last_exception
+
+    async def _check_pre_condition():
+        """Check pre_condition. Returns True if should stop (pre_condition is False)."""
         if pre_condition is not None:
             condition_result = await call_maybe_async(pre_condition, *args, **kwargs)
             if not condition_result:
-                # Pre-condition failed — stop and return default
-                if default_return_or_raise is None:
-                    return None
-                elif isinstance(default_return_or_raise, Exception):
-                    raise default_return_or_raise
+                return True
+        return False
+
+    def _handle_pre_condition_stop():
+        """Handle pre_condition returning False — return default_return_or_raise."""
+        if default_return_or_raise is None:
+            return None
+        elif isinstance(default_return_or_raise, Exception):
+            raise default_return_or_raise
+        else:
+            return default_return_or_raise
+
+    def _compute_effective_timeout():
+        """Compute effective timeout for an attempt, capping to remaining budget."""
+        effective = None
+        if attempt_timeout is not None:
+            effective = attempt_timeout
+        if deadline is not None:
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise TimeoutError(
+                    f"async_execute_with_retry exceeded total_timeout={total_timeout}s"
+                ) from last_exception
+            if effective is not None:
+                effective = min(effective, remaining)
+            else:
+                effective = remaining
+        return effective
+
+    async def _sleep_with_budget(wait_time):
+        """Sleep with budget truncation. Raises TimeoutError if budget exhausted."""
+        nonlocal last_exception
+        if wait_time > 0:
+            if deadline is not None:
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    raise TimeoutError(
+                        f"async_execute_with_retry exceeded total_timeout={total_timeout}s"
+                    ) from last_exception
+                wait_time = min(wait_time, remaining)
+            await asyncio.sleep(wait_time)
+
+    for chain_idx, current_func in enumerate(callable_chain):
+        is_last_in_chain = (chain_idx == len(callable_chain) - 1)
+        is_primary = (chain_idx == 0)
+
+        # Determine max attempts for this callable in the chain
+        # CRITICAL: Preserve async semantics: `for attempt in range(max_retry)` = max_retry total calls
+        if is_primary and has_fallback and fallback_mode == FallbackMode.ON_FIRST_FAILURE:
+            # ON_FIRST_FAILURE: primary gets exactly 1 attempt
+            current_max_attempts = 1
+        else:
+            # ON_EXHAUSTED or subsequent callables in ON_FIRST_FAILURE: full budget
+            current_max_attempts = max(1, max_retry)
+
+        transition_exception = None
+
+        for attempt in range(current_max_attempts):
+            # Check deadline before each attempt
+            _check_deadline()
+
+            # Pre-condition guard: check before each attempt
+            if await _check_pre_condition():
+                return _handle_pre_condition_stop()
+
+            try:
+                effective = _compute_effective_timeout()
+
+                # Execute with or without per-attempt timeout
+                if effective is not None:
+                    coro = current_func(*args, **kwargs)
+                    result = await asyncio.wait_for(maybe_await(coro), timeout=effective)
                 else:
-                    return default_return_or_raise
+                    result = current_func(*args, **kwargs)
+                    result = await maybe_await(result)
 
-        try:
-            result = func(*args, **kwargs)
-            result = await maybe_await(result)
+                # Output validation: check after successful execution
+                if output_validator is not None:
+                    is_valid = await call_maybe_async(output_validator, result)
+                    if not is_valid:
+                        last_exception = ValueError("Output validation failed")
+                        transition_exception = last_exception
+                        total_attempts_across_chain += 1
 
-            # Output validation: check after successful execution
-            if output_validator is not None:
-                is_valid = await call_maybe_async(output_validator, result)
-                if not is_valid:
-                    last_exception = ValueError("Output validation failed")
-                    if on_retry_callback:
-                        await maybe_await(on_retry_callback(attempt, last_exception))
-                    if attempt < max_retry - 1:
-                        wait_time = random.uniform(min_retry_wait, max_retry_wait)
-                        if wait_time > 0:
-                            await asyncio.sleep(wait_time)
-                    continue
+                        # ON_FIRST_FAILURE for primary: validator failure triggers immediate transition
+                        if is_primary and has_fallback and fallback_mode == FallbackMode.ON_FIRST_FAILURE:
+                            break  # break inner for to transition
 
-            return result
-        except retry_on_exceptions as e:
-            last_exception = e
+                        # Fire on_retry_callback for validation failure
+                        if on_retry_callback:
+                            await maybe_await(on_retry_callback(attempt, last_exception))
 
-            logging.getLogger(__name__).info(
-                "Retry attempt %d/%d after %s: %s",
-                attempt + 1,
-                max_retry,
-                type(e).__name__,
-                str(e)[:200],
+                        if attempt < current_max_attempts - 1:
+                            wait_time = random.uniform(min_retry_wait, max_retry_wait)
+                            await _sleep_with_budget(wait_time)
+                        continue
+
+                return result
+
+            except asyncio.TimeoutError as e:
+                last_exception = e
+                transition_exception = e
+                total_attempts_across_chain += 1
+
+                logging.getLogger(__name__).info(
+                    "Retry attempt %d/%d after %s: %s",
+                    attempt + 1,
+                    current_max_attempts,
+                    type(e).__name__,
+                    str(e)[:200],
+                )
+
+                if on_retry_callback:
+                    await maybe_await(on_retry_callback(attempt, e))
+
+                if attempt < current_max_attempts - 1:
+                    wait_time = random.uniform(min_retry_wait, max_retry_wait)
+                    await _sleep_with_budget(wait_time)
+
+            except retry_on_exceptions as e:
+                last_exception = e
+                transition_exception = e
+                total_attempts_across_chain += 1
+
+                logging.getLogger(__name__).info(
+                    "Retry attempt %d/%d after %s: %s",
+                    attempt + 1,
+                    current_max_attempts,
+                    type(e).__name__,
+                    str(e)[:200],
+                )
+
+                if on_retry_callback:
+                    await maybe_await(on_retry_callback(attempt, e))
+
+                if attempt < current_max_attempts - 1:
+                    wait_time = random.uniform(min_retry_wait, max_retry_wait)
+                    await _sleep_with_budget(wait_time)
+
+        # This callable is exhausted (or ON_FIRST_FAILURE triggered transition)
+        if is_last_in_chain:
+            # Last callable exhausted — terminal
+            _check_deadline()
+            return _default_return_or_raise_terminal()
+
+        # Not last in chain — check fallback_on_exceptions filter before transitioning
+        if transition_exception is not None and fallback_on_exceptions is not None:
+            if not isinstance(transition_exception, fallback_on_exceptions):
+                # Exception doesn't match filter — propagate immediately
+                # Normalize asyncio.TimeoutError before propagating
+                if isinstance(transition_exception, asyncio.TimeoutError):
+                    raise TimeoutError(
+                        f"async_execute_with_retry: timeout exception does not match fallback filter"
+                    ) from transition_exception
+                raise transition_exception
+
+        # Fire on_fallback_callback before transitioning to next callable
+        if on_fallback_callback is not None:
+            next_func = callable_chain[chain_idx + 1]
+            await maybe_await(
+                on_fallback_callback(current_func, next_func, transition_exception, total_attempts_across_chain)
             )
 
-            if on_retry_callback:
-                await maybe_await(on_retry_callback(attempt, e))
+    # Should not reach here, but just in case
+    return _default_return_or_raise_terminal()
 
-            if attempt < max_retry - 1:
-                wait_time = random.uniform(min_retry_wait, max_retry_wait)
-                if wait_time > 0:
-                    await asyncio.sleep(wait_time)
-
-    # All retries failed
-    if default_return_or_raise is None:
-        if last_exception:
-            raise last_exception
-        raise RuntimeError(
-            f"Function {func.__name__} failed after {max_retry} attempts"
-        )
-    elif isinstance(default_return_or_raise, Exception):
-        raise default_return_or_raise
-    else:
-        return default_return_or_raise
 
 
 def _run_async(coro) -> Any:

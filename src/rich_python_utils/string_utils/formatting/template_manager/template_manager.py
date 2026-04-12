@@ -33,6 +33,28 @@ if TYPE_CHECKING:
     from .variable_manager import VariableLoader
 
 
+class _OriginTaggedStr(str):
+    """A string that remembers which template root it came from.
+
+    Used for variable isolation in multi-root TemplateManager: each template
+    carries its origin root path so the correct VariableLoader is selected.
+
+    WARNING: String operations (strip, +, slicing, f-strings) return plain str,
+    silently losing origin info. Only use this for values that pass through
+    lookup chains without transformation (which the current code does).
+    """
+
+    __slots__ = ("_origin_root",)
+
+    def __new__(cls, value, origin_root=None):
+        instance = super().__new__(cls, value)
+        instance._origin_root = origin_root
+        return instance
+
+    def __reduce__(self):
+        return (_OriginTaggedStr, (str(self), self._origin_root))
+
+
 @attrs
 class TemplateManager:
     """
@@ -41,12 +63,17 @@ class TemplateManager:
     TemplateManager provides flexible template resolution with:
     - Hierarchical namespaces (root_space/type/template_key)
     - Multi-level fallback for template lookup
+    - Multi-root support with first-write-wins priority and variable isolation
     - Template versioning for deployment-level customization
     - Component/partial support with version combinations
 
     Attributes:
         default_template: Fallback template when no match is found.
-        templates: Template source - either a directory path or a dict mapping.
+        templates: Template source - a directory path, a dict mapping, or a
+            **list** of these for multi-root overlay. When a list is provided,
+            sources are deep-merged with first-write-wins priority: earlier
+            entries (overrides) take precedence over later entries (defaults).
+            Each template remembers its origin root for variable isolation.
         active_template_type: Active template type namespace (e.g., "main", "reflection").
             Can be overridden at call time via __call__(active_template_type=...).
         active_template_root_space: Active root namespace (e.g., "action_agent").
@@ -92,6 +119,23 @@ class TemplateManager:
         To change version at runtime, use switch() to create a new TemplateManager instance
         with the desired version, rather than modifying the existing instance.
 
+    Multi-Root Overlay (templates as list):
+        Pass a list of template sources to ``templates`` for layered resolution.
+        Templates are deep-merged with first-write-wins priority, and each
+        template's origin root is tracked for variable isolation.
+
+        Example:
+            >>> manager = TemplateManager(
+            ...     templates=[
+            ...         "/path/to/custom_templates",   # checked first (overrides)
+            ...         "/path/to/default_templates",   # checked second (base)
+            ...     ],
+            ...     predefined_variables=True,
+            ... )
+            >>> # If custom_templates has "agent/main/BrowseLink" but not
+            >>> # "agent/main/Search", BrowseLink comes from custom and
+            >>> # Search comes from default — each using their own _variables/.
+
     Methods:
         __call__: Resolve and format a template by key.
         switch: Create a copy with different active_template_type, active_template_root_space,
@@ -113,7 +157,9 @@ class TemplateManager:
     }
 
     default_template: str = attrib(default="")
-    templates: Optional[Union[str, Mapping]] = attrib(default=None)
+    templates: Optional[Union[str, Mapping, List[Union[str, Mapping]]]] = attrib(
+        default=None
+    )
     active_template_type: Optional[str] = attrib(default="main")
     active_template_root_space: Optional[str] = attrib(default=None)
     template_encoding: str = attrib(default="utf-8")
@@ -142,9 +188,21 @@ class TemplateManager:
             ValueError: if `template_components` is `True` or a string but `templates`
                         isn't a string, making path construction impossible.
         """
-        # Store the original templates path before processing for VariableLoader
-        self._original_templates_path = (
-            self.templates if isinstance(self.templates, str) else None
+        # Normalize templates into a list for uniform processing.
+        # Accepts: str, Mapping, List[Union[str, Mapping]], or None.
+        if self.templates is not None and not isinstance(self.templates, list):
+            templates_sources = [self.templates]
+        else:
+            templates_sources = self.templates or []
+
+        # Store original path strings for VariableLoader initialization
+        self._original_templates_paths: List[str] = [
+            src for src in templates_sources if isinstance(src, str)
+        ]
+        self._original_templates_path: Optional[str] = (
+            self._original_templates_paths[0]
+            if self._original_templates_paths
+            else None
         )
 
         # Resolve template_file_patterns
@@ -172,10 +230,12 @@ class TemplateManager:
                 allow_reading_from_folder=False,
             )
 
-        # Load the main templates if set (could be a path or a dict).
-        if self.templates:
-            self.templates: Dict = read_all_text_(
-                self.templates,
+        # Load each template source and deep-merge with first-write-wins priority.
+        # Earlier sources (overrides) take priority over later sources (defaults).
+        merged_templates: Dict = {}
+        for source in templates_sources:
+            loaded = read_all_text_(
+                source,
                 encoding=self.template_encoding,
                 keep_extension=False,
                 key_sep=self.template_key_parts_sep,
@@ -184,65 +244,65 @@ class TemplateManager:
                 version_parent_folders=self.template_components_key,
                 file_patterns=self.template_file_patterns,
             )
+            if isinstance(loaded, str):
+                # Single file resolved to text — use as default_template
+                if not self.default_template:
+                    self.default_template = loaded
+            elif isinstance(loaded, dict):
+                origin_root = source if isinstance(source, str) else None
+                for space_key, space_value in loaded.items():
+                    if space_key not in merged_templates:
+                        # First source to claim this space key wins
+                        if origin_root and isinstance(space_value, dict):
+                            merged_templates[space_key] = {
+                                k: (
+                                    _OriginTaggedStr(v, origin_root=origin_root)
+                                    if isinstance(v, str)
+                                    else v
+                                )
+                                for k, v in space_value.items()
+                            }
+                        else:
+                            merged_templates[space_key] = space_value
+                    elif isinstance(merged_templates[space_key], dict) and isinstance(
+                        space_value, dict
+                    ):
+                        # Deep merge: fill in missing template keys from
+                        # lower-priority source
+                        for tmpl_name, tmpl_content in space_value.items():
+                            if tmpl_name not in merged_templates[space_key]:
+                                if origin_root and isinstance(tmpl_content, str):
+                                    merged_templates[space_key][tmpl_name] = (
+                                        _OriginTaggedStr(
+                                            tmpl_content, origin_root=origin_root
+                                        )
+                                    )
+                                else:
+                                    merged_templates[space_key][tmpl_name] = (
+                                        tmpl_content
+                                    )
 
-            if isinstance(self.templates, str):
-                self.default_template = self.templates
-                self.templates = None
-            elif isinstance(self.templates, Dict):
-                # If there's a 'default' key, use it as the default_template unless already set.
-                if self.default_template_name in self.templates:
-                    if not self.default_template:
-                        self.default_template = self.templates[
-                            self.default_template_name
-                        ]
-                    del self.templates[self.default_template_name]
+        self.templates = merged_templates if merged_templates else None
+
+        # Extract default template from merged dict
+        if self.templates and isinstance(self.templates, dict):
+            if self.default_template_name in self.templates:
+                if not self.default_template:
+                    self.default_template = self.templates[
+                        self.default_template_name
+                    ]
+                del self.templates[self.default_template_name]
 
         if not self.default_template and not self.templates:
             raise ValueError("No templates were provided.")
 
         # Initialize predefined_variables handling
         self._variable_loader = None
+        self._variable_loaders_by_root: Dict = {}
         self._static_predefined_vars = None
 
         if self.predefined_variables is True:
-            # Auto-create VariableLoader using the original templates path
-            try:
-                from .variable_manager import VariableLoader
-            except ImportError:
-                raise NotImplementedError(
-                    "VariableLoader is not available in the migrated environment. "
-                    "Pass predefined_variables as a dict or False instead."
-                )
-            if self._original_templates_path:
-                config_kwargs = {}
-                if self.cross_space_root:
-                    from .variable_manager import VariableLoaderConfig
-                    config_kwargs["config"] = VariableLoaderConfig(
-                        cross_space_root=self.cross_space_root
-                    )
-                self._variable_loader = VariableLoader(
-                    template_dir=self._original_templates_path,
-                    **config_kwargs,
-                )
-                # Load root .variables.yaml sidecar if available
-                from pathlib import Path as _Path
-                root_yaml = _Path(self._original_templates_path) / ".variables.yaml"
-                if root_yaml.is_file():
-                    self._variable_loader.load_yaml_sidecar(root_yaml)
-                # Load cross-space YAML sidecar if available
-                if self.cross_space_root:
-                    from pathlib import Path as _Path
-                    cross_root = _Path(self.cross_space_root)
-                    for yaml_candidate in [
-                        cross_root / ".variables.yaml",
-                    ]:
-                        if yaml_candidate.is_file():
-                            self._variable_loader.load_yaml_sidecar(yaml_candidate)
-            else:
-                raise ValueError(
-                    "predefined_variables=True requires templates to be a path string, "
-                    "not a dict or other type"
-                )
+            self._init_variable_loaders()
         elif (
             self.predefined_variables is not None
             and self.predefined_variables is not False
@@ -264,6 +324,67 @@ class TemplateManager:
                     f"predefined_variables must be True, False, None, a VariableLoader, "
                     f"or a Mapping, got {type(self.predefined_variables).__name__}"
                 )
+
+    def _init_variable_loaders(self):
+        """Build per-root VariableLoaders from _original_templates_paths.
+
+        Creates one VariableLoader per template root that has a ``_variables/``
+        directory or a ``.variables.yaml`` sidecar.  Each loader is isolated to
+        its own root, with an optional shared ``cross_space_root`` fallback.
+
+        Sets ``_variable_loaders_by_root`` (origin-keyed dict) and
+        ``_variable_loader`` (backward-compat reference to the first loader).
+        """
+        try:
+            from .variable_manager import VariableLoader
+        except ImportError:
+            raise NotImplementedError(
+                "VariableLoader is not available in the migrated environment. "
+                "Pass predefined_variables as a dict or False instead."
+            )
+
+        from pathlib import Path as _Path
+
+        self._variable_loaders_by_root = {}
+
+        for tmpl_path in self._original_templates_paths:
+            has_vars_dir = (_Path(tmpl_path) / "_variables").is_dir()
+            has_vars_yaml = (_Path(tmpl_path) / ".variables.yaml").is_file()
+            if has_vars_dir or has_vars_yaml:
+                config_kwargs = {}
+                if self.cross_space_root:
+                    from .variable_manager import VariableLoaderConfig
+
+                    config_kwargs["config"] = VariableLoaderConfig(
+                        cross_space_root=self.cross_space_root
+                    )
+                loader = VariableLoader(
+                    template_dir=tmpl_path,
+                    **config_kwargs,
+                )
+                # Load root .variables.yaml sidecar if available
+                root_yaml = _Path(tmpl_path) / ".variables.yaml"
+                if root_yaml.is_file():
+                    loader.load_yaml_sidecar(root_yaml)
+                # Load cross-space YAML sidecar if available
+                if self.cross_space_root:
+                    cross_yaml = _Path(self.cross_space_root) / ".variables.yaml"
+                    if cross_yaml.is_file():
+                        loader.load_yaml_sidecar(cross_yaml)
+                self._variable_loaders_by_root[tmpl_path] = loader
+
+        # Backward compat: _variable_loader points to the first loader
+        self._variable_loader = (
+            next(iter(self._variable_loaders_by_root.values()), None)
+            if self._variable_loaders_by_root
+            else None
+        )
+
+        if not self._variable_loaders_by_root and not self._original_templates_paths:
+            raise ValueError(
+                "predefined_variables=True requires templates to be a path string, "
+                "not a dict or other type"
+            )
 
     def switch(
         self,
@@ -292,24 +413,11 @@ class TemplateManager:
             _copy.predefined_variables = predefined_variables
             # Re-initialize the loader based on the new value
             _copy._variable_loader = None
+            _copy._variable_loaders_by_root = {}
             _copy._static_predefined_vars = None
 
             if predefined_variables is True:
-                try:
-                    from .variable_manager import VariableLoader
-                except ImportError:
-                    raise NotImplementedError(
-                        "VariableLoader is not available in the migrated environment. "
-                        "Pass predefined_variables as a dict or False instead."
-                    )
-                if self._original_templates_path:
-                    _copy._variable_loader = VariableLoader(
-                        template_dir=self._original_templates_path
-                    )
-                else:
-                    raise ValueError(
-                        "predefined_variables=True requires templates to be a path string"
-                    )
+                _copy._init_variable_loaders()
             elif predefined_variables is not False:
                 try:
                     from .variable_manager import VariableLoader
@@ -953,7 +1061,8 @@ class TemplateManager:
             ...
             ...     manager = TemplateManager(
             ...         templates=tmp_dir,
-            ...         template_formatter=jinjia_template_format
+            ...         template_formatter=jinjia_template_format,
+            ...         template_file_patterns=None,
             ...     )
             ...
             ...     # Returns an iterator over all version combinations
@@ -1019,7 +1128,8 @@ class TemplateManager:
             ...     # Create a TemplateManager pointed at tmp_dir
             ...     manager_action = TemplateManager(
             ...         templates=tmp_dir,
-            ...         template_formatter=jinjia_template_format
+            ...         template_formatter=jinjia_template_format,
+            ...         template_file_patterns=None,
             ...     )
             ...
             ...     # Now let's render some of these keys
@@ -1114,46 +1224,10 @@ class TemplateManager:
         elif not active_template_root_space:
             active_template_root_space = None
 
-        # Resolve predefined variables if enabled and not skipped
-        predefined_vars = {}
-        if not skip_predefined:
-            if self._variable_loader is not None:
-                # Get raw template first to scan for variable references
-                raw_template = self.get_raw_template(
-                    template_key=template_key,
-                    active_template_type=active_template_type,
-                    active_template_root_space=active_template_root_space,
-                )
-                if raw_template:
-                    predefined_vars = self._variable_loader.resolve_from_template(
-                        template_content=raw_template,
-                        template_root_space=active_template_root_space or "",
-                        template_type=active_template_type or "main",
-                        version=self.template_version,
-                    )
-                # Also include YAML sidecar variables (loaded via load_yaml_sidecar).
-                # These have lower priority than file-based resolved vars.
-                yaml_vars = self._variable_loader.get_all_variables(
-                    variable_root_space=active_template_root_space or "",
-                    variable_type=active_template_type or "main",
-                )
-                if yaml_vars:
-                    predefined_vars = {**yaml_vars, **predefined_vars}
-            elif self._static_predefined_vars is not None:
-                predefined_vars = dict(self._static_predefined_vars)
-
-        # Merge: predefined (lowest) < feed < kwargs (highest)
-        merged_kwargs = {**predefined_vars}
-        if feed:
-            merged_kwargs.update(feed)
-        merged_kwargs.update(kwargs)
-        # Replace kwargs with merged, and clear feed since it's now in merged_kwargs
-        kwargs = merged_kwargs
-        feed = None
-
-        # Resolve templated feed values if enabled
-        if self.enable_templated_feed:
-            kwargs = self._resolve_templated_feed(kwargs)
+        # Save original values before fallback may mutate them.
+        # Used for variable cascade parameters (backward compat).
+        _orig_root_space = active_template_root_space
+        _orig_type = active_template_type
 
         def _resolve_template_space_key_with_root_space_and_type(main_space_key):
             return create_3component_key(
@@ -1281,6 +1355,50 @@ class TemplateManager:
             # endregion
 
             template_components = self.templates.get(template_components_key, None)
+
+        # Resolve predefined variables AFTER template resolution so we use the
+        # actual resolved template (avoiding divergent fallback chains between
+        # get_raw_template and __call__) and can pick the correct per-root
+        # VariableLoader via _OriginTaggedStr origin.
+        predefined_vars = {}
+        if not skip_predefined:
+            if self._variable_loader is not None or self._variable_loaders_by_root:
+                # Pick the right loader based on template origin (variable isolation)
+                origin = getattr(template, "_origin_root", None)
+                loader = (
+                    self._variable_loaders_by_root.get(origin, self._variable_loader)
+                    if origin
+                    else self._variable_loader
+                )
+                if loader:
+                    predefined_vars = loader.resolve_from_template(
+                        template_content=template,
+                        template_root_space=_orig_root_space or "",
+                        template_type=_orig_type or "main",
+                        version=self.template_version,
+                    )
+                    # Also include YAML sidecar variables (loaded via load_yaml_sidecar).
+                    # These have lower priority than file-based resolved vars.
+                    yaml_vars = loader.get_all_variables(
+                        variable_root_space=_orig_root_space or "",
+                        variable_type=_orig_type or "main",
+                    )
+                    if yaml_vars:
+                        predefined_vars = {**yaml_vars, **predefined_vars}
+            elif self._static_predefined_vars is not None:
+                predefined_vars = dict(self._static_predefined_vars)
+
+        # Merge: predefined (lowest) < feed < kwargs (highest)
+        merged_kwargs = {**predefined_vars}
+        if feed:
+            merged_kwargs.update(feed)
+        merged_kwargs.update(kwargs)
+        kwargs = merged_kwargs
+        feed = None
+
+        # Resolve templated feed values if enabled
+        if self.enable_templated_feed:
+            kwargs = self._resolve_templated_feed(kwargs)
 
         formatter = formatter or self.template_formatter
         if not formatter:

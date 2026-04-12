@@ -155,7 +155,7 @@ def next_available_path_with_year_month_day(
         verbose: bool = False,
         **path_pattern_kwargs
 ):
-    for date in rich_python_utils.time_utils.iter_dates.iter_dates(
+    for date in rich_python_utils.datetime_utils.iter_dates.iter_dates(
             start_date=start_date,
             end_date_inclusive=end_date,
             days_delta=days_delta,
