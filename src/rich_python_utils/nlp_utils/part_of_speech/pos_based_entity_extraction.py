@@ -7,9 +7,9 @@ from typing import Union, Iterator
 import nltk
 from pyspark.sql import SparkSession
 
-from rich_python_utils.general_utils.nlp_utility.common import PreDefinedNlpToolNames, Languages
-from rich_python_utils.general_utils.nlp_utility.ner.spark_batch import ner_spark_batch
-from rich_python_utils.general_utils.nlp_utility.part_of_speech.common import get_pos_tagging_method
+from rich_python_utils.nlp_utils.common import PreDefinedNlpToolNames, Languages
+from rich_python_utils.nlp_utils._dev._archived.ner.spark_batch import ner_spark_batch
+from rich_python_utils.nlp_utils.part_of_speech.common import get_pos_tagging_method
 
 NLTK_DATA_PATH_ENV_NAME = 'NLTK_DATA_PATH'
 

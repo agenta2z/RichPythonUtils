@@ -5,10 +5,10 @@ from itertools import product
 from typing import Any, Iterator
 from typing import Callable, Iterable, Union, Tuple, Mapping
 
-from rich_python_utils.general_utils.nlp_utility.metrics.edit_distance import (
+from rich_python_utils.nlp_utils.metrics.edit_distance import (
     EditDistanceOptions, edit_distance, regular_edit_distance_based_similarity
 )
-from rich_python_utils.general_utils.nlp_utility.string_sanitization import (
+from rich_python_utils.nlp_utils.string_sanitization import (
     StringSanitizationOptions, StringSanitizationConfig
 )
 

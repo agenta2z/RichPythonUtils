@@ -3,14 +3,10 @@ import sys
 import time
 from typing import Tuple, List, Optional, Dict, Any
 
-from rich_python_utils.common_utils.typing_helper import solve_key_value_pairs, is_none_or_empty_str, is_str, bool_
-from rich_python_utils.general_utils.external.colorama import Fore, Style
-from rich_python_utils.general_utils.external.colorama import (
+from rich_python_utils.common_utils.typing_helper import solve_key_value_pairs, is_none_or_empty_str, is_str, bool_, is_basic_type, is_class
+from rich_python_utils.external.colorama import Fore, Style
+from rich_python_utils.external.colorama import (
     init as colorama_init,
-)
-from rich_python_utils.general_utils.general import (
-    is_basic_type,
-    is_class,
 )
 
 colorama_init()

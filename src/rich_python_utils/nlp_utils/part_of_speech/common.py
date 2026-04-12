@@ -3,7 +3,7 @@ from typing import Union
 
 from rich_python_utils.common_utils.function_helper import get_relevant_named_args
 from rich_python_utils.console_utils import hprint_message
-from rich_python_utils.general_utils.nlp_utility.common import (
+from rich_python_utils.nlp_utils.common import (
     Languages, get_language_for_nltk_pos_tagger, PreDefinedNlpToolNames
 )
 
@@ -57,9 +57,9 @@ def get_pos_tagger(
 
 def get_pos_tagging_method(tool: PreDefinedNlpToolNames, **kwargs):
     if tool == PreDefinedNlpToolNames.NLTK:
-        from rich_python_utils.general_utils.nlp_utility.part_of_speech.nltk_pos import pos_tag_
+        from rich_python_utils.nlp_utils.part_of_speech.nltk_pos import pos_tag_
     elif tool == PreDefinedNlpToolNames.FLAIR:
-        from rich_python_utils.general_utils.nlp_utility.part_of_speech.flair_pos import pos_tag_
+        from rich_python_utils.nlp_utils.part_of_speech.flair_pos import pos_tag_
     else:
         raise ValueError(f"{tool} is supported part-of-speech tagging")
 

@@ -4,7 +4,7 @@ import shutil
 from os import path
 from typing import Union, List, Optional, Sequence
 from rich_python_utils.console_utils import hprint_pairs, hprint
-from rich_python_utils.general_utils.messages import msg_skip_non_local_dir, msg_create_dir, msg_arg_not_a_dir, msg_clear_dir
+from rich_python_utils.path_utils.messages import msg_skip_non_local_dir, msg_create_dir, msg_arg_not_a_dir, msg_clear_dir
 from rich_python_utils.path_utils.path_listing import iter_files_by_pattern
 from rich_python_utils.path_utils.path_string_operations import abspath_
 import platform

@@ -43,7 +43,7 @@ class Workflow(WorkNodeBase, ABC):
             The steps to be executed, defined as callables.
         enable_optional_post_process (bool):
             If True, enables the `_optional_post_process` hook after each step, provided the step allows it.
-        enable_result_save (Union[rich_python_utils.general_utils.common_objects.workflow.worknode_base.StepResultSaveOptions, bool, str]):
+        enable_result_save (Union[rich_python_utils.common_objects.workflow.common.step_result_save_options.StepResultSaveOptions, bool, str]):
             Determines when to save step results. Supported values:
                 - `StepResultSaveOptions.NoSave`
                 - `StepResultSaveOptions.Always`

@@ -6,9 +6,9 @@ from attr import attrs, attrib
 from rich_python_utils.common_utils.iter_helper import max_len__
 from rich_python_utils.common_utils.map_helper import get_
 from rich_python_utils.common_utils.typing_helper import is_str
-from rich_python_utils.general_utils.nlp_utility.common import Languages
+from rich_python_utils.nlp_utils.common import Languages
 from rich_python_utils.string_utils.common import startswith_any, endswith_any, contains_any
-from rich_python_utils.general_utils.nlp_utility.string_sanitization import string_sanitize, StringSanitizationOptions, StringSanitizationConfig, remove_common_tokens_except_for_sub_tokens
+from rich_python_utils.nlp_utils.string_sanitization import string_sanitize, StringSanitizationOptions, StringSanitizationConfig, remove_common_tokens_except_for_sub_tokens
 from rich_python_utils.string_utils.tokenization import tokenize
 
 try:

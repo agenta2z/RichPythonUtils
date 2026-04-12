@@ -39,7 +39,7 @@ from rich_python_utils.console_utils.colorama_console_utils import (
     # Helper
     get_titled_message_str,
 )
-from rich_python_utils.general_utils.external.colorama import Fore, Style
+from rich_python_utils.external.colorama import Fore, Style
 
 
 class TestColorConstants:
