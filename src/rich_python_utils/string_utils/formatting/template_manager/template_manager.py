@@ -1,4 +1,5 @@
 import copy
+import enum
 from itertools import product
 from typing import (
     Any,
@@ -31,6 +32,40 @@ from rich_python_utils.string_utils.formatting.jinja2_format import (
 
 if TYPE_CHECKING:
     from .variable_manager import VariableLoader
+
+
+class TemplateRootPriority(enum.Enum):
+    """Priority when adding a template root to an existing TemplateManager.
+
+    Used with :meth:`TemplateManager.add_template_root` to control how
+    templates from the new root are merged with existing templates.
+    """
+
+    LOWEST = "lowest"  # Fill in missing keys only (default/fallback templates)
+    HIGHEST = "highest"  # Override existing keys (forced overrides)
+
+
+class _OriginTaggedStr(str):
+    """A string that remembers which template root it came from.
+
+    Used for variable isolation in multi-root TemplateManager: each template
+    carries its origin root path so the correct VariableLoader is selected.
+
+    WARNING: String operations (strip, +, slicing, f-strings) return plain str,
+    silently losing origin info. Only use this for values that pass through
+    lookup chains without transformation (which the current code does).
+    """
+
+    __slots__ = ("_origin_root",)
+
+    def __new__(cls, value, origin_root=None):
+        instance = super().__new__(cls, value)
+        instance._origin_root = origin_root
+        return instance
+
+    def __reduce__(self):
+        return (_OriginTaggedStr, (str(self), self._origin_root))
+
 
 
 @attrs
@@ -132,6 +167,9 @@ class TemplateManager:
     enable_templated_feed: bool = attrib(default=False)
     template_variable_extractor: Union[str, Callable, None] = attrib(default="default")
     cross_space_root: Optional[str] = attrib(default=None)
+
+    # Internal tracking for idempotent add_template_root calls
+    _injected_roots: set = attrib(factory=set, init=False, repr=False)
 
     def __attrs_post_init__(self):
         """
@@ -265,6 +303,78 @@ class TemplateManager:
                     f"or a Mapping, got {type(self.predefined_variables).__name__}"
                 )
 
+    def _add_variable_loader_for_root(self, tmpl_path: str) -> None:
+        """Create and register a VariableLoader for a single root path.
+
+        Skips silently if the root has no ``_variables/`` directory or
+        ``.variables.yaml`` sidecar.
+        """
+        from pathlib import Path as _Path
+
+        has_vars_dir = (_Path(tmpl_path) / "_variables").is_dir()
+        has_vars_yaml = (_Path(tmpl_path) / ".variables.yaml").is_file()
+        if not has_vars_dir and not has_vars_yaml:
+            return
+
+        try:
+            from .variable_manager import VariableLoader
+        except ImportError:
+            return  # VariableLoader not available — skip silently
+
+        config_kwargs = {}
+        if self.cross_space_root:
+            from .variable_manager import VariableLoaderConfig
+
+            config_kwargs["config"] = VariableLoaderConfig(
+                cross_space_root=self.cross_space_root
+            )
+        loader = VariableLoader(template_dir=tmpl_path, **config_kwargs)
+        root_yaml = _Path(tmpl_path) / ".variables.yaml"
+        if root_yaml.is_file():
+            loader.load_yaml_sidecar(root_yaml)
+        if self.cross_space_root:
+            cross_yaml = _Path(self.cross_space_root) / ".variables.yaml"
+            if cross_yaml.is_file():
+                loader.load_yaml_sidecar(cross_yaml)
+        self._variable_loaders_by_root[tmpl_path] = loader
+
+    def _init_variable_loaders(self):
+        """Build per-root VariableLoaders from _original_templates_paths.
+
+        Creates one VariableLoader per template root that has a ``_variables/``
+        directory or a ``.variables.yaml`` sidecar.  Each loader is isolated to
+        its own root, with an optional shared ``cross_space_root`` fallback.
+
+        Sets ``_variable_loaders_by_root`` (origin-keyed dict) and
+        ``_variable_loader`` (backward-compat reference to the first loader).
+        """
+        try:
+            from .variable_manager import VariableLoader  # noqa: F401
+        except ImportError:
+            raise NotImplementedError(
+                "VariableLoader is not available in the migrated environment. "
+                "Pass predefined_variables as a dict or False instead."
+            )
+
+        self._variable_loaders_by_root = {}
+
+        for tmpl_path in self._original_templates_paths:
+            self._add_variable_loader_for_root(tmpl_path)
+
+        # Backward compat: _variable_loader points to the first loader
+        self._variable_loader = (
+            next(iter(self._variable_loaders_by_root.values()), None)
+            if self._variable_loaders_by_root
+            else None
+        )
+
+        if not self._variable_loaders_by_root and not self._original_templates_paths:
+            raise ValueError(
+                "predefined_variables=True requires templates to be a path string, "
+                "not a dict or other type"
+            )
+
+
     def switch(
         self,
         active_template_type: str = None,
@@ -329,6 +439,125 @@ class TemplateManager:
                     )
 
         return _copy
+
+    @property
+    def template_roots(self) -> List[str]:
+        """Return a copy of the original template source paths (read-only)."""
+        return list(self._original_templates_paths)
+
+    def add_template_root(
+        self,
+        source: Union[str, Mapping],
+        priority: TemplateRootPriority = TemplateRootPriority.LOWEST,
+    ) -> None:
+        """Add a template source after construction.
+
+        Merges templates from *source* into this manager's template store.
+        Intended for construction-time use (e.g., in a subclass
+        ``__attrs_post_init__``) before concurrent rendering begins.
+
+        Args:
+            source: A directory path or dict mapping to merge in.
+            priority: ``LOWEST`` fills in missing keys only (default/fallback
+                templates).  ``HIGHEST`` overrides existing keys.
+
+        The call is **idempotent**: adding the same *source* twice is a no-op.
+        Dict sources are accepted but receive no origin tagging or
+        VariableLoader (same as dict sources in the constructor).
+        """
+        if not isinstance(priority, TemplateRootPriority):
+            raise ValueError(
+                f"priority must be a TemplateRootPriority, got {priority!r}"
+            )
+
+        # Idempotent: skip if already injected
+        source_key = source if isinstance(source, str) else id(source)
+        if source_key in self._injected_roots:
+            return
+
+        # Load the source using the same parameters as __attrs_post_init__
+        loaded = read_all_text_(
+            source,
+            encoding=self.template_encoding,
+            keep_extension=False,
+            key_sep=self.template_key_parts_sep,
+            recursive_levels=-1,
+            collect_subdir_files_in_one_mapping=True,
+            version_parent_folders=self.template_components_key,
+            file_patterns=self.template_file_patterns,
+        )
+
+        if isinstance(loaded, str):
+            # Single file resolved to text — use as default_template if unset
+            if not self.default_template:
+                self.default_template = loaded
+            self._injected_roots = set(self._injected_roots)  # copy-on-write
+            self._injected_roots.add(source_key)
+            return
+
+        if not isinstance(loaded, dict):
+            return
+
+        is_highest = priority is TemplateRootPriority.HIGHEST
+        origin_root = source if isinstance(source, str) else None
+
+        # --- Copy-on-write: isolate from switch() shallow copies ---
+        # One-level deep copy of templates dict (inner space dicts are also copied)
+        if self.templates is None:
+            self.templates = {}
+        else:
+            self.templates = {
+                k: (dict(v) if isinstance(v, dict) else v)
+                for k, v in self.templates.items()
+            }
+        self._original_templates_paths = list(self._original_templates_paths)
+        self._injected_roots = set(self._injected_roots)
+        self._variable_loaders_by_root = dict(self._variable_loaders_by_root)
+
+        # --- Merge templates ---
+        for space_key, space_value in loaded.items():
+            if not isinstance(space_value, dict):
+                # Non-dict top-level value (rare — e.g., bare default string)
+                if is_highest or space_key not in self.templates:
+                    self.templates[space_key] = space_value
+                continue
+
+            if space_key not in self.templates:
+                self.templates[space_key] = {}
+
+            target = self.templates[space_key]
+            if not isinstance(target, dict):
+                if is_highest:
+                    self.templates[space_key] = {}
+                    target = self.templates[space_key]
+                else:
+                    continue
+
+            for tmpl_name, tmpl_content in space_value.items():
+                if is_highest or tmpl_name not in target:
+                    target[tmpl_name] = (
+                        _OriginTaggedStr(tmpl_content, origin_root=origin_root)
+                        if origin_root and isinstance(tmpl_content, str)
+                        else tmpl_content
+                    )
+
+        # --- Update root tracking ---
+        if isinstance(source, str):
+            if is_highest:
+                self._original_templates_paths.insert(0, source)
+                self._original_templates_path = source
+            else:
+                self._original_templates_paths.append(source)
+                # LOWEST: don't change _original_templates_path (singular)
+
+        # --- Create VariableLoader for new root if applicable ---
+        if self.predefined_variables is True and isinstance(source, str):
+            self._add_variable_loader_for_root(source)
+            # For LOWEST, don't update _variable_loader (keep highest-priority loader)
+            if is_highest and source in self._variable_loaders_by_root:
+                self._variable_loader = self._variable_loaders_by_root[source]
+
+        self._injected_roots.add(source_key)
 
     def get_raw_template(
         self,
