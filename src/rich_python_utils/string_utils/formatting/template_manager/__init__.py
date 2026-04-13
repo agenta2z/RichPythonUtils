@@ -50,6 +50,7 @@ Example (manual - with explicit VariableLoader):
 
 from rich_python_utils.string_utils.formatting.template_manager.template_manager import (
     TemplateManager,
+    TemplateRootPriority,
 )
 from rich_python_utils.string_utils.formatting.template_manager.sop_manager import (
     SOP,
@@ -67,6 +68,7 @@ from rich_python_utils.string_utils.formatting.template_manager.variable_manager
 
 __all__ = [
     "TemplateManager",
+    "TemplateRootPriority",
     "VariableLoader",
     "VariableLoaderConfig",
     "AmbiguousVariableError",
