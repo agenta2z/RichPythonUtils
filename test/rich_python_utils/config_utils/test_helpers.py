@@ -86,6 +86,20 @@ class AttrsWithCallable:
     processor: Optional[Any] = attrib(default=None)
 
 
+@attrs
+class AttrsWithFactory:
+    """Has a ``*_factory`` field for testing _ImportFactory / auto-partial."""
+    name: str = attrib(default="")
+    worker_factory: Any = attrib(default=None)
+
+
+@attrs
+class InnerWorker:
+    """Simple worker instantiated by factory tests."""
+    model: str = attrib(default="default")
+    child: Any = attrib(default=None)
+
+
 # ---------------------------------------------------------------------------
 # dataclass test classes
 # ---------------------------------------------------------------------------

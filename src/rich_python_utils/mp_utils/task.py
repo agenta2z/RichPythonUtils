@@ -84,6 +84,7 @@ class Task:
     args = attrib(type=Tuple, default=())
     kwargs = attrib(type=dict, factory=dict)
     name = attrib(type=Optional[str], default=None)
+    group = attrib(default=None)
 
     def __attrs_post_init__(self):
         """Validate parameters and set defaults after initialization."""

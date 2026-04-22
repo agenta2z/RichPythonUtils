@@ -185,6 +185,11 @@ class WorkGraphNode(Node, WorkNodeBase):
     # StepResultSaveOptions.SkipResumable to decide whether to skip node-level
     # save/load and let the worker handle it internally.
     worker_manages_resume: bool = attrib(default=False, kw_only=True)
+    # Optional callback for graph visualization — emits NodeStatusEvent on RUNNING/COMPLETED/ERROR.
+    # Set via WorkGraph.set_graph_event_callback(). Must be an async coroutine function when used
+    # in _arun() (async path). In _run() (sync path), async callbacks are skipped to avoid
+    # unawaited coroutine leaks. BTA always uses _arun() (use_async=True).
+    _graph_event_callback: Optional[Callable] = attrib(default=None, repr=False, kw_only=True)
     min_repeat_wait: float = attrib(default=0, kw_only=True)
     max_repeat_wait: float = attrib(default=0, kw_only=True)
     retry_on_exceptions: Optional[List[type]] = attrib(default=None, kw_only=True)
@@ -557,6 +562,15 @@ class WorkGraphNode(Node, WorkNodeBase):
 
                         # Use execute_with_retry to support repeat/retry functionality
                         from rich_python_utils.common_utils.function_helper import execute_with_retry
+                        # Graph visualization: emit RUNNING status (sync path — skip async cb)
+                        if self._graph_event_callback:
+                            import inspect as _inspect
+                            if not _inspect.iscoroutinefunction(self._graph_event_callback):
+                                try:
+                                    from agent_foundation.common.inferencers.graph_events import NodeStatusEvent, NodeStatus
+                                    self._graph_event_callback(NodeStatusEvent(node_id=self.name, status=NodeStatus.RUNNING))
+                                except Exception:
+                                    pass
                         result = execute_with_retry(
                             func=self.value,
                             max_retry=self.max_repeat,
@@ -731,6 +745,11 @@ class WorkGraphNode(Node, WorkNodeBase):
         # Support per-group semaphores: if _semaphore is a dict, select by node.group
         if isinstance(_semaphore_or_map, dict):
             semaphore = _semaphore_or_map.get(self.group) or _semaphore_or_map.get(None)
+            self.log_info(
+                f"group={self.group!r}, dict_keys={list(_semaphore_or_map.keys())}, "
+                f"selected_semaphore={id(semaphore) if semaphore else None}",
+                "ConcurrencyDiag",
+            )
         else:
             semaphore = _semaphore_or_map
 
@@ -807,7 +826,12 @@ class WorkGraphNode(Node, WorkNodeBase):
                     # Released before downstream propagation to avoid nested-lock
                     # deadlock in diamond graphs (fan-out → fan-in).
                     if semaphore:
+                        self.log_info(
+                            f"acquiring semaphore (group={self.group!r}, id={id(semaphore)})",
+                            "ConcurrencyDiag",
+                        )
                         await semaphore.acquire()
+                        self.log_info("acquired semaphore", "ConcurrencyDiag")
                     try:
                         try:
                             rel_args, rel_kwargs = get_relevant_args(
@@ -817,6 +841,29 @@ class WorkGraphNode(Node, WorkNodeBase):
                                 args=args,
                                 **kwargs
                             )
+
+                            # Graph visualization: emit RUNNING status (async path)
+                            if self._graph_event_callback:
+                                try:
+                                    from agent_foundation.common.inferencers.graph_events import NodeStatusEvent, NodeStatus
+                                    _cb_result = self._graph_event_callback(NodeStatusEvent(node_id=self.name, status=NodeStatus.RUNNING))
+                                    if _cb_result is not None:
+                                        import asyncio as _asyncio
+                                        if _asyncio.iscoroutine(_cb_result):
+                                            await _cb_result
+                                except Exception:
+                                    pass
+                            # On retry, re-emit RUNNING so the UI doesn't stick on ERROR
+                            async def _on_retry(attempt, exc):
+                                if self._graph_event_callback:
+                                    try:
+                                        from agent_foundation.common.inferencers.graph_events import NodeStatusEvent, NodeStatus
+                                        _r = self._graph_event_callback(NodeStatusEvent(node_id=self.name, status=NodeStatus.RUNNING))
+                                        if _r is not None:
+                                            import asyncio as _a
+                                            if _a.iscoroutine(_r): await _r
+                                    except Exception:
+                                        pass
 
                             result = await async_execute_with_retry(
                                 func=self.value,
@@ -829,9 +876,35 @@ class WorkGraphNode(Node, WorkNodeBase):
                                 args=rel_args,
                                 kwargs=rel_kwargs,
                                 default_return_or_raise=self._get_fallback_result(*args, **kwargs),
+                                on_retry_callback=_on_retry,
                             )
+                            # Graph visualization: emit COMPLETED status after successful execution
+                            if self._graph_event_callback:
+                                try:
+                                    from agent_foundation.common.inferencers.graph_events import NodeStatusEvent, NodeStatus
+                                    _cb_result = self._graph_event_callback(NodeStatusEvent(node_id=self.name, status=NodeStatus.COMPLETED))
+                                    if _cb_result is not None:
+                                        import asyncio as _asyncio
+                                        if _asyncio.iscoroutine(_cb_result):
+                                            await _cb_result
+                                except Exception as _e:
+                                    import logging as _logging
+                                    _logging.getLogger(__name__).warning(
+                                        "Graph COMPLETED callback failed for %s: %s", self.name, _e
+                                    )
                         except Exception as err:
                             import traceback
+                            # Graph visualization: emit ERROR status
+                            if self._graph_event_callback:
+                                try:
+                                    from agent_foundation.common.inferencers.graph_events import NodeStatusEvent, NodeStatus
+                                    _cb_result = self._graph_event_callback(NodeStatusEvent(node_id=self.name, status=NodeStatus.ERROR, error=str(err)))
+                                    if _cb_result is not None:
+                                        import asyncio as _asyncio
+                                        if _asyncio.iscoroutine(_cb_result):
+                                            await _cb_result
+                                except Exception:
+                                    pass
                             self.log_error(
                                 {
                                     'name': self.name,
@@ -867,6 +940,7 @@ class WorkGraphNode(Node, WorkNodeBase):
                             self._save_result(result, result_path)
                     finally:
                         if semaphore:
+                            self.log_info("releasing semaphore", "ConcurrencyDiag")
                             semaphore.release()
 
             # Propagate the result to downstream nodes concurrently
@@ -1235,6 +1309,21 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
 
         for start_node in self.start_nodes:
             clear_node(start_node)
+
+    def set_graph_event_callback(self, callback: Callable) -> None:
+        """Propagate graph event callback to all reachable WorkGraphNodes.
+
+        Call this after building the graph (e.g., after _build_diamond_graph).
+        The callback receives NodeStatusEvent objects and should be an async
+        coroutine function when used in the async execution path (_arun).
+
+        Example:
+            async def _status_cb(event):
+                await reporter.on_node_status(event.node_id, event.status)
+            workgraph.set_graph_event_callback(_status_cb)
+        """
+        for node in self._all_nodes():
+            node._graph_event_callback = callback
 
     def _all_nodes(self) -> List['WorkGraphNode']:
         """Get all nodes reachable from start_nodes via DFS."""
@@ -1734,6 +1823,11 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
 
         terminate_event = asyncio.Event()
         # Build semaphore(s) for concurrency limiting
+        self.log_info(
+            f"WorkGraph._arun: group_max_concurrency={self.group_max_concurrency}, "
+            f"max_concurrency={self.max_concurrency}, start_nodes={len(self.start_nodes)}",
+            "ConcurrencyDiag",
+        )
         if self.group_max_concurrency:
             # Per-group semaphores: dict mapping group_name -> Semaphore
             semaphore = {

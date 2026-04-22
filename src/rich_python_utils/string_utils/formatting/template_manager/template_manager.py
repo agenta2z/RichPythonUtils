@@ -1,6 +1,8 @@
 import copy
 import enum
+import os
 from itertools import product
+from pathlib import Path
 from typing import (
     Any,
     Callable,
@@ -190,6 +192,7 @@ class TemplateManager:
     enable_templated_feed: bool = attrib(default=False)
     template_variable_extractor: Union[str, Callable, None] = attrib(default="default")
     cross_space_root: Optional[str] = attrib(default=None)
+    default_template_key: str = attrib(default="")
 
     # Internal tracking for idempotent add_template_root calls
     _injected_roots: set = attrib(factory=set, init=False, repr=False)
@@ -203,6 +206,20 @@ class TemplateManager:
             ValueError: if `template_components` is `True` or a string but `templates`
                         isn't a string, making path construction impossible.
         """
+        # Smart path resolution: if templates is a relative path that doesn't
+        # exist, try resolving via PROMPT_TEMPLATES_ROOT env var.
+        if (
+            self.templates is not None
+            and isinstance(self.templates, str)
+            and not Path(self.templates).is_absolute()
+            and not Path(self.templates).is_dir()
+        ):
+            env_root = os.environ.get("PROMPT_TEMPLATES_ROOT", "")
+            if env_root:
+                resolved = Path(env_root) / self.templates
+                if resolved.is_dir():
+                    self.templates = str(resolved.resolve())
+
         # Normalize templates into a list for uniform processing.
         # Accepts: str, Mapping, List[Union[str, Mapping]], or None.
         if self.templates is not None and not isinstance(self.templates, list):
@@ -467,6 +484,38 @@ class TemplateManager:
     def template_roots(self) -> List[str]:
         """Return a copy of the original template source paths (read-only)."""
         return list(self._original_templates_paths)
+
+    def load_variable(
+        self,
+        var_name: str,
+        variant: str,
+        root_space: Optional[str] = None,
+    ) -> str:
+        """Load a specific variant of a predefined variable file.
+
+        Looks for ``<root>/<root_space>/<active_template_type>/_variables/<var_name>/<variant>.jinja2``
+        in each template root path.
+
+        Args:
+            var_name: Variable name (maps to subdirectory under ``_variables/``).
+            variant: Variant file name (without extension).
+            root_space: Template root space.  Defaults to ``active_template_root_space``.
+
+        Returns:
+            File content as a string, or empty string if not found.
+        """
+        if root_space is None:
+            root_space = self.active_template_root_space or ""
+        tmpl_type = self.active_template_type or "main"
+        for tmpl_path in self._original_templates_paths:
+            parts = [tmpl_path]
+            if root_space:
+                parts.append(root_space)
+            parts.extend([tmpl_type, "_variables", var_name, f"{variant}.jinja2"])
+            candidate = Path(*parts)
+            if candidate.is_file():
+                return candidate.read_text(encoding=self.template_encoding)
+        return None  # not found (distinct from "" = empty file)
 
     def add_template_root(
         self,
@@ -1355,6 +1404,10 @@ class TemplateManager:
             >>> manager_underscore("template", name="Eve")
             'Version 2: Hello, Eve!'
         """
+        # Fallback to default_template_key when caller passes empty/None key
+        if not template_key and self.default_template_key:
+            template_key = self.default_template_key
+
         template = self.default_template
         template_components = None
 

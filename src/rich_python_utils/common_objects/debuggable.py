@@ -295,7 +295,20 @@ class Debuggable(Identifiable, ABC):
         """
         Normalize ``self.logger`` into a dict ``{name: logger_object}`` and
         build ``self._resolved_logger_configs`` from inline configs and ``logger_configs``.
+
+        Supports ``logger="auto"`` — delegates to ``_resolve_auto_logger()``
+        hook (implemented by subclasses like InferencerBase) to create a
+        workspace-derived logger. If the hook can't resolve yet (no workspace),
+        normalization is deferred.
         """
+        # Handle "auto" logger — delegate to subclass hook
+        if isinstance(self.logger, str) and self.logger == "auto":
+            if hasattr(self, "_resolve_auto_logger"):
+                self._resolve_auto_logger()
+            if isinstance(self.logger, str):
+                # Still unresolved (e.g., no workspace yet) — defer
+                return
+
         logger_dict = {}
         inline_configs = {}
         index = 0
@@ -381,6 +394,10 @@ class Debuggable(Identifiable, ABC):
 
         # Normalize loggers into dict format before potentially adding default logger
         self._normalize_loggers()
+
+        # If logger is deferred ("auto" with no workspace yet), skip default logger setup
+        if isinstance(self.logger, str):
+            return
 
         if (
                 not self.logger
@@ -687,6 +704,14 @@ class Debuggable(Identifiable, ABC):
         if not log_type:
             log_type = self.default_log_type
 
+        # Dynamic log_name: if log_name is the default class name and the
+        # instance has a more descriptive `name` attribute (e.g., WorkGraphNode
+        # with hierarchical BTA name), prefer it for log output.
+        _effective_log_name = self.log_name
+        _name = getattr(self, "name", None)
+        if _name and _name != _effective_log_name and self.log_name == self.__class__.__name__:
+            _effective_log_name = _name
+
         # Generate message_id early for rate limiting checks
         generated_message_id = self._generate_message_id(log_item, log_type, log_level, message_id)
 
@@ -702,6 +727,10 @@ class Debuggable(Identifiable, ABC):
             return
 
         processed = None  # Pipeline: processed data from upstream logger
+
+        # Skip if logger is deferred ("auto" — not yet resolved to a dict)
+        if not isinstance(self.logger, dict):
+            return
 
         for _logger_name, _logger in self.logger.items():
             try:
@@ -751,14 +780,14 @@ class Debuggable(Identifiable, ABC):
                     if self.log_time:
                         time_str = datetime.now().strftime(self.log_time)
                         if show_name:
-                            message = f"{self.id} - {time_str} - {self.log_name} [{_logger_name}] - {logging.getLevelName(log_level)} - {log_type}: {display_item}{suppression_suffix}"
+                            message = f"{self.id} - {time_str} - {_effective_log_name} [{_logger_name}] - {logging.getLevelName(log_level)} - {log_type}: {display_item}{suppression_suffix}"
                         else:
-                            message = f"{self.id} - {time_str} - {self.log_name} - {logging.getLevelName(log_level)} - {log_type}: {display_item}{suppression_suffix}"
+                            message = f"{self.id} - {time_str} - {_effective_log_name} - {logging.getLevelName(log_level)} - {log_type}: {display_item}{suppression_suffix}"
                     else:
                         if show_name:
-                            message = f"{self.id} - {self.log_name} [{_logger_name}] - {logging.getLevelName(log_level)} - {log_type}: {display_item}{suppression_suffix}"
+                            message = f"{self.id} - {_effective_log_name} [{_logger_name}] - {logging.getLevelName(log_level)} - {log_type}: {display_item}{suppression_suffix}"
                         else:
-                            message = f"{self.id} - {self.log_name} - {logging.getLevelName(log_level)} - {log_type}: {display_item}{suppression_suffix}"
+                            message = f"{self.id} - {_effective_log_name} - {logging.getLevelName(log_level)} - {log_type}: {display_item}{suppression_suffix}"
                     _level_print(message, log_level)
 
                     if log_level == logging.WARNING and self.warning_raiser is not None:
@@ -777,9 +806,9 @@ class Debuggable(Identifiable, ABC):
                             self._backend_suppression_counts[generated_message_id] = 0
 
                     if show_name:
-                        message = f"{self.id} - {self.log_name} [{_logger_name}] - {log_type}: {display_item}{suppression_suffix}"
+                        message = f"{self.id} - {_effective_log_name} [{_logger_name}] - {log_type}: {display_item}{suppression_suffix}"
                     else:
-                        message = f"{self.id} - {self.log_name} - {log_type}: {display_item}{suppression_suffix}"
+                        message = f"{self.id} - {_effective_log_name} - {log_type}: {display_item}{suppression_suffix}"
                     _logger.log(log_level, message)
 
                     if log_level == logging.WARNING and self.warning_raiser is not None:
@@ -788,7 +817,7 @@ class Debuggable(Identifiable, ABC):
                     # Use the callable logger
                     log_data = {
                         'level': log_level,
-                        'name': self.log_name,
+                        'name': _effective_log_name,
                         'id': self.id,
                         'type': log_type,
                         'item': display_item
@@ -860,7 +889,7 @@ class Debuggable(Identifiable, ABC):
                         processed = result
 
                     if log_level == logging.WARNING and self.warning_raiser is not None:
-                        message = f"{self.id} - {self.log_name} - {log_type}: {display_item}"
+                        message = f"{self.id} - {_effective_log_name} - {log_type}: {display_item}"
                         self.warning_raiser(message)
                 else:
                     raise TypeError("Logger must be a callable or an instance of logging.Logger")

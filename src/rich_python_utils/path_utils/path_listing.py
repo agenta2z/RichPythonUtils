@@ -1,9 +1,15 @@
+import hashlib
+import logging
 import os
 import re
+import shutil
+import unicodedata
 from enum import IntEnum
 from os import path
 from pathlib import Path
-from typing import List, Union, Iterator
+from typing import Any, Dict, List, Optional, Tuple, Union, Iterator
+
+_logger = logging.getLogger(__name__)
 
 NOEXT_PATTERN = 'NOEXT'
 
@@ -462,3 +468,201 @@ def get_sorted_files_from_all_sub_dirs(dir_path: str, pattern: str, full_path: b
         sub_dir_files.sort()
         files.extend(sub_dir_files)
     return files
+
+
+# ---------------------------------------------------------------------------
+# Multi-root file diffing and conflict detection
+# ---------------------------------------------------------------------------
+
+from typing import NamedTuple
+
+
+class FileCandidate(NamedTuple):
+    """One root's version of a file."""
+    root_name: str
+    abs_path: str
+    size: int
+    sha256: str
+
+
+class MultiRootDiff(NamedTuple):
+    """Result of comparing files across multiple root directories."""
+    agreed: List[Dict[str, Any]]
+    conflicts: Dict[str, List[Dict[str, Any]]]
+
+
+def canonicalize_text(content: bytes) -> bytes:
+    """Normalize text for stable hashing (line endings, trailing whitespace, NFC).
+
+    Binary files (UnicodeDecodeError) bypass normalization and return raw bytes.
+    """
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        return content
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    lines = [line.rstrip() for line in text.split("\n")]
+    text = "\n".join(lines).rstrip("\n") + "\n"
+    text = unicodedata.normalize("NFC", text)
+    return text.encode("utf-8")
+
+
+def hash_file_canonical(filepath: str, large_file_threshold: int = 10 * 1024 * 1024) -> str:
+    """SHA-256 of canonical-normalized file content.
+
+    Files larger than *large_file_threshold* are hashed raw (no normalization).
+    """
+    h = hashlib.sha256()
+    size = os.path.getsize(filepath)
+    if size > large_file_threshold:
+        with open(filepath, "rb") as f:
+            while chunk := f.read(64 * 1024):
+                h.update(chunk)
+        return h.hexdigest()
+    with open(filepath, "rb") as f:
+        h.update(canonicalize_text(f.read()))
+    return h.hexdigest()
+
+
+def find_conflicting_and_agreed_files(
+    roots: List[str],
+    root_names: Optional[List[str]] = None,
+) -> Tuple[List[Dict[str, Any]], Dict[str, List[Dict[str, Any]]]]:
+    """Walk multiple root directories and categorize files as agreed or conflicting.
+
+    For each relative path that appears under any root:
+    - **Agreed**: all roots that have it produce the same canonical hash → returned
+      in *agreed* list.
+    - **Conflicting**: roots produce different hashes → returned in *conflicts* dict.
+
+    Args:
+        roots: List of directory paths to compare.
+        root_names: Optional names for each root (for logging/reporting).
+            Defaults to the directory basename.
+
+    Returns:
+        (agreed, conflicts) where:
+        - agreed: list of ``{path, size, sha256, source_roots}``
+        - conflicts: dict mapping ``rel_path → [{root_name, abs_path, size, sha256}, ...]``
+    """
+    if root_names is None:
+        root_names = [os.path.basename(r) for r in roots]
+
+    file_map: Dict[str, List[Dict[str, Any]]] = {}
+    for root_dir, name in zip(roots, root_names):
+        if not os.path.isdir(root_dir):
+            continue
+        for dirpath, dirs, files in os.walk(root_dir):
+            for fname in files:
+                abs_path = os.path.join(dirpath, fname)
+                rel_path = os.path.relpath(abs_path, root_dir)
+                size = os.path.getsize(abs_path)
+                sha = hash_file_canonical(abs_path)
+                file_map.setdefault(rel_path, []).append({
+                    "root_name": name,
+                    "abs_path": abs_path,
+                    "size": size,
+                    "sha256": sha,
+                })
+
+    agreed: List[Dict[str, Any]] = []
+    conflicts: Dict[str, List[Dict[str, Any]]] = {}
+    for rel_path, instances in sorted(file_map.items()):
+        unique_hashes = {inst["sha256"] for inst in instances}
+        if len(unique_hashes) == 1:
+            agreed.append({
+                "path": rel_path,
+                "size": instances[0]["size"],
+                "sha256": instances[0]["sha256"],
+                "abs_path": instances[0]["abs_path"],
+                "source_roots": [inst["root_name"] for inst in instances],
+            })
+        else:
+            conflicts[rel_path] = instances
+    return agreed, conflicts
+
+
+def safe_copy_agreed(
+    agreed: List[Dict[str, Any]],
+    dest: str,
+    skip_existing: bool = True,
+) -> List[str]:
+    """Copy agreed files to *dest*, optionally skipping files that already exist.
+
+    Returns list of paths actually copied.
+    """
+    copied = []
+    for entry in agreed:
+        dst_path = os.path.join(dest, entry["path"])
+        if skip_existing and os.path.exists(dst_path):
+            continue
+        os.makedirs(os.path.dirname(dst_path), exist_ok=True)
+        shutil.copy2(entry.get("abs_path", entry.get("source_abs_path", "")), dst_path)
+        copied.append(entry["path"])
+    return copied
+
+
+def safe_copy_per_file(
+    diff: Tuple[List[Dict[str, Any]], Dict[str, List[Dict[str, Any]]]],
+    dest: str,
+    skip_existing: bool = True,
+    conflict_fallback: str = "largest",
+) -> List[str]:
+    """Copy files from a diff result to *dest* with conflict handling.
+
+    For agreed files: copies to dest (skips if *skip_existing* and file exists).
+    For conflicting files: applies *conflict_fallback* policy only if the file
+    doesn't already exist at dest (i.e., the aggregator didn't write a merged version).
+
+    Args:
+        diff: Tuple of (agreed, conflicts) from ``find_conflicting_and_agreed_files``.
+        dest: Destination directory.
+        skip_existing: If True, never overwrite files already in dest.
+        conflict_fallback: Policy for unresolved conflicts:
+            - ``"largest"``: copy the largest candidate (heuristic: more complete).
+            - ``"skip"``: don't copy anything for unresolved conflicts.
+
+    Returns:
+        List of relative paths actually copied.
+    """
+    agreed, conflicts = diff
+    copied = safe_copy_agreed(agreed, dest, skip_existing=skip_existing)
+
+    for rel_path, candidates in conflicts.items():
+        dst_path = os.path.join(dest, rel_path)
+        if skip_existing and os.path.exists(dst_path):
+            continue
+        if conflict_fallback == "largest":
+            best = max(candidates, key=lambda c: c.get("size", 0))
+            os.makedirs(os.path.dirname(dst_path), exist_ok=True)
+            shutil.copy2(best["abs_path"], dst_path)
+            copied.append(rel_path)
+            _logger.warning(
+                "Conflict fallback (largest): %s → copied from %s (%d bytes)",
+                rel_path, best.get("root_name", "unknown"), best.get("size", 0),
+            )
+    return copied
+
+
+def group_conflicts_by_parent(
+    conflicts: Dict[str, List[Dict[str, Any]]],
+    depth: int = 1,
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Group conflicting files by their parent directory for semantic context.
+
+    Args:
+        conflicts: Dict from rel_path → list of candidates (from find_conflicting_and_agreed_files).
+        depth: How many parent segments to group by (1 = immediate parent, 2 = grandparent/parent).
+
+    Returns:
+        Dict mapping parent_path → list of ``{path, candidates}`` dicts.
+    """
+    groups: Dict[str, list] = {}
+    for rel_path, candidates in conflicts.items():
+        parts = rel_path.replace("\\", "/").split("/")
+        if len(parts) > depth:
+            parent = "/".join(parts[:depth])
+        else:
+            parent = "."
+        groups.setdefault(parent, []).append({"path": rel_path, "candidates": candidates})
+    return groups
