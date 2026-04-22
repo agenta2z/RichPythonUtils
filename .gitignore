@@ -1,8 +1,4 @@
 # Ignore development and build artifacts
-_dev/
-_archive/
-_docs/
-_plan/
 _runtime/
 _tmp/
 _logs/
