@@ -704,7 +704,7 @@ def _filter_attrs_keys(
         if "_target_" in val:
             # Single factory: worker_factory: {_target_: RovoChat, ...}
             if _FACTORY_MARKER in val:
-                raw = dict(val)
+                raw = copy.deepcopy(val)
                 del raw[_FACTORY_MARKER]
                 del val[_FACTORY_MARKER]
                 if _factory_configs is not None:
@@ -717,7 +717,7 @@ def _filter_attrs_keys(
                     continue  # skip Hydra/injectable keys but NOT data keys like __default__
                 if isinstance(v, dict) and "_target_" in v:
                     if _FACTORY_MARKER in v:
-                        raw = dict(v)
+                        raw = copy.deepcopy(v)
                         del raw[_FACTORY_MARKER]
                         del v[_FACTORY_MARKER]
                         if _factory_configs is not None:
