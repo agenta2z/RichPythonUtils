@@ -21,6 +21,10 @@ from rich_python_utils.common_objects.workflow.common.step_result_save_options i
 from rich_python_utils.common_objects.workflow.common.worknode_base import (
     WorkNodeBase, WorkGraphStopFlags, NextNodesSelector
 )
+from rich_python_utils.common_objects.workflow.common.expansion import GraphExpansionResult, SubgraphSpec
+from rich_python_utils.common_objects.workflow.common.exceptions import (
+    ExpansionConfigError, ExpansionLimitExceeded, ExpansionReplayError
+)
 from rich_python_utils.common_utils import flatten_iter, len_, get_relevant_named_args, get_relevant_args
 from rich_python_utils.common_utils.attr_helper import getattr_or_new
 from rich_python_utils.common_utils.async_utils import call_maybe_async, async_execute_with_retry
@@ -195,6 +199,12 @@ class WorkGraphNode(Node, WorkNodeBase):
     retry_on_exceptions: Optional[List[type]] = attrib(default=None, kw_only=True)
     output_validator: Optional[Callable[..., bool]] = attrib(default=None, kw_only=True)
 
+    # Dynamic expansion attributes (Task 4.1)
+    _expansion_depth = attrib(type=int, default=0, init=False, repr=False)
+    _max_expansion_depth = attrib(type=int, default=0, init=False, repr=False)
+    _max_total_nodes = attrib(type=int, default=200, init=False, repr=False)
+    _expansion_applied = attrib(type=bool, default=False, init=False, repr=False)
+
     def __attrs_post_init__(self):
         super().__attrs_post_init__()
         if isinstance(self.value, Debuggable):
@@ -264,6 +274,8 @@ class WorkGraphNode(Node, WorkNodeBase):
         
         Serializes node configuration including name, connections, and settings.
         Callable values are stored as references when possible.
+        Dynamically added nodes (expansion_depth > 0) are marked with
+        ``"expanded": True`` and their ``expansion_id`` if available.
         
         Args:
             mode: Serialization mode ('auto', 'dict', 'pickle')
@@ -283,7 +295,7 @@ class WorkGraphNode(Node, WorkNodeBase):
             else:
                 result_pass_down_mode_str = None  # Non-serializable callable
         
-        return {
+        obj = {
             '_type': type(self).__name__,
             '_module': type(self).__module__,
             'name': self.name,
@@ -304,6 +316,13 @@ class WorkGraphNode(Node, WorkNodeBase):
                 'remove_abstain_result_flag_from_upstream_input': self.remove_abstain_result_flag_from_upstream_input,
             }
         }
+
+        # Mark dynamically added nodes (expansion_depth > 0)
+        if self._expansion_depth > 0:
+            obj['expanded'] = True
+            obj['expansion_depth'] = self._expansion_depth
+
+        return obj
 
     def _merge_upstream_inputs(self, inputs):
         args_list = []  # Explicit list variable
@@ -437,7 +456,411 @@ class WorkGraphNode(Node, WorkNodeBase):
 
         return nodes
 
+    # =========================================================================
+    # Dynamic Expansion Methods (Tasks 4.2–4.5)
+    # =========================================================================
+
+    def _validate_seed_factory(self, fn):
+        """Validate that *reconstruct_from_seed* is importable.
+
+        Performs explicit ``hasattr(fn, '__qualname__')`` check before
+        accessing ``fn.__qualname__``, to handle ``functools.partial``
+        objects cleanly.
+
+        Raises:
+            ExpansionConfigError: for lambdas, closures, or objects
+                missing ``__module__``/``__qualname__``.
+        """
+        if not hasattr(fn, '__qualname__'):
+            raise ExpansionConfigError(
+                f"reconstruct_from_seed {fn!r} has no __qualname__ attribute. "
+                "It must be a module-level function (not a functools.partial, "
+                "lambda, or closure)."
+            )
+        if not hasattr(fn, '__module__'):
+            raise ExpansionConfigError(
+                f"reconstruct_from_seed {fn!r} has no __module__ attribute. "
+                "It must be a module-level function."
+            )
+        qualname = fn.__qualname__
+        if '<lambda>' in qualname:
+            raise ExpansionConfigError(
+                f"reconstruct_from_seed must not be a lambda (got qualname={qualname!r}). "
+                "Use a named module-level function instead."
+            )
+        if '<locals>' in qualname:
+            raise ExpansionConfigError(
+                f"reconstruct_from_seed must not be a closure (got qualname={qualname!r}). "
+                "Use a named module-level function instead."
+            )
+
+    def _collect_all_graph_names(self):
+        """Collect names of all nodes reachable via previous AND next links.
+
+        BFS traversal starting from self, walking both previous and next edges.
+
+        Returns:
+            set: Set of node names reachable from self.
+        """
+        visited = set()
+        queue = [self]
+        names = set()
+        while queue:
+            node = queue.pop(0)
+            node_id = id(node)
+            if node_id in visited:
+                continue
+            visited.add(node_id)
+            if node.name is not None:
+                names.add(node.name)
+            for neighbor in (node.next or []):
+                if id(neighbor) not in visited:
+                    queue.append(neighbor)
+            for neighbor in (node.previous or []):
+                if id(neighbor) not in visited:
+                    queue.append(neighbor)
+        return names
+
+    def _validate_no_cycles(self, new_nodes):
+        """DFS cycle detection on the subgraph's nodes, excluding self-loops.
+
+        Walks ``next`` edges from each node in *new_nodes*. A back-edge to an
+        ancestor in the current DFS path (that is not a self-loop) indicates a
+        cycle.
+
+        Args:
+            new_nodes: List of WorkGraphNode instances to check.
+
+        Raises:
+            ValueError: If a cycle is detected among the new nodes.
+        """
+        node_ids = {id(n) for n in new_nodes}
+
+        # States: 0 = unvisited, 1 = in-progress, 2 = done
+        state = {id(n): 0 for n in new_nodes}
+
+        def dfs(node):
+            state[id(node)] = 1  # in-progress
+            for child in (node.next or []):
+                if child is node:
+                    continue  # skip self-loops
+                child_id = id(child)
+                if child_id not in node_ids:
+                    continue  # outside the subgraph
+                if state[child_id] == 1:
+                    raise ValueError(
+                        f"Cycle detected in subgraph: node '{node.name}' -> '{child.name}' "
+                        f"forms a back-edge."
+                    )
+                if state[child_id] == 0:
+                    dfs(child)
+            state[id(node)] = 2  # done
+
+        for node in new_nodes:
+            if state[id(node)] == 0:
+                dfs(node)
+
+    def _validate_no_cross_boundary_cycles(self, subgraph_nodes):
+        """Post-wiring cycle check (S2 fix).
+
+        After subgraph attachment (including insert mode), verify that no path
+        from any subgraph leaf's downstream reaches back to the expanding node.
+        Also verify that no path from the original downstream children reaches
+        back to any node in the expanded subgraph, covering cycles that span
+        the rewired topology.
+
+        Args:
+            subgraph_nodes: List of WorkGraphNode instances in the subgraph.
+
+        Raises:
+            ValueError: If a cross-boundary cycle is detected.
+        """
+        sg_node_ids = {id(n) for n in subgraph_nodes}
+        expanding_node_id = id(self)
+
+        # Find subgraph leaf nodes (nodes with no next within subgraph, excluding self-loops)
+        leaf_nodes = []
+        for sg_node in subgraph_nodes:
+            has_internal_next = any(
+                id(n) in sg_node_ids
+                for n in (sg_node.next or [])
+                if n is not sg_node
+            )
+            if not has_internal_next:
+                leaf_nodes.append(sg_node)
+
+        # Check 1: DFS from subgraph leaf nodes' downstream — no path should
+        # reach back to the expanding node (excluding self-loops)
+        for leaf in leaf_nodes:
+            for downstream in (leaf.next or []):
+                if downstream is leaf:
+                    continue  # skip self-loops
+                if id(downstream) in sg_node_ids:
+                    continue  # still within subgraph
+                # DFS from downstream, check if we reach expanding node
+                visited = set()
+                stack = [downstream]
+                while stack:
+                    node = stack.pop()
+                    nid = id(node)
+                    if nid == expanding_node_id:
+                        raise ValueError(
+                            f"Cross-boundary cycle detected: path from subgraph leaf "
+                            f"'{leaf.name}' downstream reaches back to expanding node "
+                            f"'{self.name}'."
+                        )
+                    if nid in visited:
+                        continue
+                    visited.add(nid)
+                    for child in (node.next or []):
+                        if child is node:
+                            continue  # skip self-loops
+                        if id(child) not in visited:
+                            stack.append(child)
+
+        # Check 2: DFS from original downstream children (non-subgraph next of
+        # subgraph leaves) — no path should reach back to any subgraph node
+        for leaf in leaf_nodes:
+            for downstream in (leaf.next or []):
+                if downstream is leaf:
+                    continue
+                if id(downstream) in sg_node_ids:
+                    continue
+                visited = set()
+                stack = [downstream]
+                while stack:
+                    node = stack.pop()
+                    nid = id(node)
+                    if nid in sg_node_ids:
+                        raise ValueError(
+                            f"Cross-boundary cycle detected: path from downstream "
+                            f"of subgraph leaf '{leaf.name}' reaches back to "
+                            f"subgraph node '{node.name}'."
+                        )
+                    if nid in visited:
+                        continue
+                    visited.add(nid)
+                    for child in (node.next or []):
+                        if child is node:
+                            continue
+                        if id(child) not in visited:
+                            stack.append(child)
+
+    def _propagate_settings_to_subgraph(self, nodes):
+        """Propagate execution settings and expansion depth to subgraph nodes.
+
+        Propagates:
+        - enable_result_save
+        - resume_with_saved_results
+        - checkpoint_mode (if present)
+        - _graph_event_callback
+        - _max_expansion_depth
+        - _max_total_nodes
+        - _expansion_depth (set to self._expansion_depth + 1)
+
+        Args:
+            nodes: List of WorkGraphNode instances in the subgraph.
+        """
+        child_depth = self._expansion_depth + 1
+        for node in nodes:
+            node.enable_result_save = self.enable_result_save
+            node.resume_with_saved_results = self.resume_with_saved_results
+            if hasattr(self, 'checkpoint_mode'):
+                node.checkpoint_mode = self.checkpoint_mode
+            node._graph_event_callback = self._graph_event_callback
+            node._max_expansion_depth = self._max_expansion_depth
+            node._max_total_nodes = self._max_total_nodes
+            node._expansion_depth = child_depth
+
+    def _handle_insert_mode(self, expansion_result):
+        """Rewire topology for non-leaf insert mode (Req 33).
+
+        1. Save original downstream children (excluding self-edge)
+        2. Detach expanding node from original downstream (remove from self.next,
+           remove self from child.previous)
+        3. Attach subgraph entry nodes as new downstream via self.add_next()
+        4. Find subgraph leaf nodes (nodes with no next within subgraph,
+           excluding self-loops)
+        5. Wire subgraph leaf nodes → original downstream children via leaf.add_next()
+        """
+        subgraph = expansion_result.subgraph
+
+        # 1. Save original downstream children (excluding self-edge)
+        original_downstream = [n for n in (self.next or []) if n is not self]
+
+        # 2. Detach expanding node from original downstream
+        for child in original_downstream:
+            if child in self.next:
+                self.next.remove(child)
+            if self in (child.previous or []):
+                child.previous.remove(self)
+
+        # 3. Attach subgraph entry nodes as new downstream
+        for entry_node in subgraph.entry_nodes:
+            self.add_next(entry_node)
+
+        # 4. Find subgraph leaf nodes (nodes with no next within subgraph,
+        #    excluding self-loops)
+        sg_node_ids = {id(n) for n in subgraph.nodes}
+        leaf_nodes = []
+        for sg_node in subgraph.nodes:
+            has_internal_next = any(
+                id(n) in sg_node_ids
+                for n in (sg_node.next or [])
+                if n is not sg_node
+            )
+            if not has_internal_next:
+                leaf_nodes.append(sg_node)
+
+        # 5. Wire subgraph leaf nodes → original downstream children
+        for leaf in leaf_nodes:
+            for child in original_downstream:
+                leaf.add_next(child)
+
+    def _handle_graph_expansion(self, expansion_result, *args, **kwargs):
+        """Process a GraphExpansionResult: validate, attach subgraph, record.
+
+        Handles:
+        - Req 28: Self-loop detection — if _expansion_applied, skip re-expansion
+        - Req 30: worker_manages_resume check → ExpansionConfigError
+        - Req 25.4: Seed factory validation → ExpansionConfigError
+        - Empty entry_nodes → no-op with warning
+        - Expansion depth check → log warning and return result
+        - Total nodes check → raise ExpansionLimitExceeded
+        - Name uniqueness check → raise ValueError
+        - Cycle detection → raise ValueError
+        - Req 14.5: _get_result_path must be implemented
+        - Req 14.1: Persist expansion record BEFORE mutating topology
+        - Req 33: Insert mode for non-leaf nodes
+        - Leaf node: add entry_nodes to self.next
+        - Propagate settings and expansion depth to subgraph nodes
+        - Set _expansion_applied = True
+
+        Returns:
+            The unwrapped result from expansion_result.result.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # Req 28: If already expanded (self-loop scenario), skip re-expansion
+        if self._expansion_applied:
+            logger.debug(
+                "Node '%s': _expansion_applied is True, skipping re-expansion.",
+                self.name,
+            )
+            return expansion_result.result
+
+        # Req 30: Forbidden combination — worker_manages_resume + expansion
+        if self.worker_manages_resume:
+            raise ExpansionConfigError(
+                f"Node '{self.name}' has worker_manages_resume=True and returned "
+                "GraphExpansionResult. This combination is forbidden because the "
+                "worker's internal checkpointing conflicts with expansion topology "
+                "mutations."
+            )
+
+        # Req 25.4: Validate seed factory if provided
+        if expansion_result.reconstruct_from_seed is not None:
+            self._validate_seed_factory(expansion_result.reconstruct_from_seed)
+
+        subgraph = expansion_result.subgraph
+        entry_nodes = subgraph.entry_nodes
+
+        # Handle empty entry_nodes as no-op
+        if not entry_nodes:
+            logger.warning(
+                "Node '%s': GraphExpansionResult has empty entry_nodes. "
+                "Treating as no-op.",
+                self.name,
+            )
+            return expansion_result.result
+
+        # Check expansion depth: _expansion_depth >= _max_expansion_depth → skip
+        if self._expansion_depth >= self._max_expansion_depth:
+            logger.warning(
+                "Node '%s': expansion depth %d >= max_expansion_depth %d. "
+                "Skipping expansion.",
+                self.name,
+                self._expansion_depth,
+                self._max_expansion_depth,
+            )
+            return expansion_result.result
+
+        # Check total nodes via _collect_all_graph_names
+        existing_names = self._collect_all_graph_names()
+        new_node_count = len(subgraph.nodes)
+        total_after = len(existing_names) + new_node_count
+        if total_after > self._max_total_nodes:
+            raise ExpansionLimitExceeded(
+                f"Attaching subgraph ({new_node_count} nodes) to node '{self.name}' "
+                f"would result in {total_after} total nodes, exceeding "
+                f"max_total_nodes={self._max_total_nodes}."
+            )
+
+        # Check name uniqueness
+        new_names = {n.name for n in subgraph.nodes}
+        conflicts = existing_names & new_names
+        if conflicts:
+            raise ValueError(
+                f"Subgraph node names conflict with existing graph nodes: "
+                f"{sorted(conflicts)}"
+            )
+
+        # Validate no cycles within the subgraph
+        self._validate_no_cycles(subgraph.nodes)
+
+        # Req 14.5: Check _get_result_path is implemented
+        try:
+            self._get_result_path("__test__")
+        except NotImplementedError:
+            raise ExpansionConfigError(
+                f"Node '{self.name}' returned GraphExpansionResult but "
+                "_get_result_path is not implemented. Expansion records "
+                "require a result path for persistence."
+            )
+
+        # Req 14.1: Persist expansion record BEFORE mutating topology
+        record_data = {
+            'expanding_node': self.name,
+            'expansion_id': expansion_result.expansion_id,
+            'subgraph': subgraph.to_serializable_obj(),
+        }
+        if expansion_result.seed is not None:
+            record_data['seed'] = expansion_result.seed
+        if expansion_result.reconstruct_from_seed is not None:
+            record_data['factory_module'] = expansion_result.reconstruct_from_seed.__module__
+            record_data['factory_qualname'] = expansion_result.reconstruct_from_seed.__qualname__
+
+        self._save_result(
+            record_data,
+            output_path=self._resolve_result_path(
+                f"__graph_expansion__{self.name}", *args, **kwargs
+            ),
+        )
+
+        # Determine if leaf or non-leaf
+        non_self_next = [n for n in (self.next or []) if n is not self]
+        if non_self_next:
+            # Non-leaf → insert mode
+            self._handle_insert_mode(expansion_result)
+        else:
+            # Leaf → attach entry_nodes directly
+            for entry_node in entry_nodes:
+                self.add_next(entry_node)
+
+        # Post-wiring cross-boundary cycle check (S2 fix)
+        self._validate_no_cross_boundary_cycles(subgraph.nodes)
+
+        # Propagate settings and expansion depth to subgraph nodes
+        self._propagate_settings_to_subgraph(subgraph.nodes)
+
+        # Mark expansion as applied (Req 28 — self-loop won't re-expand)
+        self._expansion_applied = True
+
+        return expansion_result.result
+
     def _run(self, *args, **kwargs):
+        self._expansion_applied = False
         stop_flag = WorkGraphStopFlags.Continue
 
         # region Process a special scenario when input is the AbstainResult flag
@@ -600,10 +1023,42 @@ class WorkGraphNode(Node, WorkNodeBase):
 
                         raise err
 
-                    # Handle NextNodesSelector return value first
+                    # Track whether stop_flag was already determined by expansion handling
+                    _stop_flag_from_expansion = None
+                    _expansion_include_self = None
+                    _expansion_include_others = None
+
+                    # Req 29: Stop-flag composition — detect (StopFlag, GraphExpansionResult) tuples
+                    if (isinstance(result, tuple) and len(result) == 2
+                            and isinstance(result[0], WorkGraphStopFlags)
+                            and isinstance(result[1], GraphExpansionResult)):
+                        _stop_flag_from_expansion = result[0]
+                        expansion_result = result[1]
+                        _expansion_include_self = expansion_result.include_self
+                        _expansion_include_others = expansion_result.include_others
+                        result = self._handle_graph_expansion(expansion_result, *args, **kwargs)
+                    elif isinstance(result, GraphExpansionResult):
+                        # Handle plain GraphExpansionResult before NextNodesSelector
+                        _expansion_include_self = result.include_self
+                        _expansion_include_others = result.include_others
+                        result = self._handle_graph_expansion(result, *args, **kwargs)
+
+                    # Handle NextNodesSelector return value
                     include_self, include_others, result = self._handle_next_nodes_selector(result)
 
-                    stop_flag, result = WorkGraphStopFlags.separate_stop_flag_from_result(result)
+                    # Req 23.3: GraphExpansionResult include_self/include_others take precedence
+                    # Only override if GER explicitly set non-default values
+                    if _expansion_include_self is not None and _expansion_include_self is not False:
+                        include_self = _expansion_include_self
+                    if _expansion_include_others is not None and _expansion_include_others is not True:
+                        include_others = _expansion_include_others
+
+                    # Stop-flag resolution: if expansion already determined the flag, use it;
+                    # otherwise use the existing helper for non-expansion results.
+                    if _stop_flag_from_expansion is not None:
+                        stop_flag = _stop_flag_from_expansion
+                    else:
+                        stop_flag, result = WorkGraphStopFlags.separate_stop_flag_from_result(result)
 
                     # After the core logic executes successfully, run the mandatory _post_process hook.
                     _result = self._post_process(result, *args, **kwargs)
@@ -721,6 +1176,7 @@ class WorkGraphNode(Node, WorkNodeBase):
           branch. Only the inter-sibling sequential ordering is relaxed.
           If strict sync-equivalent ordering is needed, use max_concurrency=1 on WorkGraph.
         """
+        self._expansion_applied = False
         stop_flag = WorkGraphStopFlags.Continue
 
         # region Process a special scenario when input is the AbstainResult flag
@@ -919,10 +1375,42 @@ class WorkGraphNode(Node, WorkNodeBase):
                             )
                             raise err
 
+                        # Track whether stop_flag was already determined by expansion handling
+                        _stop_flag_from_expansion = None
+                        _expansion_include_self = None
+                        _expansion_include_others = None
+
+                        # Req 29: Stop-flag composition — detect (StopFlag, GraphExpansionResult) tuples
+                        if (isinstance(result, tuple) and len(result) == 2
+                                and isinstance(result[0], WorkGraphStopFlags)
+                                and isinstance(result[1], GraphExpansionResult)):
+                            _stop_flag_from_expansion = result[0]
+                            expansion_result = result[1]
+                            _expansion_include_self = expansion_result.include_self
+                            _expansion_include_others = expansion_result.include_others
+                            result = self._handle_graph_expansion(expansion_result, *args, **kwargs)
+                        elif isinstance(result, GraphExpansionResult):
+                            # Handle plain GraphExpansionResult before NextNodesSelector
+                            _expansion_include_self = result.include_self
+                            _expansion_include_others = result.include_others
+                            result = self._handle_graph_expansion(result, *args, **kwargs)
+
                         # Handle NextNodesSelector return value
                         include_self, include_others, result = self._handle_next_nodes_selector(result)
 
-                        stop_flag, result = WorkGraphStopFlags.separate_stop_flag_from_result(result)
+                        # Req 23.3: GraphExpansionResult include_self/include_others take precedence
+                        # Only override if GER explicitly set non-default values
+                        if _expansion_include_self is not None and _expansion_include_self is not False:
+                            include_self = _expansion_include_self
+                        if _expansion_include_others is not None and _expansion_include_others is not True:
+                            include_others = _expansion_include_others
+
+                        # Stop-flag resolution: if expansion already determined the flag, use it;
+                        # otherwise use the existing helper for non-expansion results.
+                        if _stop_flag_from_expansion is not None:
+                            stop_flag = _stop_flag_from_expansion
+                        else:
+                            stop_flag, result = WorkGraphStopFlags.separate_stop_flag_from_result(result)
 
                         # Post-process hooks via call_maybe_async
                         _result = await call_maybe_async(self._post_process, result, *args, **kwargs)
@@ -1226,11 +1714,39 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
     # Example: {"research": 5, "investigation": 2}
     group_max_concurrency: Optional[Dict[str, int]] = attrib(default=None, kw_only=True)
 
+    # Dynamic expansion configuration (Task 6.1)
+    max_expansion_depth: int = attrib(default=0, kw_only=True)
+    max_total_nodes: int = attrib(default=200, kw_only=True)
+    subgraph_registry: Optional[Dict[str, Callable]] = attrib(default=None, kw_only=True)
+
     def __attrs_post_init__(self):
         super().__attrs_post_init__()
         for start_node in self.start_nodes:
             if isinstance(start_node, Debuggable):
                 start_node.set_parent_debuggable(self)
+        # Propagate expansion settings to all reachable nodes via BFS
+        self._propagate_expansion_settings()
+
+    def _propagate_expansion_settings(self):
+        """Propagate max_expansion_depth and max_total_nodes to all reachable nodes.
+
+        BFS from start_nodes following 'next' edges to ensure every node in the
+        graph has the correct expansion limits set.
+        """
+        from collections import deque
+        visited = set()
+        queue = deque(self.start_nodes)
+        while queue:
+            node = queue.popleft()
+            node_id = id(node)
+            if node_id in visited:
+                continue
+            visited.add(node_id)
+            node._max_expansion_depth = self.max_expansion_depth
+            node._max_total_nodes = self.max_total_nodes
+            for child in (node.next or []):
+                if id(child) not in visited:
+                    queue.append(child)
 
     def _post_process(self, result, *args, **kwargs):
         return tuple(x for x in result if x is not None)
@@ -1343,6 +1859,152 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
         return nodes
 
     # =========================================================================
+    # Dynamic Expansion Reconstruction (Task 6.2)
+    # =========================================================================
+
+    def _reconstruct_graph_expansions(self, *args, **kwargs):
+        """Reconstruct expanded subgraphs from persisted expansion records.
+
+        Called during resume, BEFORE start_nodes execution begins.
+        BFS from start_nodes following 'next' edges. For each node, checks
+        for a persisted expansion record via ``_exists_result("__graph_expansion__{name}")``.
+
+        Reconstruction priority per node:
+        1. Seed-based: import factory by factory_ref, call factory(seed) → SubgraphSpec
+        2. Registry-based: look up expansion_id in subgraph_registry, call factory(expansion_id)
+        3. If neither available: raise ExpansionReplayError
+           (dict form from to_serializable_obj is NOT sufficient — S6 fix)
+
+        After reconstruction, re-attaches the subgraph via add_next(), propagates
+        settings, and adds reconstructed nodes to the BFS queue for further traversal.
+        """
+        from collections import deque
+
+        # Fast-path skip when expansion is disabled and no registry configured.
+        if self.max_expansion_depth == 0 and self.subgraph_registry is None:
+            return
+
+        visited = set()
+        queue = deque(self.start_nodes)
+
+        while queue:
+            node = queue.popleft()
+            if id(node) in visited:
+                continue
+            visited.add(id(node))
+
+            # Check for persisted expansion record
+            result_id = f"__graph_expansion__{node.name}"
+            try:
+                result_path = node._resolve_result_path(result_id, *args, **kwargs)
+                exists = node._exists_result(result_id=result_id, result_path=result_path)
+            except (NotImplementedError, Exception):
+                exists = None
+
+            if exists is not None and exists is not False:
+                # Load the expansion record
+                record = node._load_result(
+                    result_id=result_id,
+                    result_path_or_preloaded_result=(
+                        result_path if isinstance(exists, bool) else exists
+                    ),
+                )
+
+                reconstructed_subgraph = None
+                seed = record.get("seed")
+                factory_module = record.get("factory_module")
+                factory_qualname = record.get("factory_qualname")
+                expansion_id = record.get("expansion_id")
+
+                # Priority 1: Seed-based reconstruction
+                if factory_module is not None and factory_qualname is not None:
+                    try:
+                        import importlib
+                        import operator
+                        module = importlib.import_module(factory_module)
+                        factory = operator.attrgetter(factory_qualname)(module)
+                        reconstructed_subgraph = factory(seed)
+                    except (ImportError, AttributeError, Exception) as e:
+                        raise ExpansionReplayError(
+                            f"Failed to reconstruct graph expansion for node "
+                            f"'{node.name}' from seed. Factory '{factory_module}.{factory_qualname}' "
+                            f"could not be imported: {e}"
+                        )
+
+                # Priority 2: Registry-based
+                if reconstructed_subgraph is None:
+                    if (self.subgraph_registry is not None
+                            and expansion_id is not None
+                            and expansion_id in self.subgraph_registry):
+                        factory = self.subgraph_registry[expansion_id]
+                        reconstructed_subgraph = factory(expansion_id)
+
+                # No fallback to pickle/dict — dict form is observability only (S6 fix)
+                if reconstructed_subgraph is None:
+                    raise ExpansionReplayError(
+                        f"Cannot reconstruct graph expansion for node '{node.name}' "
+                        f"(expansion_id='{expansion_id}'). Provide a seed-based "
+                        f"reconstruct_from_seed or register a factory in subgraph_registry. "
+                        f"The serialized dict form is for observability only and cannot "
+                        f"reconstruct executable WorkGraphNode instances."
+                    )
+
+                # Re-attach subgraph to the node
+                if isinstance(reconstructed_subgraph, SubgraphSpec):
+                    was_insert_mode = record.get("was_insert_mode", False)
+                    original_downstream_names = record.get("original_downstream_names", [])
+
+                    if was_insert_mode and original_downstream_names:
+                        # Insert-mode reconstruction: detach original downstream,
+                        # attach subgraph entries, wire subgraph leaves to original downstream
+                        original_downstream = [
+                            n for n in (node.next or []) if n is not node
+                            and n.name in original_downstream_names
+                        ]
+                        for child in original_downstream:
+                            node.next.remove(child)
+                            if node in (child.previous or []):
+                                child.previous.remove(node)
+                        for entry_node in reconstructed_subgraph.entry_nodes:
+                            node.add_next(entry_node)
+                        # Find subgraph leaves and wire to original downstream
+                        sg_node_ids = {id(n) for n in reconstructed_subgraph.nodes}
+                        for sg_node in reconstructed_subgraph.nodes:
+                            has_internal_next = any(
+                                id(n) in sg_node_ids for n in (sg_node.next or [])
+                                if n is not sg_node
+                            )
+                            if not has_internal_next:
+                                for child in original_downstream:
+                                    sg_node.add_next(child)
+                    else:
+                        # Leaf-mode reconstruction: simply add entry nodes
+                        for entry_node in reconstructed_subgraph.entry_nodes:
+                            node.add_next(entry_node)
+
+                    # Propagate settings
+                    for sg_node in reconstructed_subgraph.nodes:
+                        sg_node._expansion_depth = record.get("expansion_depth", 0) + 1
+                        sg_node._max_expansion_depth = self.max_expansion_depth
+                        sg_node._max_total_nodes = self.max_total_nodes
+                    node._propagate_settings_to_subgraph(reconstructed_subgraph.nodes)
+                    node._expansion_applied = True
+
+                    # Add reconstructed nodes to traversal queue
+                    for sg_node in reconstructed_subgraph.nodes:
+                        queue.append(sg_node)
+                else:
+                    raise ExpansionReplayError(
+                        f"Factory for expansion '{expansion_id}' returned "
+                        f"{type(reconstructed_subgraph).__name__}, expected SubgraphSpec."
+                    )
+
+            # Continue BFS to downstream nodes
+            for next_node in (node.next or []):
+                if id(next_node) not in visited:
+                    queue.append(next_node)
+
+    # =========================================================================
     # Phase 4: Queue-Based Execution Support
     # =========================================================================
 
@@ -1393,6 +2055,11 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
                 kwargs=rel_kwargs,
                 default_return_or_raise=node._get_fallback_result(*args, **kwargs),
             )
+
+            # Handle GraphExpansionResult before NextNodesSelector
+            if isinstance(result, GraphExpansionResult):
+                expansion_result = result
+                result = node._handle_graph_expansion(expansion_result, *args, **kwargs)
 
             # Handle NextNodesSelector
             include_self, include_others, actual_result = node._handle_next_nodes_selector(result)
@@ -1585,6 +2252,14 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
             # NORMAL SUCCESS PATH
             # ============================================================
 
+            # Handle GraphExpansionResult before NextNodesSelector
+            if isinstance(result, GraphExpansionResult):
+                expansion_result = result
+                result = node._handle_graph_expansion(expansion_result, *task_state.input_args, **task_state.input_kwargs)
+                # Update node_map with newly added subgraph nodes
+                for sg_node in expansion_result.subgraph.nodes:
+                    node_map[sg_node.name] = sg_node
+
             # Handle NextNodesSelector
             include_self, include_others, actual_result = node._handle_next_nodes_selector(result)
 
@@ -1746,6 +2421,10 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
         # This prevents stale items from previous runs (e.g., after Terminate) from corrupting this run
         self._clear_all_node_queues()
 
+        # Reconstruct graph expansions from persisted records when resuming
+        if self.resume_with_saved_results is not False:
+            self._reconstruct_graph_expansions(*args, **kwargs)
+
         output = []
         is_loaded_from_saved_results = []
         stop_flag = WorkGraphStopFlags.Continue
@@ -1814,6 +2493,10 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
         """
         # Clear all node queues for fresh execution
         self._clear_all_node_queues()
+
+        # Reconstruct graph expansions from persisted records when resuming
+        if self.resume_with_saved_results is not False:
+            self._reconstruct_graph_expansions(*args, **kwargs)
 
         _EMPTY = object()  # Sentinel — distinguishes "no result" from "result is None"
 

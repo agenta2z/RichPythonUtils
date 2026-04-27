@@ -1,4 +1,5 @@
 import glob
+import importlib
 import json
 import os
 import pickle
@@ -7,14 +8,24 @@ import shutil
 from abc import ABC
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, Optional, Sequence, Callable, Union
+from typing import Any, Dict, List, Optional, Sequence, Callable, Union
 
 from attr import attrs, attrib
 
-from rich_python_utils.common_objects.workflow.common.exceptions import WorkflowAborted
+from rich_python_utils.common_objects.workflow.common.exceptions import (
+    WorkflowAborted,
+    ExpansionConfigError,
+    ExpansionReplayError,
+    ExpansionLimitExceeded,
+)
+from rich_python_utils.common_objects.workflow.common.expansion import (
+    ExpansionResult,
+    ExpansionRecord,
+)
 from rich_python_utils.common_objects.workflow.common.step_result_save_options import (
     StepResultSaveOptions
 )
+from rich_python_utils.common_objects.workflow.common.step_wrapper import StepWrapper
 from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
 from rich_python_utils.common_objects.workflow.common.worknode_base import WorkNodeBase
 from rich_python_utils.common_utils.async_utils import call_maybe_async
@@ -147,6 +158,9 @@ class Workflow(WorkNodeBase, ABC):
     _steps = attrib(type=Sequence[Callable], default=None)
     _state = attrib(default=None, init=False)
     max_loop_iterations = attrib(type=int, default=10)
+    max_expansion_events = attrib(type=int, default=0)
+    max_total_steps = attrib(type=int, default=100)
+    expansion_step_registry = attrib(type=Optional[Dict[str, Callable]], default=None)
 
     # ------------------------------------------------------------------
     # State & step hooks (override in subclasses)
@@ -203,11 +217,360 @@ class Workflow(WorkNodeBase, ABC):
         raise ValueError(f"Loop target step '{target}' not found")
 
     # ------------------------------------------------------------------
+    # Dynamic expansion methods
+    # ------------------------------------------------------------------
+
+    def _reset_expansion_state(self):
+        """Reset per-run expansion state. Called at top of _run/_arun.
+
+        Prevents cross-run leaks when the same Workflow instance is run
+        multiple times (C2 fix).
+        """
+        self._expansion_count = 0
+        self._expansion_records: List[ExpansionRecord] = []
+        self._expansion_active = False
+
+    def _validate_seed_factory(self, fn):
+        """Validate that *reconstruct_from_seed* is importable.
+
+        Performs explicit ``hasattr(fn, '__qualname__')`` check before
+        accessing ``fn.__qualname__``, to handle ``functools.partial``
+        objects cleanly.
+
+        Raises:
+            ExpansionConfigError: for lambdas, closures, or objects
+                missing ``__module__``/``__qualname__``.
+        """
+        if not hasattr(fn, '__qualname__'):
+            raise ExpansionConfigError(
+                f"reconstruct_from_seed {fn!r} has no __qualname__ attribute. "
+                "It must be a module-level function (not a functools.partial, "
+                "lambda, or closure)."
+            )
+        if not hasattr(fn, '__module__'):
+            raise ExpansionConfigError(
+                f"reconstruct_from_seed {fn!r} has no __module__ attribute. "
+                "It must be a module-level function."
+            )
+        qualname = fn.__qualname__
+        if '<lambda>' in qualname:
+            raise ExpansionConfigError(
+                f"reconstruct_from_seed must not be a lambda (got qualname={qualname!r}). "
+                "Use a named module-level function instead."
+            )
+        if '<locals>' in qualname:
+            raise ExpansionConfigError(
+                f"reconstruct_from_seed must not be a closure (got qualname={qualname!r}). "
+                "Use a named module-level function instead."
+            )
+
+    def _get_loop_count_key(self, step, step_index):
+        """Return name-based key when expansion active, index-based otherwise.
+
+        Assigns synthetic name ``__step_{index}__`` for unnamed steps when
+        expansion is active (Req 31).
+        """
+        if self._expansion_active:
+            name = getattr(step, 'name', None)
+            if name is None:
+                name = f"__step_{step_index}__"
+            return name
+        return step_index
+
+    def _migrate_loop_counts_to_names(self):
+        """Migrate int-keyed ``_loop_counts`` to name-keyed using current ``_steps``.
+
+        Called when the first expansion occurs to switch from index-based to
+        name-based loop count tracking (Req 31, Req 34.2).
+        """
+        if not self._loop_counts:
+            return
+        new_counts = {}
+        for key, value in self._loop_counts.items():
+            if isinstance(key, int) and 0 <= key < len(self._steps):
+                step = self._steps[key]
+                name = getattr(step, 'name', None)
+                if name is None:
+                    name = f"__step_{key}__"
+                new_counts[name] = value
+            else:
+                # Keep non-int or out-of-range keys as-is
+                new_counts[key] = value
+        self._loop_counts = new_counts
+
+    def _resolve_integer_loop_back_to_targets(self):
+        """Resolve integer loop_back_to targets to step names on first expansion.
+
+        When expansion shifts indices, integer-based loop_back_to targets would
+        point at wrong steps. This method resolves all existing integer targets
+        to their corresponding step names. If the target step has no name, a
+        synthetic name is assigned (Req 37.1).
+        """
+        if not self._steps:
+            return
+        # Convert _steps to list if tuple so we can mutate StepWrapper attributes
+        if isinstance(self._steps, tuple):
+            self._steps = list(self._steps)
+
+        for step in self._steps:
+            loop_back_to = getattr(step, 'loop_back_to', None)
+            if loop_back_to is not None and isinstance(loop_back_to, int):
+                if 0 <= loop_back_to < len(self._steps):
+                    target_step = self._steps[loop_back_to]
+                    target_name = getattr(target_step, 'name', None)
+                    if target_name is None:
+                        # Assign synthetic name to unnamed target step
+                        target_name = f"__step_{loop_back_to}__"
+                        if isinstance(target_step, StepWrapper):
+                            target_step.name = target_name
+                        elif hasattr(target_step, 'name'):
+                            target_step.name = target_name
+                    # Update loop_back_to to use name instead of index
+                    if isinstance(step, StepWrapper):
+                        step.loop_back_to = target_name
+                    elif hasattr(step, 'loop_back_to'):
+                        step.loop_back_to = target_name
+
+    def _handle_expansion(self, step_index, expansion_result, state,
+                          orig_args=None, orig_kwargs=None):
+        """Process an ExpansionResult: validate, insert steps, record.
+
+        Args:
+            step_index: Index of the step that returned the ExpansionResult.
+            expansion_result: The ExpansionResult returned by the step.
+            state: Current workflow state dict.
+            orig_args: Original positional args to the emitter step (for splice mode).
+            orig_kwargs: Original keyword args to the emitter step (for splice mode).
+
+        Returns:
+            The ``expansion_result.result`` (the step's actual output).
+        """
+        new_steps = expansion_result.new_steps
+
+        # Empty/None new_steps is a no-op (Req 9.1)
+        if not new_steps:
+            return expansion_result.result
+
+        # Check max_expansion_events limit (Req 6.1, 6.2)
+        if self._expansion_count >= self.max_expansion_events:
+            self.log_warning(
+                f"Expansion limit reached ({self.max_expansion_events}). "
+                f"Ignoring expansion at step index {step_index}."
+            )
+            return expansion_result.result
+
+        # Validate all new_steps are callable (Req 9.4)
+        for idx, s in enumerate(new_steps):
+            if not callable(s):
+                raise TypeError(
+                    f"new_steps[{idx}] is not callable: {s!r}"
+                )
+
+        # Check max_total_steps limit (Req 6.3, 6.4)
+        new_total = len(self._steps) + len(new_steps)
+        if new_total > self.max_total_steps:
+            raise ExpansionLimitExceeded(
+                f"Inserting {len(new_steps)} steps would bring total to "
+                f"{new_total}, exceeding max_total_steps={self.max_total_steps}."
+            )
+
+        # Check name uniqueness (Req 2.3)
+        existing_names = set()
+        for s in self._steps:
+            n = getattr(s, 'name', None)
+            if n is not None:
+                existing_names.add(n)
+        for s in new_steps:
+            n = getattr(s, 'name', None)
+            if n is not None:
+                if n in existing_names:
+                    raise ValueError(
+                        f"Duplicate step name in expansion: {n!r}"
+                    )
+                existing_names.add(n)
+
+        # Validate seed factory if provided (Req 25.4)
+        factory_module = None
+        factory_qualname = None
+        if expansion_result.reconstruct_from_seed is not None:
+            self._validate_seed_factory(expansion_result.reconstruct_from_seed)
+            factory_module = expansion_result.reconstruct_from_seed.__module__
+            factory_qualname = expansion_result.reconstruct_from_seed.__qualname__
+
+        # Convert _steps to list if tuple so we can mutate it
+        if isinstance(self._steps, tuple):
+            self._steps = list(self._steps)
+
+        # Wrap plain callables in StepWrapper for synthetic name tracking (S4 fix)
+        wrapped_steps = []
+        for idx, s in enumerate(new_steps):
+            if not isinstance(s, StepWrapper) and not hasattr(s, 'name'):
+                synthetic_name = f"__expanded_{self._expansion_count}_{idx}__"
+                s = StepWrapper(s, name=synthetic_name)
+            wrapped_steps.append(s)
+
+        # Insert new_steps at step_index + 1 (Req 2.1)
+        insert_pos = step_index + 1
+        for idx, s in enumerate(wrapped_steps):
+            self._steps.insert(insert_pos + idx, s)
+
+        # Get the expanding step's name for the record (S1 fix: use name, not index)
+        expanding_step = self._steps[step_index]
+        expanding_step_name = getattr(expanding_step, 'name', None) or str(step_index)
+
+        # Create ExpansionRecord
+        record = ExpansionRecord(
+            after_step_name=expanding_step_name,
+            expansion_id=expansion_result.expansion_id,
+            num_steps=len(wrapped_steps),
+            seed=expansion_result.seed,
+            factory_module=factory_module,
+            factory_qualname=factory_qualname,
+        )
+        self._expansion_records.append(record)
+
+        # Switch to name-based loop counts on first expansion (Req 31)
+        if not self._expansion_active:
+            self._migration_needed = True
+            self._migrate_loop_counts_to_names()
+            self._resolve_integer_loop_back_to_targets()  # Req 37
+            self._expansion_active = True
+
+        # Update expansion count and state (Req 7.3)
+        self._expansion_count += 1
+        if state is not None:
+            state["__expansion_count"] = self._expansion_count
+
+        # Handle splice mode (Req 26): store original args for first expanded step
+        if expansion_result.mode == 'splice':
+            self._splice_orig_args = orig_args
+            self._splice_orig_kwargs = orig_kwargs
+            self._splice_step_index = step_index + 1  # first expanded step
+
+        return expansion_result.result
+
+    def _reconstruct_expansions(self, checkpoint, *args, **kwargs):
+        """Reconstruct expanded steps from checkpoint expansion records.
+
+        Priority order:
+        1. Seed-based: import factory by factory_ref, call factory(seed)
+        2. Registry-based: look up expansion_id in expansion_step_registry
+        3. Error: raise indicating reconstruction method required
+
+        Raises:
+            ExpansionReplayError: if seed-based reconstruction fails.
+            TypeError: if no reconstruction method succeeds.
+        """
+        expansions = checkpoint.get("expansions")
+        if not expansions:
+            return
+
+        # Convert _steps to list if tuple
+        if isinstance(self._steps, tuple):
+            self._steps = list(self._steps)
+
+        for rec_data in expansions:
+            # Support both dict and ExpansionRecord
+            if isinstance(rec_data, dict):
+                after_step_name = rec_data.get("after_step_name")
+                expansion_id = rec_data.get("expansion_id")
+                num_steps = rec_data.get("num_steps", 0)
+                seed = rec_data.get("seed")
+                factory_module = rec_data.get("factory_module")
+                factory_qualname = rec_data.get("factory_qualname")
+            else:
+                after_step_name = rec_data.after_step_name
+                expansion_id = rec_data.expansion_id
+                num_steps = rec_data.num_steps
+                seed = rec_data.seed
+                factory_module = rec_data.factory_module
+                factory_qualname = rec_data.factory_qualname
+
+            # Resolve insertion point by step NAME (S1 fix)
+            insert_after_idx = None
+            for idx, step in enumerate(self._steps):
+                name = getattr(step, 'name', None)
+                if name == after_step_name:
+                    insert_after_idx = idx
+                    break
+            # Fallback: try parsing as int index if name lookup fails
+            if insert_after_idx is None:
+                try:
+                    insert_after_idx = int(after_step_name)
+                except (ValueError, TypeError):
+                    raise ExpansionReplayError(
+                        f"Cannot find step named {after_step_name!r} for "
+                        f"expansion reconstruction."
+                    )
+
+            reconstructed_steps = None
+
+            # Priority 1: Seed-based reconstruction
+            if seed is not None and factory_module and factory_qualname:
+                try:
+                    mod = importlib.import_module(factory_module)
+                    # Navigate dotted qualname (e.g., "Class.method")
+                    obj = mod
+                    for part in factory_qualname.split('.'):
+                        obj = getattr(obj, part)
+                    factory_fn = obj
+                    reconstructed_steps = factory_fn(seed)
+                except Exception as e:
+                    raise ExpansionReplayError(
+                        f"Seed-based reconstruction failed for expansion "
+                        f"after step {after_step_name!r} "
+                        f"(factory={factory_module}.{factory_qualname}): {e}"
+                    ) from e
+
+            # Priority 2: Registry-based reconstruction
+            if reconstructed_steps is None and expansion_id is not None:
+                if self.expansion_step_registry and expansion_id in self.expansion_step_registry:
+                    factory = self.expansion_step_registry[expansion_id]
+                    reconstructed_steps = factory(expansion_id)
+
+            # No reconstruction method available
+            if reconstructed_steps is None:
+                raise TypeError(
+                    f"Cannot reconstruct expansion after step {after_step_name!r} "
+                    f"(expansion_id={expansion_id!r}). Provide an "
+                    f"expansion_step_registry or seed-based reconstruction."
+                )
+
+            # Wrap plain callables in StepWrapper (S4 fix)
+            wrapped = []
+            for idx, s in enumerate(reconstructed_steps):
+                if not isinstance(s, StepWrapper) and not hasattr(s, 'name'):
+                    synthetic_name = f"__reconstructed_{expansion_id or after_step_name}_{idx}__"
+                    s = StepWrapper(s, name=synthetic_name)
+                wrapped.append(s)
+
+            # Insert at correct position
+            insert_pos = insert_after_idx + 1
+            for idx, s in enumerate(wrapped):
+                self._steps.insert(insert_pos + idx, s)
+
+            # Rebuild the ExpansionRecord for tracking
+            record = ExpansionRecord(
+                after_step_name=after_step_name,
+                expansion_id=expansion_id,
+                num_steps=len(wrapped),
+                seed=seed,
+                factory_module=factory_module,
+                factory_qualname=factory_qualname,
+            )
+            self._expansion_records.append(record)
+
+        # Mark expansion as active since we reconstructed
+        self._expansion_active = True
+
+    # ------------------------------------------------------------------
     # Loop + resume checkpoint helpers
     # ------------------------------------------------------------------
 
     def _has_loop_steps(self) -> bool:
-        """Detect if any step uses loop_back_to."""
+        """Detect if any step uses loop_back_to or expansion is enabled (Req 32)."""
+        if self.max_expansion_events > 0:
+            return True
         return any(
             getattr(s, 'loop_back_to', None) is not None
             for s in (self._steps or ())
@@ -247,6 +610,7 @@ class Workflow(WorkNodeBase, ABC):
                     "next_step_index": ckpt.next_step_index,
                     "loop_counts": ckpt.loop_counts,
                     "state": ckpt.state,
+                    "expansions": getattr(ckpt, 'expansions', []),
                 }
             if not isinstance(ckpt, dict) or "next_step_index" not in ckpt:
                 return None
@@ -263,6 +627,13 @@ class Workflow(WorkNodeBase, ABC):
             ckpt_state = ckpt.get("state")
             if ckpt_state is not None:
                 self._setup_child_workflows(ckpt_state, *args, **kwargs)
+            # Reconstruct expanded steps from checkpoint (v1→v2 migration: defaults to empty)
+            self._reconstruct_expansions(ckpt, *args, **kwargs)
+            # Req 26.5: Restore splice state from checkpoint if present
+            if "splice_step_index" in ckpt:
+                self._splice_orig_args = ckpt.get("splice_orig_args")
+                self._splice_orig_kwargs = ckpt.get("splice_orig_kwargs")
+                self._splice_step_index = ckpt["splice_step_index"]
             return ckpt
         except Exception:
             return None
@@ -301,14 +672,44 @@ class Workflow(WorkNodeBase, ABC):
             self._state_picklability_verified = True
 
         checkpoint_dict = {
-            "version": 1,
+            "version": 2 if self._expansion_records else 1,
             "exec_seq": self._exec_seq,
             "step_index": step_index,
             "result_id": last_saved_result_id,
             "next_step_index": next_step_index,
             "loop_counts": dict(self._loop_counts),
             "state": state,
+            "expansions": [vars(r) for r in self._expansion_records],
         }
+
+        # Req 26.5: Persist splice state for checkpoint/resume
+        _splice_args = getattr(self, '_splice_orig_args', None)
+        _splice_kwargs = getattr(self, '_splice_orig_kwargs', None)
+        _splice_idx = getattr(self, '_splice_step_index', None)
+        if _splice_idx is not None:
+            # Validate serializability of splice args
+            if self.checkpoint_mode == 'jsonfy':
+                try:
+                    from rich_python_utils.io_utils.json_io import jsonfy
+                    jsonfy(_splice_args)
+                    jsonfy(_splice_kwargs)
+                except Exception as e:
+                    raise TypeError(
+                        f"Splice mode original args/kwargs are not jsonfy-serializable "
+                        f"and cannot be checkpointed. Original error: {e}"
+                    ) from e
+            else:
+                try:
+                    pickle.dumps(_splice_args)
+                    pickle.dumps(_splice_kwargs)
+                except Exception as e:
+                    raise TypeError(
+                        f"Splice mode original args/kwargs are not picklable "
+                        f"and cannot be checkpointed. Original error: {e}"
+                    ) from e
+            checkpoint_dict["splice_orig_args"] = _splice_args
+            checkpoint_dict["splice_orig_kwargs"] = _splice_kwargs
+            checkpoint_dict["splice_step_index"] = _splice_idx
 
         if self.checkpoint_mode == 'jsonfy' and CheckpointState is not None:
             checkpoint_dict = CheckpointState(**checkpoint_dict)
@@ -558,7 +959,8 @@ class Workflow(WorkNodeBase, ABC):
         """Serialize Workflow to dict.
         
         Serializes step configuration and stores step identifiers that can
-        be resolved during deserialization.
+        be resolved during deserialization. Dynamically added steps are marked
+        with ``"expanded": True`` and their ``expansion_id``.
         
         Args:
             mode: Serialization mode ('auto', 'dict', 'pickle')
@@ -577,14 +979,41 @@ class Workflow(WorkNodeBase, ABC):
                 result_pass_down_mode_str = f"callable:{self.result_pass_down_mode.__module__}.{self.result_pass_down_mode.__name__}"
             else:
                 result_pass_down_mode_str = None  # Non-serializable callable
-        
+
+        # Build a set of expanded step indices and their expansion_ids
+        # from _expansion_records so we can mark them in the serialized output.
+        expanded_indices: Dict[int, Optional[str]] = {}
+        expansion_records = getattr(self, '_expansion_records', None) or []
+        if expansion_records and self._steps:
+            for record in expansion_records:
+                # Find the step that triggered the expansion by name
+                after_name = record.after_step_name
+                after_idx = None
+                for idx, step in enumerate(self._steps):
+                    if getattr(step, 'name', None) == after_name:
+                        after_idx = idx
+                        break
+                if after_idx is None:
+                    # Fallback: try parsing as int index
+                    try:
+                        after_idx = int(after_name)
+                    except (ValueError, TypeError):
+                        continue
+                # Mark the inserted steps (after_idx+1 .. after_idx+num_steps)
+                for offset in range(record.num_steps):
+                    expanded_indices[after_idx + 1 + offset] = record.expansion_id
+
         # Serialize step identifiers
         step_identifiers = []
         if self._steps:
             for i, step in enumerate(self._steps):
-                step_identifiers.append(self._get_step_identifier(step, i))
-        
-        return {
+                ident = self._get_step_identifier(step, i)
+                if i in expanded_indices:
+                    ident['expanded'] = True
+                    ident['expansion_id'] = expanded_indices[i]
+                step_identifiers.append(ident)
+
+        result = {
             '_type': type(self).__name__,
             '_module': type(self).__module__,
             'version': '1.0',
@@ -602,7 +1031,16 @@ class Workflow(WorkNodeBase, ABC):
             }
         }
 
+        # Include expansion_records in the serialized output when present
+        if expansion_records:
+            result['expansion_records'] = [vars(r) for r in expansion_records]
+
+        return result
+
     def _run(self, *args, **kwargs):
+        # Reset per-run expansion state (C2 fix: prevents cross-run leaks)
+        self._reset_expansion_state()
+
         # If no steps are defined, simply return as there's nothing to run.
         if not self._steps:
             return
@@ -745,6 +1183,8 @@ class Workflow(WorkNodeBase, ABC):
                 self._previous_attempt_info = marker
 
         try:  # OUTER try: catches WorkflowAborted → _handle_abort
+            _splice_mode = False  # Req 26: set True when emitter uses splice mode
+
             while i < len(self._steps):
                 this_step = self._steps[i]
                 step_name = self._get_step_name(this_step, i)
@@ -763,7 +1203,17 @@ class Workflow(WorkNodeBase, ABC):
 
                 try:  # INNER try: per-step error handling
                     # Handle input arguments to the step:
-                    if i > 0:
+                    # Req 26.4: Splice mode — first expanded step receives emitter's original input
+                    _splice_step_idx = getattr(self, '_splice_step_index', None)
+                    if _splice_step_idx is not None and i == _splice_step_idx:
+                        _s_args = self._splice_orig_args or args
+                        _s_kwargs = self._splice_orig_kwargs or kwargs
+                        step_result = this_step(*_s_args, **_s_kwargs)
+                        # Clean up splice state after first expanded step executes
+                        del self._splice_orig_args
+                        del self._splice_orig_kwargs
+                        del self._splice_step_index
+                    elif i > 0:
                         prev_step_result = step_result
                         nargs, nkwargs = self._get_args_for_downstream(
                             prev_step_result, args, kwargs
@@ -800,6 +1250,21 @@ class Workflow(WorkNodeBase, ABC):
                             )
                         raise err
 
+                # Expansion check: after step execution, BEFORE _post_process (Req 35)
+                if isinstance(step_result, ExpansionResult):
+                    # Req 27: Forbidden combination check
+                    if getattr(this_step, 'loop_back_to', None) is not None:
+                        raise ExpansionConfigError(
+                            f"Step '{step_name}' has loop_back_to set and returned ExpansionResult. "
+                            "This combination is forbidden."
+                        )
+                    actual_result = step_result.result
+                    _splice_mode = step_result.mode == 'splice'
+                    self._handle_expansion(i, step_result, state,
+                                           orig_args=(nargs if i > 0 else args),
+                                           orig_kwargs=(nkwargs if i > 0 else kwargs))
+                    step_result = actual_result
+
                 # After the step executes successfully, run the mandatory _post_process hook.
                 _step_result = self._post_process(step_result, *args, **kwargs)
                 if _step_result is not None:
@@ -823,10 +1288,13 @@ class Workflow(WorkNodeBase, ABC):
                     self._state = state
 
                 # Save result based on the configured saving options.
+                # Req 26: Skip result save for emitter step when splice mode is active
                 enable_result_save = getattr(
                     this_step, 'enable_result_save', self.enable_result_save
                 )
-                if (enable_result_save is True
+                if _splice_mode:
+                    _splice_mode = False  # Reset after skipping save for emitter
+                elif (enable_result_save is True
                         or enable_result_save == StepResultSaveOptions.Always):
                     if _has_loops:
                         self._exec_seq += 1
@@ -856,9 +1324,10 @@ class Workflow(WorkNodeBase, ABC):
                             this_step, 'max_loop_iterations',
                             self.max_loop_iterations,
                         )
-                        count = self._loop_counts.get(i, 0)
+                        _lc_key = self._get_loop_count_key(this_step, i)
+                        count = self._loop_counts.get(_lc_key, 0)
                         if count < max_iters:
-                            self._loop_counts[i] = count + 1
+                            self._loop_counts[_lc_key] = count + 1
                             target_i = self._resolve_step_index(
                                 loop_back_to, self._steps
                             )
@@ -909,6 +1378,9 @@ class Workflow(WorkNodeBase, ABC):
         return step_result
 
     async def _arun(self, *args, **kwargs):
+        # Reset per-run expansion state (C2 fix: prevents cross-run leaks)
+        self._reset_expansion_state()
+
         # If no steps are defined, simply return as there's nothing to run.
         if not self._steps:
             return
@@ -1041,6 +1513,8 @@ class Workflow(WorkNodeBase, ABC):
                 self._previous_attempt_info = marker
 
         try:  # OUTER try: catches WorkflowAborted → _handle_abort
+            _splice_mode = False  # Req 26: set True when emitter uses splice mode
+
             while i < len(self._steps):
                 this_step = self._steps[i]
                 step_name = self._get_step_name(this_step, i)
@@ -1058,7 +1532,17 @@ class Workflow(WorkNodeBase, ABC):
                         )
 
                 try:  # INNER try: per-step error handling
-                    if i > 0:
+                    # Req 26.4: Splice mode — first expanded step receives emitter's original input
+                    _splice_step_idx = getattr(self, '_splice_step_index', None)
+                    if _splice_step_idx is not None and i == _splice_step_idx:
+                        _s_args = self._splice_orig_args or args
+                        _s_kwargs = self._splice_orig_kwargs or kwargs
+                        step_result = await call_maybe_async(this_step, *_s_args, **_s_kwargs)
+                        # Clean up splice state after first expanded step executes
+                        del self._splice_orig_args
+                        del self._splice_orig_kwargs
+                        del self._splice_step_index
+                    elif i > 0:
                         prev_step_result = step_result
                         nargs, nkwargs = self._get_args_for_downstream(
                             prev_step_result, args, kwargs
@@ -1094,6 +1578,21 @@ class Workflow(WorkNodeBase, ABC):
                             )
                         raise err
 
+                # Expansion check: after step execution, BEFORE _post_process (Req 35)
+                if isinstance(step_result, ExpansionResult):
+                    # Req 27: Forbidden combination check
+                    if getattr(this_step, 'loop_back_to', None) is not None:
+                        raise ExpansionConfigError(
+                            f"Step '{step_name}' has loop_back_to set and returned ExpansionResult. "
+                            "This combination is forbidden."
+                        )
+                    actual_result = step_result.result
+                    _splice_mode = step_result.mode == 'splice'
+                    self._handle_expansion(i, step_result, state,
+                                           orig_args=(nargs if i > 0 else args),
+                                           orig_kwargs=(nkwargs if i > 0 else kwargs))
+                    step_result = actual_result
+
                 # Post-process hooks
                 _step_result = await call_maybe_async(self._post_process, step_result, *args, **kwargs)
                 if _step_result is not None:
@@ -1115,10 +1614,13 @@ class Workflow(WorkNodeBase, ABC):
                     self._state = state
 
                 # Save result based on the configured saving options.
+                # Req 26: Skip result save for emitter step when splice mode is active
                 enable_result_save = getattr(
                     this_step, 'enable_result_save', self.enable_result_save
                 )
-                if (enable_result_save is True
+                if _splice_mode:
+                    _splice_mode = False  # Reset after skipping save for emitter
+                elif (enable_result_save is True
                         or enable_result_save == StepResultSaveOptions.Always):
                     if _has_loops:
                         self._exec_seq += 1
@@ -1148,9 +1650,10 @@ class Workflow(WorkNodeBase, ABC):
                             this_step, 'max_loop_iterations',
                             self.max_loop_iterations,
                         )
-                        count = self._loop_counts.get(i, 0)
+                        _lc_key = self._get_loop_count_key(this_step, i)
+                        count = self._loop_counts.get(_lc_key, 0)
                         if count < max_iters:
-                            self._loop_counts[i] = count + 1
+                            self._loop_counts[_lc_key] = count + 1
                             target_i = self._resolve_step_index(
                                 loop_back_to, self._steps
                             )
@@ -1217,6 +1720,7 @@ class CheckpointState:
     next_step_index = attrib(default=0)
     loop_counts = attrib(factory=dict)
     state = attrib(default=None)
+    expansions = attrib(factory=list)
 
 
 # Update the module-level forward reference used by _try_load_checkpoint and _save_loop_checkpoint.

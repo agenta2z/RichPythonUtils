@@ -173,6 +173,17 @@ async def async_execute_with_retry(
     def _default_return_or_raise_terminal():
         """Consult default_return_or_raise at terminal."""
         nonlocal last_exception
+        # Surface the terminal exception once per chain so operators can see
+        # what drove retries. Per-attempt INFO logs already exist; this is the
+        # WARNING-level summary that fires only when retries are exhausted.
+        if last_exception is not None:
+            logging.getLogger(__name__).warning(
+                "async_execute_with_retry: retry chain exhausted after %d total "
+                "attempts. Last exception: %s: %s",
+                total_attempts_across_chain,
+                type(last_exception).__name__,
+                str(last_exception)[:500],
+            )
         # Normalize timeout errors before terminal
         if isinstance(last_exception, asyncio.TimeoutError):
             raise TimeoutError(

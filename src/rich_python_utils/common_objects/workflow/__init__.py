@@ -1,4 +1,9 @@
 from rich_python_utils.common_objects.workflow.common.exceptions import WorkflowAborted
+from rich_python_utils.common_objects.workflow.common.expansion import (
+    ExpansionResult,
+    GraphExpansionResult,
+    SubgraphSpec,
+)
 from rich_python_utils.common_objects.workflow.common.step_wrapper import StepWrapper
 from rich_python_utils.common_objects.workflow.stategraph import StateNode, StateGraph, StateGraphTracker
 from rich_python_utils.common_utils.async_utils import call_maybe_async, maybe_await
@@ -9,4 +14,5 @@ __all__ = [
     "artifact_type", "artifact_field",
     "StepWrapper",
     "StateNode", "StateGraph", "StateGraphTracker",
+    "ExpansionResult", "GraphExpansionResult", "SubgraphSpec",
 ]

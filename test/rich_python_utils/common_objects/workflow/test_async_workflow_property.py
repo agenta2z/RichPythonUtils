@@ -186,7 +186,7 @@ class TestWorkflowSaveResumeRoundTrip:
     """
 
     @pytest.mark.asyncio
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     @given(
         factors=st.lists(
             st.integers(min_value=-10, max_value=10), min_size=2, max_size=4

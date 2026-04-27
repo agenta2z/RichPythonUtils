@@ -32,6 +32,9 @@ Discoverability::
 """
 
 from rich_python_utils.config_utils._registry import (
+    AliasResolutionError,
+    MissingTargetError,
+    RegistryError,
     register,
     register_alias,
     register_class,
@@ -72,4 +75,8 @@ __all__ = [
     "resolve_target",
     "list_registered",
     "_reset_registry",
+    # Exceptions
+    "AliasResolutionError",
+    "MissingTargetError",
+    "RegistryError",
 ]

@@ -6,15 +6,20 @@ This module is the core of the config_utils package.  The public functions are
 
 from __future__ import annotations
 
+import abc
 import copy
 import importlib
 import inspect
 import logging
+import typing
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from rich_python_utils.config_utils._registry import (
+    _alias_alternatives,
     _registry,
+    AliasResolutionError,
+    MissingTargetError,
     resolve_target,
 )
 from rich_python_utils.config_utils._resolvers import (
@@ -260,6 +265,7 @@ def _walk(
     node: Any,
     _injectables: Optional[Dict[str, Any]] = None,
     _factory_configs: Optional[List[tuple]] = None,
+    _expected_cls: Optional[type] = None,
 ) -> None:
     """Recursively process a mutable dict/list tree.
 
@@ -287,7 +293,14 @@ def _walk(
        plain string matching a registered alias, expand it into
        ``{"_target_": resolved_path}``.
 
-    3. **Recursion** — recurse into all values with inherited injectables.
+    3. **Recursion** — recurse into all values with inherited injectables
+       and parent field type context (``_expected_cls``).
+
+    Parameters
+    ----------
+    _expected_cls : type or None
+        The parent field's declared type, used by D2 inference to infer
+        ``_target_`` when absent.  ``None`` at the root level.
     """
     if _injectables is None:
         _injectables = {}
@@ -310,11 +323,24 @@ def _walk(
         # (i.e., non-field injection sources).
 
         # 1. Resolve _target_ alias + attrs preprocessing
+        #    D2: If _target_ is absent, try to infer it from parent field type.
         cls = None
+        if "_target_" not in node:
+            inferred = _infer_target(_expected_cls, node)
+            if inferred is not None:
+                node["_target_"] = inferred
+
         if "_target_" in node and isinstance(node["_target_"], str):
             target = node["_target_"]
             if not target.startswith("${"):
                 node["_target_"] = resolve_target(target)
+                # D1 structural dispatch: if the original target was a
+                # registered alias with alternatives, pick the right
+                # candidate based on which unique fields appear in the node.
+                if target in _registry:
+                    node["_target_"] = _dispatch_alias(
+                        target, node["_target_"], node
+                    )
                 cls = _import_target(node["_target_"])
                 if cls is not None:
                     _filter_attrs_keys(node, cls, _factory_configs, local_injectables)
@@ -350,13 +376,172 @@ def _walk(
             if isinstance(val, str) and val in _registry:
                 node[key] = {"_target_": resolve_target(val)}
 
-        # 3. Recurse (injectables propagate to children)
-        for v in node.values():
-            _walk(v, _injectables=local_injectables, _factory_configs=_factory_configs)
+        # 3. Recurse (injectables + field type context propagate to children)
+        #    Build parent's field-type map once so children can infer _target_.
+        #    Use cls.__init__ for get_type_hints because plain classes store
+        #    annotations on __init__, not on the class itself.
+        field_types: Dict[str, Any] = {}
+        if cls is not None:
+            try:
+                field_types = typing.get_type_hints(cls.__init__, include_extras=False)
+            except Exception:
+                try:
+                    field_types = typing.get_type_hints(cls, include_extras=False)
+                except Exception:
+                    _logger.debug(
+                        "D2: typing.get_type_hints failed for %s — "
+                        "nested _target_ inference disabled for its children.",
+                        cls.__name__ if hasattr(cls, "__name__") else cls,
+                    )
+                    field_types = {}
+        for key, v in node.items():
+            # D2: For dict children without _target_, check __yaml_default_nested__
+            # on the parent class first (highest precedence), then fall back to
+            # type-based inference via _expected_cls.
+            child_expected_cls = field_types.get(key)
+            if (
+                cls is not None
+                and isinstance(v, dict)
+                and "_target_" not in v
+            ):
+                nested_alias = _check_yaml_default_nested(cls, key)
+                if nested_alias is not None:
+                    v["_target_"] = nested_alias
+            _walk(
+                v,
+                _injectables=local_injectables,
+                _factory_configs=_factory_configs,
+                _expected_cls=child_expected_cls,
+            )
 
     elif isinstance(node, list):
         for item in node:
-            _walk(item, _injectables=_injectables, _factory_configs=_factory_configs)
+            _walk(item, _injectables=_injectables, _factory_configs=_factory_configs, _expected_cls=None)
+
+
+# ---------------------------------------------------------------------------
+# D2: Optional _target_ inference from parent field type
+# ---------------------------------------------------------------------------
+
+def _infer_target(
+    _expected_cls: Optional[type],
+    node: dict,
+    path_for_error: str = "",
+) -> Optional[str]:
+    """Infer ``_target_`` from parent field type when not explicitly provided.
+
+    Precedence (highest first):
+
+    1. Parent class's ``__yaml_default_nested__`` ClassVar — explicit opt-in
+       mapping of field names to alias strings.
+    2. Parent field's declared type — only a single concrete non-abstract
+       class is eligible.  ``Optional[X]`` unwraps to ``X``.
+       ``Union[A, B]``, ``List[...]``, ABCs, and Protocols are NOT eligible.
+    3. Return ``None`` — Hydra raises its normal missing-``_target_`` error.
+    """
+    if _expected_cls is None:
+        return None
+
+    # The node must look like a config dict (has non-Hydra keys) but lack _target_.
+    # Pure scalar or empty dicts are not candidates for inference.
+    if not isinstance(node, dict) or "_target_" in node:
+        return None
+
+    # Unwrap Optional[X] and check for Union/generic types.
+    concrete = _unwrap_to_concrete(_expected_cls)
+    if concrete is None:
+        return None
+
+    # For type-based inference: only single concrete non-abstract class.
+    if _is_abstract_or_protocol(concrete):
+        return None
+
+    # Build the full import path for the concrete class.
+    try:
+        fqn = f"{concrete.__module__}.{concrete.__qualname__}"
+        # Verify it's importable (no nested classes with dots in qualname).
+        if concrete.__qualname__ != concrete.__name__:
+            return None
+        fqn = f"{concrete.__module__}.{concrete.__name__}"
+    except (AttributeError, TypeError):
+        return None
+
+    return fqn
+
+
+def _check_yaml_default_nested(
+    parent_cls: Optional[type],
+    field_name: str,
+) -> Optional[str]:
+    """Check parent class's ``__yaml_default_nested__`` for a field mapping.
+
+    Returns the alias string if found, ``None`` otherwise.
+    """
+    if parent_cls is None:
+        return None
+    defaults = getattr(parent_cls, "__yaml_default_nested__", None)
+    if defaults and isinstance(defaults, dict):
+        return defaults.get(field_name)
+    return None
+
+
+def _unwrap_to_concrete(tp: Any) -> Optional[type]:
+    """Unwrap ``Optional[X]`` to ``X``.  Return ``None`` for non-eligible types.
+
+    Eligible: a single concrete class (not generic, not ABC, not Protocol).
+    Not eligible: ``Union[A, B]``, ``List[...]``, ``Dict[...]``, ABCs, Protocols,
+    ``None``, non-type objects, ``typing.Any``.
+    """
+    # Reject typing.Any explicitly (it's a type in Python 3.11+)
+    if tp is typing.Any:
+        return None
+
+    origin = typing.get_origin(tp)
+
+    # Handle Optional[X] = Union[X, None] and Union[A, B, ...]
+    # Also handle PEP-604 syntax (X | None) which uses types.UnionType in 3.10+
+    _is_union = origin is Union
+    if not _is_union:
+        try:
+            import types as _types
+            _is_union = isinstance(tp, _types.UnionType)
+        except AttributeError:
+            pass  # Python < 3.10, no UnionType
+    if _is_union:
+        args = [a for a in typing.get_args(tp) if a is not type(None)]
+        if len(args) == 1:
+            # Optional[X] → unwrap to X
+            return _unwrap_to_concrete(args[0])
+        # Union[A, B] → not eligible
+        return None
+
+    # Handle generic types like List[...], Dict[...], Set[...], etc.
+    if origin is not None:
+        return None
+
+    # Must be an actual class
+    if not isinstance(tp, type):
+        return None
+
+    return tp
+
+
+def _is_abstract_or_protocol(cls: type) -> bool:
+    """Return True if *cls* is abstract (has unimplemented abstract methods)
+    or is a Protocol."""
+    # Check for ABC with abstract methods
+    if inspect.isabstract(cls):
+        return True
+    # Check for Protocol — runtime_checkable or not
+    if _is_protocol(cls):
+        return True
+    return False
+
+
+def _is_protocol(cls: type) -> bool:
+    """Check if *cls* is a typing.Protocol subclass."""
+    # Python 3.8+: Protocol classes have _is_protocol attribute
+    return getattr(cls, "_is_protocol", False)
 
 
 # ---------------------------------------------------------------------------
@@ -374,6 +559,77 @@ def _import_target(target_path: str) -> Optional[type]:
         return getattr(module, attr_name, None)
     except (ImportError, ModuleNotFoundError):
         return None
+
+
+def _accepted_param_names(cls: type) -> set[str]:
+    """Return the set of ``__init__`` parameter names for *cls*, excluding ``self``."""
+    try:
+        params = inspect.signature(cls.__init__).parameters
+    except (ValueError, TypeError):
+        return set()
+    return {name for name in params if name != "self"}
+
+
+def _dispatch_alias(alias: str, primary_fqn: str, node: dict) -> str:
+    """Structural dispatch: pick the right candidate class for a multi-class alias.
+
+    When ``register_alias(..., alternatives=[...])`` was used, this function
+    inspects the YAML node's user-supplied keys and each candidate's
+    ``__init__`` signature to find unique differentiator fields.
+
+    Returns the FQN of the selected candidate (may be the primary or an
+    alternative).
+
+    Raises ``AliasResolutionError`` when ≥2 candidates match.
+    """
+    alts = _alias_alternatives.get(alias, ())
+    if not alts:
+        return primary_fqn
+
+    candidates = [primary_fqn, *alts]
+    # Dedupe in case alternatives includes the primary FQN
+    seen = set()
+    deduped = []
+    for c in candidates:
+        if c not in seen:
+            seen.add(c)
+            deduped.append(c)
+    candidates = deduped
+
+    user_keys = {k for k in node.keys() if not k.startswith("_")}
+
+    accepted = {}
+    for fqn in candidates:
+        cls = _import_target(fqn)
+        if cls is None:
+            _logger.warning(
+                "alias %r: alternative %r could not be imported — skipping.",
+                alias, fqn,
+            )
+            continue
+        accepted[fqn] = _accepted_param_names(cls)
+
+    # Compute per-candidate unique fields (params accepted only by that candidate).
+    unique: dict[str, set[str]] = {}
+    for fqn, params in accepted.items():
+        other = set().union(*(p for f, p in accepted.items() if f != fqn))
+        unique[fqn] = params - other
+
+    matched = [fqn for fqn, uniq in unique.items() if uniq & user_keys]
+
+    if len(matched) == 1:
+        return matched[0]
+    if not matched:
+        _logger.info(
+            "alias %r → default %s (no differentiator field). "
+            "Variants differentiated by: %s",
+            alias, primary_fqn,
+            {fqn: sorted(uniq) for fqn, uniq in unique.items() if uniq},
+        )
+        return primary_fqn
+    raise AliasResolutionError(
+        f"Alias {alias!r} is ambiguous — candidates: {matched}"
+    )
 
 
 def _filter_attrs_keys(

@@ -355,3 +355,35 @@ class TestBackwardCompatibility:
         import asyncio
         from rich_python_utils.common_objects.workflow.workgraph import WorkGraph
         assert not asyncio.iscoroutinefunction(WorkGraph._run)
+
+
+# =============================================================================
+# Post-mortem fix 3: surface swallowed retry exceptions at terminal
+# =============================================================================
+
+
+class TestRetryTerminalExceptionLogging:
+    """Fix 3: when async_execute_with_retry exhausts the chain, log the
+    terminal exception at WARNING level once. Per-attempt INFO logs already
+    exist; this is the missing summary that fires only on exhaustion."""
+
+    @pytest.mark.asyncio
+    async def test_terminal_exception_logged_at_warning(self, caplog):
+        async def always_fail(_):
+            raise ValueError("boom")
+
+        caplog.set_level("WARNING")
+        with pytest.raises(ValueError):
+            await async_execute_with_retry(
+                func=always_fail,
+                max_retry=2,
+                args=["irrelevant"],
+                retry_on_exceptions=(ValueError,),
+            )
+        warnings = [
+            r for r in caplog.records
+            if r.levelname == "WARNING" and "retry chain exhausted" in r.message.lower()
+        ]
+        assert len(warnings) == 1
+        assert "ValueError" in warnings[0].message
+        assert "boom" in warnings[0].message

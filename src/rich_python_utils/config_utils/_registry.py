@@ -8,10 +8,27 @@ Registry is module-level global state. Use _reset_registry() in test fixtures.
 
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Dict, Optional, Sequence, Tuple
 
 _registry: Dict[str, str] = {}  # alias -> "module.ClassName"
 _registry_by_category: Dict[str, Dict[str, str]] = {}  # category -> {alias -> "module.ClassName"}
+_alias_alternatives: Dict[str, Tuple[str, ...]] = {}  # alias -> tuple of alternative FQNs
+
+
+# ---------------------------------------------------------------------------
+# Exception hierarchy
+# ---------------------------------------------------------------------------
+
+class RegistryError(Exception):
+    """Base exception for registry-related errors."""
+
+
+class AliasResolutionError(RegistryError):
+    """Raised when structural dispatch cannot unambiguously resolve an alias."""
+
+
+class MissingTargetError(RegistryError):
+    """Raised when ``_target_`` is absent and cannot be inferred."""
 
 
 def _make_import_path(cls: type) -> str:
@@ -58,12 +75,26 @@ def register_class(cls: type, alias: str, category: str = "default") -> None:
     _do_register(cls, alias, category)
 
 
-def register_alias(alias: str, import_path: str, category: str = "default") -> None:
+def register_alias(
+    alias: str,
+    import_path: str,
+    category: str = "default",
+    *,
+    alternatives: Sequence[str] = (),
+) -> None:
     """String-only registration — no class import needed.
 
     Preferred for bulk registration to avoid import cascades::
 
         register_alias('ClaudeAPI', 'agent_foundation...ClaudeApiInferencer', 'inferencer')
+
+    Parameters
+    ----------
+    alternatives:
+        Optional sequence of alternative FQNs that share this alias.
+        When present, structural dispatch (D1) selects among the primary
+        ``import_path`` and the alternatives based on which unique fields
+        appear in the YAML config node.
     """
     if alias in _registry and _registry[alias] != import_path:
         raise ValueError(
@@ -72,6 +103,8 @@ def register_alias(alias: str, import_path: str, category: str = "default") -> N
         )
     _registry[alias] = import_path
     _registry_by_category.setdefault(category, {})[alias] = import_path
+    if alternatives:
+        _alias_alternatives[alias] = tuple(alternatives)
 
 
 def _do_register(cls: type, alias: str, category: str) -> None:
@@ -116,3 +149,4 @@ def _reset_registry() -> None:
     """Clear all registrations.  **For test fixtures only.**"""
     _registry.clear()
     _registry_by_category.clear()
+    _alias_alternatives.clear()
