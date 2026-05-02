@@ -29,10 +29,13 @@ Example:
 
 from rich_python_utils.common_objects.variable_manager.base import VariableManager
 from rich_python_utils.common_objects.variable_manager.config import (
+    ContentLoader,
     VariableExtractor,
     VariableManagerConfig,
     VariableSyntax,
     VariableSyntaxMapping,
+    json_content_loader,
+    yaml_content_loader,
 )
 from rich_python_utils.common_objects.variable_manager.exceptions import (
     AmbiguousVariableError,
@@ -55,6 +58,10 @@ __all__ = [
     "VariableSyntax",
     "VariableExtractor",
     "VariableSyntaxMapping",
+    "ContentLoader",
+    # Built-in loaders
+    "json_content_loader",
+    "yaml_content_loader",
     # Exceptions
     "AmbiguousVariableError",
     "CircularReferenceError",

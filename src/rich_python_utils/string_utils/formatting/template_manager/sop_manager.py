@@ -37,7 +37,7 @@ _PHASE_HEADING_RE = re.compile(
     r"^(#{2,3})\s+Phase\s+(\w+)"
     r"(?:\s+--\s+([^[\]:]+?))?"  # optional: -- PhaseName
     r"\s*(?:\[([^\]]*)\])?"      # optional: [directives]
-    r"\s*:\s*(.+)$",             # : heading_rest (outputs)
+    r"(?:\s*:\s*(.+))?$",         # optional: heading_rest (outputs)
     re.MULTILINE,
 )
 
@@ -72,6 +72,46 @@ _IF_RE = re.compile(
     r"__if__\s+`(\w+)`"
     r"(?:\s+__is__\s+`([^`]+)`)?",
     re.IGNORECASE,
+)
+
+# ---------------------------------------------------------------------------
+# Guidance text templates — used by SOPManager.render_guidance()
+#
+# Each template is an f-string-style string.  Keeping them here makes it
+# easy to tweak wording without hunting through render_guidance() logic.
+# ---------------------------------------------------------------------------
+
+_GUIDANCE_HEADER = "### Nextstep Guidance:"
+
+_GUIDANCE_RUNNING = (
+    "- **In progress:** Phase {phase_id} "
+    "({phase_name}) is currently running. Wait for completion."
+)
+
+_GUIDANCE_ERROR = (
+    "- **Error occurred:** Phase {phase_id} "
+    "({phase_name}) had an error. Review, retry, or adjust."
+)
+
+_GUIDANCE_MISSING_OUTPUTS = (
+    "- **Phase {phase_id} ({phase_name}) incomplete:** "
+    "Missing outputs: {outputs}. "
+    "Please provide the missing information."
+)
+
+_GUIDANCE_AVAILABLE_HEADER = "The following phases are available:"
+
+_GUIDANCE_AVAILABLE_PHASE = "- **{phase_name}:** {description}"
+
+_GUIDANCE_ALL_COMPLETE = (
+    "- **All phases complete.** Suggest iterating or starting a new task."
+)
+
+_GUIDANCE_READY = "- **Ready:** Begin with the first available phase."
+
+_GUIDANCE_FOOTER = (
+    '\nWhen the user asks "what should I do next?", use the guidance '
+    "above to give a concrete recommendation."
 )
 
 
@@ -114,6 +154,21 @@ class SOP(StateGraph):
 
     def get_phase(self, phase_id: str) -> SOPPhase | None:
         return self.get_node(phase_id)
+
+    def get_next_pending_phase(
+        self, completed_ids: set[str]
+    ) -> SOPPhase | None:
+        """Return the first phase whose dependencies are all satisfied and
+        that itself is not yet completed. Returns None when no such phase
+        exists (workflow complete or blocked by an unsatisfied dependency).
+        """
+        for phase in self.phases:
+            if phase.id in completed_ids:
+                continue
+            deps = getattr(phase, "depends_on", []) or []
+            if all(dep in completed_ids for dep in deps):
+                return phase
+        return None
 
     @property
     def tool_to_phase_map(self) -> dict[str, str]:
@@ -175,7 +230,7 @@ class SOPManager:
             phase_id = match.group(2)
             phase_name_raw = (match.group(3) or "").strip()
             directives_raw = match.group(4) or ""
-            heading_rest = match.group(5)
+            heading_rest = match.group(5) or ""
 
             outputs = _OUTPUT_RE.findall(heading_rest)
 
@@ -314,21 +369,23 @@ class SOPManager:
         """Render next-step guidance from tracker state."""
         if context is None:
             context = {}
-        parts: list[str] = ["### Nextstep Guidance:"]
+        parts: list[str] = [_GUIDANCE_HEADER]
 
         if tracker.status == "running" and tracker.current_state:
             phase = sop.get_phase(tracker.current_state) if sop else None
             phase_name = phase.name if phase else tracker.current_state
             parts.append(
-                f"- **In progress:** Phase {tracker.current_state} "
-                f"({phase_name}) is currently running. Wait for completion."
+                _GUIDANCE_RUNNING.format(
+                    phase_id=tracker.current_state, phase_name=phase_name,
+                )
             )
         elif tracker.status == "error" and tracker.current_state:
             phase = sop.get_phase(tracker.current_state) if sop else None
             phase_name = phase.name if phase else tracker.current_state
             parts.append(
-                f"- **Error occurred:** Phase {tracker.current_state} "
-                f"({phase_name}) had an error. Review, retry, or adjust."
+                _GUIDANCE_ERROR.format(
+                    phase_id=tracker.current_state, phase_name=phase_name,
+                )
             )
         else:
             missing = tracker.get_missing_outputs()
@@ -337,19 +394,26 @@ class SOPManager:
                     phase = sop.get_phase(phase_id) if sop else None
                     phase_name = phase.name if phase else phase_id
                     parts.append(
-                        f"- **Phase {phase_id} ({phase_name}) incomplete:** "
-                        f"Missing outputs: {', '.join(f'`{o}`' for o in m)}. "
-                        f"Please provide the missing information."
+                        _GUIDANCE_MISSING_OUTPUTS.format(
+                            phase_id=phase_id,
+                            phase_name=phase_name,
+                            outputs=", ".join(f"`{o}`" for o in m),
+                        )
                     )
             else:
                 available = tracker.get_available_next()
                 if available:
-                    parts.append("The following phases are available:")
+                    parts.append(_GUIDANCE_AVAILABLE_HEADER)
                     for node in available:
                         phase = sop.get_phase(node.id) if sop else None
                         if phase:
                             desc = phase.description
-                            parts.append(f"- **{phase.name}:** {desc.strip()}")
+                            parts.append(
+                                _GUIDANCE_AVAILABLE_PHASE.format(
+                                    phase_name=phase.name,
+                                    description=desc.strip(),
+                                )
+                            )
                             for sub in phase.subsections:
                                 instruction = _get_directive_instruction(
                                     sub.name, sub.directive, sop_config,
@@ -360,16 +424,24 @@ class SOPManager:
                         else:
                             parts.append(f"- **{node.id}**")
                 elif tracker.status == "completed":
-                    parts.append(
-                        "- **All phases complete.** Suggest iterating or starting a new task."
-                    )
+                    parts.append(_GUIDANCE_ALL_COMPLETE)
                 else:
-                    parts.append("- **Ready:** Begin with the first available phase.")
+                    parts.append(_GUIDANCE_READY)
 
-        parts.append(
-            '\nWhen the user asks "what should I do next?", use the guidance '
-            "above to give a concrete recommendation."
-        )
+            # Task queue status (shown regardless of phase state)
+            task_queue = context.get("task_queue", [])
+            if task_queue:
+                queue_summary = context.get("task_queue_summary", "")
+                if queue_summary:
+                    parts.append(f"\n**Task queue:** {queue_summary}")
+                next_task = next(
+                    (t for t in task_queue if t.get("status") == "queued"), None
+                )
+                if next_task:
+                    h_id = next_task.get("id") or next_task.get("task_id", "")
+                    parts.append(f"  Next: {h_id} — {next_task.get('title', '')}")
+
+        parts.append(_GUIDANCE_FOOTER)
         return "\n".join(parts)
 
 

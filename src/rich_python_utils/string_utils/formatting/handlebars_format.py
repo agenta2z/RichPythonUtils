@@ -2,7 +2,12 @@ import re
 from collections.abc import Mapping
 from typing import Callable, Dict, Optional, Tuple, Set, Union
 
-from pybars import Compiler
+try:
+    from pybars import Compiler
+    PYBARS_AVAILABLE = True
+except ImportError:
+    PYBARS_AVAILABLE = False
+    Compiler = None
 
 
 def _current_date_time_string(options=None, format_str: str = None):
@@ -62,6 +67,10 @@ def compile_template(
         >>> sorted(vars_found)
         ['age', 'name']
     """
+    if not PYBARS_AVAILABLE:
+        raise ImportError(
+            "pybars3 is required for Handlebars template compilation but is not installed."
+        )
     compiler = Compiler()
     handlebars_template = compiler.compile(template)
 

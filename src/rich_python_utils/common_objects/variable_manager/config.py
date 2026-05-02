@@ -6,7 +6,8 @@ This module provides configuration dataclasses for FileBasedVariableManager.
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Callable, Dict, List, Optional, Set, Union
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Set, Union
 
 
 class VariableSyntax(StrEnum):
@@ -38,6 +39,15 @@ VariableSyntaxMapping = Dict[str, Optional[Union["VariableSyntax", VariableExtra
 
 Example:
     {"*.hbs": VariableSyntax.HANDLEBARS, "*.j2": VariableSyntax.JINJA2, "*.txt": None}
+"""
+
+# Type for content loaders
+ContentLoader = Callable[[Path], Any]
+"""Callable that loads a file and returns parsed content.
+
+Default behavior (no loader): file.read_text() -> str.
+JSON loader: json.load() -> dict.
+YAML loader: yaml.safe_load() -> dict.
 """
 
 
@@ -93,4 +103,43 @@ class VariableManagerConfig:
     )
     max_recursion_depth: int = 50
     compose_on_access: bool = True
-    cross_space_root: Optional[str] = None
+    cross_space_root: Optional[str] = None  # Path for cross-space variable fallback
+    # Extension-based content loaders. Maps file extension -> loader function.
+    # When a file's extension matches, the loader is called instead of read_text().
+    # Default: {} (all files read as text -- preserves existing behavior).
+    content_loaders: Dict[str, ContentLoader] = field(default_factory=dict)
+    # When True, if multiple cascade levels return dict values for the same
+    # variable, deep-merge them (child wins on conflict). When False, first-match
+    # wins. Only applies to dict-typed values from content_loaders.
+    # Default: False (preserves existing first-match behavior).
+    merge_structured_values: bool = False
+    # Filename patterns for per-directory config files.
+    # When set, _find_variable_file also checks <cascade>/<name>/<pattern>.
+    # Supports exact names ("tool.json") and globs ("tool.*", "*.json").
+    # Patterns are checked in order -- first match wins.
+    # Default: [] (disabled -- preserves existing name-based file discovery).
+    directory_config_filename_patterns: List[str] = field(default_factory=list)
+    # Filename patterns for parent-level default config.
+    # When set, used as the "global" fallback at each cascade level.
+    # E.g., ["global.json"] or ["global.*"].
+    # Default: [] (disabled).
+    global_config_filename_patterns: List[str] = field(default_factory=list)
+
+
+# --- Built-in content loaders ---
+
+
+def json_content_loader(path: Path) -> dict:
+    """Load a JSON file as a dict."""
+    import json
+
+    with open(path) as f:
+        return json.load(f)
+
+
+def yaml_content_loader(path: Path) -> dict:
+    """Load a YAML file as a dict."""
+    import yaml
+
+    with open(path) as f:
+        return yaml.safe_load(f) or {}

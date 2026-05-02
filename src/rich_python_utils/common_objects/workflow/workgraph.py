@@ -953,6 +953,22 @@ class WorkGraphNode(Node, WorkNodeBase):
         # instead of recursive node.run() calls which would cause stack overflow.
         # =========================================================================
         self_loop_iteration = 0
+
+        if (
+            has_self_edge
+            and self.resume_with_saved_results
+            and self._should_save_result()
+        ):
+            loop_state = self._load_loop_state(resolve_args=args, resolve_kwargs=kwargs)
+            if loop_state is not None and not loop_state["completed"]:
+                last_iter = loop_state["last_completed_iteration"]
+                self_loop_iteration = last_iter
+                iter_data = self._load_loop_iteration(
+                    last_iter, resolve_args=args, resolve_kwargs=kwargs
+                )
+                if self.result_pass_down_mode != ResultPassDownMode.NoPassDown:
+                    args, kwargs = iter_data["next_args"], iter_data["next_kwargs"]
+
         while True:
             self_loop_iteration += 1
 
@@ -1109,9 +1125,30 @@ class WorkGraphNode(Node, WorkNodeBase):
                 if stop_flag == WorkGraphStopFlags.AbstainResult:
                     stop_flag = WorkGraphStopFlags.Continue
 
-                # Merge multiple downstream outputs
+                downstream_results = [r for r in downstream_results if r is not _DS_EMPTY]
                 if downstream_results:
                     result = self._merge_downstream_results(downstream_results)
+
+                if (
+                    has_self_edge
+                    and not is_loaded_from_saved_result
+                    and self._should_save_result()
+                    and stop_flag == WorkGraphStopFlags.Continue
+                ):
+                    if self.result_pass_down_mode == ResultPassDownMode.NoPassDown:
+                        _loop_next_args = original_args
+                        _loop_next_kwargs = original_kwargs
+                    else:
+                        _loop_next_args = nargs
+                        _loop_next_kwargs = nkwargs
+                    self._save_loop_iteration(
+                        self_loop_iteration,
+                        result,
+                        _loop_next_args,
+                        _loop_next_kwargs,
+                        resolve_args=args,
+                        resolve_kwargs=kwargs,
+                    )
 
             # =========================================================================
             # SELF-LOOP HANDLING: Check if we should loop back (instead of recursion)
@@ -1129,6 +1166,14 @@ class WorkGraphNode(Node, WorkNodeBase):
                 # Reset for next iteration - we'll get fresh values from next execution
                 include_self = False
                 include_others = True
+
+                if self._should_save_result():
+                    self._save_loop_state(
+                        self_loop_iteration,
+                        completed=False,
+                        resolve_args=args,
+                        resolve_kwargs=kwargs,
+                    )
 
                 self.log_debug(
                     {
@@ -1150,6 +1195,15 @@ class WorkGraphNode(Node, WorkNodeBase):
                             'exit_reason': 'include_self=False' if not include_self else f'stop_flag={stop_flag}',
                         },
                         'SelfLoopExit'
+                    )
+                if has_self_edge and self._should_save_result():
+                    result_path = self._get_result_path(self.name, *args, **kwargs)
+                    self._save_result(result, result_path)
+                    self._save_loop_state(
+                        self_loop_iteration,
+                        completed=True,
+                        resolve_args=args,
+                        resolve_kwargs=kwargs,
                     )
                 break  # Exit while loop - no self-loop or stopped
 
@@ -1262,6 +1316,22 @@ class WorkGraphNode(Node, WorkNodeBase):
         # Same pattern as sync _run() — avoids recursion for self-loop nodes.
         # =========================================================================
         self_loop_iteration = 0
+
+        if (
+            has_self_edge
+            and self.resume_with_saved_results
+            and self._should_save_result()
+        ):
+            loop_state = self._load_loop_state(resolve_args=args, resolve_kwargs=kwargs)
+            if loop_state is not None and not loop_state["completed"]:
+                last_iter = loop_state["last_completed_iteration"]
+                self_loop_iteration = last_iter
+                iter_data = self._load_loop_iteration(
+                    last_iter, resolve_args=args, resolve_kwargs=kwargs
+                )
+                if self.result_pass_down_mode != ResultPassDownMode.NoPassDown:
+                    args, kwargs = iter_data["next_args"], iter_data["next_kwargs"]
+
         while True:
             self_loop_iteration += 1
 
@@ -1441,7 +1511,8 @@ class WorkGraphNode(Node, WorkNodeBase):
 
                 # Concurrent downstream fan-out via asyncio.gather with indexed insertion
                 # for deterministic result ordering (matching sync path's sequential order).
-                downstream_results = [None] * len(nodes_to_run)
+                _DS_EMPTY = object()
+                downstream_results = [_DS_EMPTY] * len(nodes_to_run)
                 tasks = []
                 for idx, node in enumerate(nodes_to_run):
                     if stop_flag == WorkGraphStopFlags.Continue:
@@ -1475,10 +1546,30 @@ class WorkGraphNode(Node, WorkNodeBase):
                 if stop_flag == WorkGraphStopFlags.AbstainResult:
                     stop_flag = WorkGraphStopFlags.Continue
 
-                # Merge multiple downstream outputs (filter out None slots)
-                downstream_results = [r for r in downstream_results if r is not None]
+                downstream_results = [r for r in downstream_results if r is not _DS_EMPTY]
                 if downstream_results:
                     result = self._merge_downstream_results(downstream_results)
+
+                if (
+                    has_self_edge
+                    and not is_loaded_from_saved_result
+                    and self._should_save_result()
+                    and stop_flag == WorkGraphStopFlags.Continue
+                ):
+                    if self.result_pass_down_mode == ResultPassDownMode.NoPassDown:
+                        _loop_next_args = original_args
+                        _loop_next_kwargs = original_kwargs
+                    else:
+                        _loop_next_args = nargs
+                        _loop_next_kwargs = nkwargs
+                    self._save_loop_iteration(
+                        self_loop_iteration,
+                        result,
+                        _loop_next_args,
+                        _loop_next_kwargs,
+                        resolve_args=args,
+                        resolve_kwargs=kwargs,
+                    )
 
             # =========================================================================
             # SELF-LOOP HANDLING (async): Same iterative pattern as sync _run()
@@ -1490,6 +1581,14 @@ class WorkGraphNode(Node, WorkNodeBase):
                     args, kwargs = nargs, dict(nkwargs)
                 include_self = False
                 include_others = True
+
+                if self._should_save_result():
+                    self._save_loop_state(
+                        self_loop_iteration,
+                        completed=False,
+                        resolve_args=args,
+                        resolve_kwargs=kwargs,
+                    )
 
                 self.log_debug(
                     {
@@ -1511,6 +1610,15 @@ class WorkGraphNode(Node, WorkNodeBase):
                             'exit_reason': 'include_self=False' if not include_self else f'stop_flag={stop_flag}',
                         },
                         'SelfLoopExit'
+                    )
+                if has_self_edge and self._should_save_result():
+                    result_path = self._get_result_path(self.name, *args, **kwargs)
+                    self._save_result(result, result_path)
+                    self._save_loop_state(
+                        self_loop_iteration,
+                        completed=True,
+                        resolve_args=args,
+                        resolve_kwargs=kwargs,
                     )
                 break
 
@@ -1703,6 +1811,7 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
     # When set, _run() delegates to executor.run_async() instead of recursive execution
     # Use wrapper mode (threads) or router mode (multi-processing)
     executor: Optional['QueuedExecutorBase'] = attrib(default=None, kw_only=True)
+    use_async: bool = attrib(default=False, kw_only=True)
 
     # Optional concurrency limit for async execution path (_arun).
     # When set, creates an asyncio.Semaphore(max_concurrency) to limit concurrent node execution.
@@ -2391,6 +2500,24 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
         Returns:
             Processed results after running the graph and applying the `post_process` method.
         """
+        # =====================================================================
+        # Delegate to async path if use_async is enabled
+        # =====================================================================
+        if self.use_async:
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+            if loop is not None and loop.is_running():
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor(1) as pool:
+                    return pool.submit(
+                        asyncio.run, self._arun(*args, **kwargs)
+                    ).result()
+            else:
+                return asyncio.run(self._arun(*args, **kwargs))
+
         # =====================================================================
         # Phase 4: Delegate to executor if configured
         # =====================================================================

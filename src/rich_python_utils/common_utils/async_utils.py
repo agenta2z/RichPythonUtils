@@ -73,6 +73,7 @@ async def async_execute_with_retry(
     min_retry_wait: float = 0.0,
     max_retry_wait: float = 1.0,
     retry_on_exceptions: Tuple[type, ...] = (Exception,),
+    non_retryable_exceptions: Tuple[type, ...] = (),
     output_validator: Callable[..., bool] = None,
     pre_condition: Callable[..., bool] = None,
     default_return_or_raise: Any = None,
@@ -336,6 +337,9 @@ async def async_execute_with_retry(
                     await _sleep_with_budget(wait_time)
 
             except retry_on_exceptions as e:
+                if non_retryable_exceptions and isinstance(e, non_retryable_exceptions):
+                    raise
+
                 last_exception = e
                 transition_exception = e
                 total_attempts_across_chain += 1

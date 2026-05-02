@@ -7,7 +7,7 @@ for all variable manager implementations.
 
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 class VariableManager(Mapping, ABC):
@@ -33,19 +33,20 @@ class VariableManager(Mapping, ABC):
     """
 
     @abstractmethod
-    def get_variable(self, name: str) -> Optional[str]:
+    def get_variable(self, name: str) -> Optional[Any]:
         """Get a single variable by name.
 
         Args:
             name: The variable name to look up.
 
         Returns:
-            The variable content as a string, or None if not found.
+            The variable content (str for text files, dict for structured files),
+            or None if not found.
         """
         pass
 
     @abstractmethod
-    def resolve_variables(self, names: List[str]) -> Dict[str, str]:
+    def resolve_variables(self, names: List[str]) -> Dict[str, Any]:
         """Resolve multiple variables at once.
 
         Args:
@@ -63,7 +64,7 @@ class VariableManager(Mapping, ABC):
         content: str,
         variable_root_space: str = "",
         variable_type: str = "",
-    ) -> Dict[str, str]:
+    ) -> Dict[str, Any]:
         """Auto-detect and resolve variables from content.
 
         Extracts variable references from the content string based on the
@@ -81,7 +82,7 @@ class VariableManager(Mapping, ABC):
 
     # Mapping interface implementation
 
-    def __getitem__(self, key: str) -> str:
+    def __getitem__(self, key: str) -> Any:
         """Get variable content by name.
 
         Raises:

@@ -204,14 +204,9 @@ class WorkNodeBase(Serializable, Debuggable, Resumable, PostProcessable, ABC):
     result_pass_down_mode = attrib(type=Union[str, ResultPassDownMode, Callable, Any], default=ResultPassDownMode.NoPassDown)
     unpack_single_result = attrib(type=Union[bool, TypeOrGenericAlias], default=True)
     ignore_stop_flag_from_saved_results = attrib(type=bool, default=True)
-    logger: Optional[Union[Callable[[dict], Any], logging.Logger]] = attrib(default=None, kw_only=True)
 
     def __attrs_post_init__(self):
         """Ensure parent classes' __attrs_post_init__ methods are called."""
-        # Set default logger to hprint_message if still None after parent init
-        if self.logger is None:
-            self.logger = hprint_message
-
         super().__attrs_post_init__()
 
     def _get_args_for_downstream(self, result, args: Sequence, kwargs: Mapping):

@@ -186,7 +186,9 @@ class StateGraphTracker:
                 continue
             if node.foreach_collection_var:
                 collection = self.state_outputs.get(node.foreach_collection_var)
-                if not collection or not isinstance(collection, list):
+                if collection and not isinstance(collection, list):
+                    collection = [collection]
+                if not collection:
                     continue
             available.append(node)
 

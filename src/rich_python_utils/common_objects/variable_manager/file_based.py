@@ -6,10 +6,13 @@ of VariableManager that loads variables from files on the filesystem.
 """
 
 import fnmatch
+import logging
 import re
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Dict, Iterator, List, Mapping, Optional, Set, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Set, Tuple
+
+logger = logging.getLogger(__name__)
 
 from rich_python_utils.common_objects.variable_manager.base import VariableManager
 from rich_python_utils.common_objects.variable_manager.config import (
@@ -99,7 +102,7 @@ class FileBasedVariableManager(VariableManager):
         self.key_discovery_mode = key_discovery_mode
         self.variable_root_space = variable_root_space
         self.variable_type = variable_type
-        self._content_cache: Dict[str, str] = {}
+        self._content_cache: Dict[str, Any] = {}
         self._discovered_keys: Optional[Set[str]] = None
 
         # Eager mode: discover keys immediately
@@ -115,7 +118,7 @@ class FileBasedVariableManager(VariableManager):
         variable_root_space: str = "",
         variable_type: str = "",
         version: str = "",
-    ) -> Optional[str]:
+    ) -> Optional[Any]:
         """Get a single variable by name.
 
         Args:
@@ -127,7 +130,8 @@ class FileBasedVariableManager(VariableManager):
             version: Version suffix for variable resolution.
 
         Returns:
-            The variable content as a string, or None if not found.
+            The variable content (str for text files, dict for structured files),
+            or None if not found.
         """
         # Determine whether to compose
         should_compose = (
@@ -136,12 +140,68 @@ class FileBasedVariableManager(VariableManager):
 
         # Get cascade paths for file lookup
         cascade_paths = self._get_cascade_paths(variable_root_space, variable_type)
+
+        # Merge mode: collect dict values from all cascade levels + global config,
+        # deep-merge them (most general first, most specific last -- child wins).
+        if self.config.merge_structured_values:
+            layers: list = []  # collected from most general to most specific
+
+            # Check global config at each cascade level (parent defaults)
+            if self.config.global_config_filename_patterns:
+                for cascade_path in reversed(cascade_paths):  # global first
+                    match = self._match_filename_patterns(
+                        cascade_path,
+                        self.config.global_config_filename_patterns,
+                    )
+                    if match is not None:
+                        gc = self._read_file_content(match)
+                        if isinstance(gc, dict):
+                            layers.append(gc)
+
+            # Check variable-specific file at each cascade level
+            for cascade_path in reversed(cascade_paths):  # global first
+                file_path, _ = self._find_variable_file(
+                    name, [cascade_path], version=version
+                )
+                if file_path is not None:
+                    vc = self._read_file_content(file_path)
+                    if isinstance(vc, dict):
+                        layers.append(vc)
+                    elif isinstance(vc, str):
+                        # Str value in merge path -- apply composition if enabled
+                        if should_compose:
+                            extractor = self._get_variable_extractor(file_path)
+                            if extractor is not None:
+                                vc = self._resolve_content(
+                                    vc,
+                                    variable_root_space,
+                                    variable_type,
+                                    version,
+                                    [name],
+                                    file_path,
+                                )
+                        return vc
+
+            if layers:
+                from rich_python_utils.common_utils.map_helper import _deep_merge_two
+
+                result: dict = {}
+                for layer in layers:
+                    result = _deep_merge_two(result, layer)
+                return result
+            return None
+
+        # Standard mode: first-match wins (existing behavior)
         file_path, _ = self._find_variable_file(name, cascade_paths, version=version)
 
         if file_path is None:
             return None
 
         content = self._read_file_content(file_path)
+
+        # Structured content (dict from content_loaders) bypasses composition
+        if not isinstance(content, str):
+            return content
 
         # Resolve nested variables if composition is enabled
         if should_compose:
@@ -158,7 +218,7 @@ class FileBasedVariableManager(VariableManager):
 
         return content
 
-    def resolve_variables(self, names: List[str]) -> Dict[str, str]:
+    def resolve_variables(self, names: List[str]) -> Dict[str, Any]:
         """Resolve multiple variables at once.
 
         Args:
@@ -181,7 +241,7 @@ class FileBasedVariableManager(VariableManager):
         variable_root_space: str = "",
         variable_type: str = "",
         version: str = "",
-    ) -> Dict[str, str]:
+    ) -> Dict[str, Any]:
         """Auto-detect and resolve all variables from content.
 
         Scans the content for variable references based on the configured syntax,
@@ -512,6 +572,23 @@ class FileBasedVariableManager(VariableManager):
 
     # region File Resolution
 
+    def _match_filename_patterns(
+        self, directory: Path, patterns: List[str]
+    ) -> Optional[Path]:
+        """Find first file in directory matching any pattern (in order).
+
+        Supports exact names (``"tool.json"``) and globs (``"tool.*"``).
+        Patterns are checked in priority order -- first match wins.
+        """
+        if not directory.is_dir():
+            return None
+        children = sorted(directory.iterdir())
+        for pattern in patterns:
+            for child in children:
+                if child.is_file() and fnmatch.fnmatch(child.name, pattern):
+                    return child
+        return None
+
     def _find_variable_file(
         self,
         variable_name: str,
@@ -528,10 +605,49 @@ class FileBasedVariableManager(VariableManager):
         Returns:
             Tuple of (file_path, resolved_name) or (None, None) if not found
         """
+        if "/" in variable_name:
+            for cascade_path in cascade_paths:
+                versioned_variants: List[str] = []
+                if version and self.config.enable_overrides:
+                    versioned_variants.append(
+                        f"{variable_name}.{version}{self.config.override_suffix}"
+                    )
+                if self.config.enable_overrides:
+                    versioned_variants.append(
+                        f"{variable_name}{self.config.override_suffix}"
+                    )
+                if version:
+                    versioned_variants.append(f"{variable_name}.{version}")
+                versioned_variants.append(variable_name)
+                for file_variant in versioned_variants:
+                    for ext in self.config.file_extensions:
+                        file_path = cascade_path / f"{file_variant}{ext}"
+                        if file_path.exists() and file_path.is_file():
+                            return file_path, variable_name
+                target_dir = cascade_path / variable_name
+                if target_dir.is_dir():
+                    resolved = self._resolve_variable_folder(target_dir)
+                    if resolved is not None:
+                        return resolved, variable_name
+            return None, None
+
         possible_paths = self._generate_underscore_splits(variable_name)
 
         for cascade_path in cascade_paths:
             matches_at_level = []
+
+            # Directory config discovery: check <cascade>/<name>/<pattern>
+            # Returns immediately if found (avoids false AmbiguousVariableError
+            # when a flat file with the same name also exists).
+            if self.config.directory_config_filename_patterns:
+                dir_path = cascade_path / variable_name
+                if dir_path.is_dir():
+                    match = self._match_filename_patterns(
+                        dir_path,
+                        self.config.directory_config_filename_patterns,
+                    )
+                    if match is not None:
+                        return (match, variable_name)
 
             for path_variant in possible_paths:
                 # Build version resolution order — split into versioned and unversioned
@@ -676,7 +792,12 @@ class FileBasedVariableManager(VariableManager):
         if self.config.cache_content and path_str in self._content_cache:
             return self._content_cache[path_str]
 
-        content = file_path.read_text(encoding="utf-8")
+        # Dispatch to extension-based loader if configured
+        loader = self.config.content_loaders.get(file_path.suffix)
+        if loader is not None:
+            content = loader(file_path)
+        else:
+            content = file_path.read_text(encoding="utf-8")
 
         if self.config.cache_content:
             self._content_cache[path_str] = content
@@ -735,14 +856,34 @@ class FileBasedVariableManager(VariableManager):
             variable_root_space, variable_type, scope, current_level_path
         )
 
-        # Find the variable file
-        file_path, _ = self._find_variable_file(variable_name, cascade_paths, version)
+        # Sibling-first: for an unscoped, non-slash bare variable name
+        # referenced from inside another variable file, the same-directory
+        # sibling wins over the cascade.
+        file_path: Optional[Path] = None
+        if (
+            current_level_path is not None
+            and scope is None
+            and "/" not in variable_name
+        ):
+            sibling_dir = current_level_path.parent
+            for ext in self.config.file_extensions:
+                candidate = sibling_dir / f"{variable_name}{ext}"
+                if candidate.is_file():
+                    file_path = candidate
+                    break
+
+        if file_path is None:
+            file_path, _ = self._find_variable_file(variable_name, cascade_paths, version)
 
         if file_path is None:
             return "" if is_optional else None
 
         # Read content
         content = self._read_file_content(file_path)
+
+        # Structured content (dict from content_loaders) bypasses composition
+        if not isinstance(content, str):
+            return content
 
         # Check if composition is enabled
         extractor = self._get_variable_extractor(file_path)
