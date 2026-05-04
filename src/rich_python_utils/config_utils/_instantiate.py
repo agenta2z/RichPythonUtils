@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import abc
 import copy
+import functools
 import importlib
 import inspect
 import logging
@@ -74,6 +75,129 @@ def _deep_merge(base: dict, overrides: dict) -> dict:
         else:
             result[k] = v
     return result
+
+
+# ---------------------------------------------------------------------------
+# `_inherits_` directive — deep-copy + override-merge from another node
+# ---------------------------------------------------------------------------
+#
+# Convention: a dict containing ``_inherits_: <dotted-path>`` is replaced by
+# ``deep_copy(source_at_path)`` deep-merged with the dict's other keys
+# (current keys win). Each occurrence produces a fresh deep copy, so
+# instantiation through Hydra produces distinct Python instances.
+#
+# This is at the same architectural layer as ``_resolve_import_``: a
+# load-time pre-processing step on the plain-dict container, run before
+# ``OmegaConf.create(container)`` in ``load_config``.
+
+_INHERITS_KEY = "_inherits_"
+
+
+def _resolve_path_in_root(root_container, path_str):
+    """Look up a dotted path inside ``root_container``.
+
+    Supports list indices via integer segments (e.g.,
+    ``"flow_configs.0.initial_inferencer"``). The target node must be a
+    dict. Raises ``TypeError`` for non-string paths or non-dict targets,
+    ``ValueError`` for missing segments.
+    """
+    if not isinstance(path_str, str):
+        raise TypeError(
+            f"{_INHERITS_KEY} must be a string path; got "
+            f"{type(path_str).__name__}: {path_str!r}"
+        )
+    if not path_str:
+        raise ValueError(f"{_INHERITS_KEY} path must not be empty")
+    parts = path_str.split(".")
+    cursor = root_container
+    for i, segment in enumerate(parts):
+        try:
+            if isinstance(cursor, list):
+                idx = int(segment)
+                cursor = cursor[idx]
+            elif isinstance(cursor, dict):
+                cursor = cursor[segment]
+            else:
+                raise ValueError(
+                    f"cannot traverse {type(cursor).__name__} at segment "
+                    f"{i} ({'.'.join(parts[: i + 1])!r})"
+                )
+        except (KeyError, IndexError, ValueError) as exc:
+            raise ValueError(
+                f"{_INHERITS_KEY}: failed to resolve path {path_str!r} at "
+                f"segment {i} ({'.'.join(parts[: i + 1])!r}): {exc}"
+            ) from exc
+    if not isinstance(cursor, dict):
+        raise TypeError(
+            f"{_INHERITS_KEY}: target at {path_str!r} must be a dict; got "
+            f"{type(cursor).__name__}"
+        )
+    return cursor
+
+
+def _resolve_inherits_(node, root_container, _resolution_stack=None):
+    """Resolve ``_inherits_`` directives via deep-copy + override-merge.
+
+    Each dict containing ``_inherits_: <path>`` is replaced with:
+      1. ``copy.deepcopy`` of the resolved source node at ``<path>``.
+      2. Recursively resolved (so chained ``_inherits_`` chains complete
+         depth-first; cycles are detected via the ``_resolution_stack``).
+      3. Merged with the current dict's other keys via ``_deep_merge``
+         (current dict's keys win; lists are replaced wholesale).
+      4. The ``_inherits_`` key stripped.
+
+    Single-inheritance only — the directive value must be a string path.
+    Lists/multiple bases are not supported (raises ``TypeError`` via
+    ``_resolve_path_in_root``).
+
+    Cycles raise ``ValueError`` with the path chain (e.g., ``a -> b -> a``).
+
+    Note on OmegaConf interpolations inside the source: the deep-copied
+    interpolation strings still resolve against the root config when
+    ``OmegaConf.resolve`` runs (absolute, root-relative). For
+    sibling-aware references after inheritance, source nodes should use
+    ``${.field}`` (relative) instead of ``${field}`` (absolute).
+    """
+    import copy as _copy
+
+    if _resolution_stack is None:
+        _resolution_stack = []
+
+    if isinstance(node, list):
+        return [
+            _resolve_inherits_(item, root_container, _resolution_stack)
+            for item in node
+        ]
+    if not isinstance(node, dict):
+        return node
+
+    if _INHERITS_KEY in node:
+        path = node[_INHERITS_KEY]
+        if path in _resolution_stack:
+            chain = " -> ".join(_resolution_stack + [str(path)])
+            raise ValueError(f"{_INHERITS_KEY} cycle: {chain}")
+        # Validate type and look up source
+        source = _resolve_path_in_root(root_container, path)
+        # Deepcopy first so recursive resolution doesn't mutate the root.
+        source_copy = _copy.deepcopy(source)
+        # Resolve any _inherits_ chain on the source (depth-first).
+        source_resolved = _resolve_inherits_(
+            source_copy, root_container, _resolution_stack + [path]
+        )
+        # Merge current dict's other keys on top — current keys win.
+        # Recursively resolve _inherits_ inside the override values too.
+        overrides = {k: v for k, v in node.items() if k != _INHERITS_KEY}
+        overrides_resolved = {
+            k: _resolve_inherits_(v, root_container, _resolution_stack)
+            for k, v in overrides.items()
+        }
+        return _deep_merge(source_resolved, overrides_resolved)
+
+    # No directive at this level; recurse into children.
+    return {
+        k: _resolve_inherits_(v, root_container, _resolution_stack)
+        for k, v in node.items()
+    }
 
 
 def _resolve_import_(node, current_yaml_dir: Path):
@@ -160,6 +284,12 @@ def load_config(path: str, overrides: Optional[Dict[str, Any]] = None):
         # dot-notation overrides can patch into the expanded config.
         container = OmegaConf.to_container(cfg, resolve=False)
         container = _resolve_import_(container, Path(path).resolve().parent)
+        # Resolve _inherits_ directives (deep-copy + override-merge from
+        # another node within the same container). Runs after _import_ so
+        # _inherits_ can reference imported nodes; runs before
+        # OmegaConf.create so OmegaConf interpolations inside copied nodes
+        # resolve naturally during the OmegaConf.resolve step below.
+        container = _resolve_inherits_(container, container)
         cfg = OmegaConf.create(container)
         if overrides:
             # Convert dotted override keys to nested dicts so that
@@ -369,6 +499,22 @@ def _walk(
         #     (_import_ outside a *_factory field degrades to shared semantics.)
         node.pop(_FACTORY_MARKER, None)
 
+        # 1d. Slot-based role defaults — class-declared template defaults for
+        #     specific slot fields. Skips entirely if the node opts out via
+        #     ``_disable_slot_defaults_: true``. Each entry in the class's
+        #     ``SLOT_DEFAULTS`` ClassVar is a (slot_path, defaults_obj) pair;
+        #     ``slot_path`` may be a dotted path with ``*`` wildcards for
+        #     list-element walks (e.g. ``"flow_configs.*.followup_inferencer"``).
+        #     ``defaults_obj`` is duck-typed via ``apply_to(node, parent_node=)``.
+        #     Note: the opt-out key was already stripped from ``node`` by the
+        #     underscore-prefix collection above (step 0/1a) and survives in
+        #     ``local_injectables`` under its un-prefixed name.
+        if cls is not None and not local_injectables.get(
+            "disable_slot_defaults_", False
+        ):
+            for slot_path, defaults_obj in _collect_slot_defaults(cls).items():
+                _apply_at_path(node, slot_path.split("."), defaults_obj, parent_node=node)
+
         # 2. String shorthand expansion
         for key, val in list(node.items()):
             if key.startswith("_"):
@@ -568,6 +714,106 @@ def _accepted_param_names(cls: type) -> set[str]:
     except (ValueError, TypeError):
         return set()
     return {name for name in params if name != "self"}
+
+
+# ---------------------------------------------------------------------------
+# Slot-based role defaults (consumed by step 1d in _walk)
+#
+# Each orchestrator class may declare a ``SLOT_DEFAULTS: dict[str, Any]``
+# ClassVar mapping a slot path to a defaults object. The defaults object is
+# duck-typed: ``_walk`` calls ``defaults_obj.apply_to(node, parent_node=...)``
+# on the resolved leaf node. The actual ``InferencerTemplateDefaults`` class
+# lives in ``AgentFoundation.common.inferencers.template_defaults`` — this
+# module knows nothing about it, keeping ``rich_python_utils`` independent of
+# downstream packages.
+#
+# Slot path syntax:
+#   "aggregator_inferencer"                       — direct child slot
+#   "flow_configs.*.followup_inferencer"          — list-element wildcard
+#
+# Wrapping descent: a child node whose target class declares
+# ``_TEMPLATE_TRANSPARENT_SLOTS`` (a list of slot names) is treated as a
+# transparent wrapper; the parent's defaults pass through to those inner
+# slots instead of being applied to the wrapper itself.
+# ---------------------------------------------------------------------------
+
+
+@functools.lru_cache(maxsize=None)
+def _collect_slot_defaults(cls: Any) -> Dict[str, Any]:
+    """Walk MRO base→subclass; later (subclass) entries replace earlier per-slot.
+
+    Atomic-bundle semantics: no per-key merge across MRO; the bundle IS the
+    unit. Returns a flat ``{slot_path: defaults_obj}`` dict. Returns an empty
+    dict for non-class targets (functions, callables) since only classes
+    declare ``SLOT_DEFAULTS``.
+    """
+    mro = getattr(cls, "__mro__", None)
+    if mro is None:
+        return {}
+    merged: Dict[str, Any] = {}
+    for base in reversed(mro):
+        decl = base.__dict__.get("SLOT_DEFAULTS")
+        if decl:
+            merged.update(decl)
+    return merged
+
+
+def _apply_at_path(
+    current: Any,
+    path_parts: List[str],
+    defaults_obj: Any,
+    parent_node: dict,
+) -> None:
+    """Walk ``path_parts`` through ``current``; at each terminal, apply
+    ``defaults_obj`` (with wrapping descent if applicable).
+
+    ``parent_node`` is the orchestrator node owning the slot — passed
+    through to ``apply_to`` so conditional defaults can gate on parent flags.
+    """
+    if not path_parts:
+        _apply_with_descent(current, defaults_obj, parent_node)
+        return
+    head, *rest = path_parts
+    if head == "*":
+        if isinstance(current, list):
+            for item in current:
+                _apply_at_path(item, rest, defaults_obj, parent_node)
+    elif isinstance(current, dict) and head in current:
+        _apply_at_path(current[head], rest, defaults_obj, parent_node)
+
+
+def _apply_with_descent(
+    node: Any,
+    defaults_obj: Any,
+    parent_node: dict,
+) -> None:
+    """Apply ``defaults_obj`` to ``node``. If ``node`` is a transparent
+    wrapper (its target class declares ``_TEMPLATE_TRANSPARENT_SLOTS``),
+    descend into each listed inner slot and apply there instead.
+    """
+    if not isinstance(node, dict):
+        return
+    transparent_slots: List[str] = []
+    target = node.get("_target_")
+    if isinstance(target, str):
+        try:
+            child_cls = _import_target(resolve_target(target))
+        except Exception:
+            child_cls = None
+        if child_cls is not None:
+            transparent_slots = list(
+                getattr(child_cls, "_TEMPLATE_TRANSPARENT_SLOTS", []) or []
+            )
+    if transparent_slots:
+        for slot in transparent_slots:
+            inner = node.get(slot)
+            if isinstance(inner, dict):
+                _apply_with_descent(inner, defaults_obj, parent_node=node)
+        # Don't apply to the wrapper itself — Hydra's _filter_attrs_keys
+        # would drop unknown kwargs anyway, but skipping is cleaner.
+        return
+    if hasattr(defaults_obj, "apply_to"):
+        defaults_obj.apply_to(node, parent_node=parent_node)
 
 
 def _dispatch_alias(alias: str, primary_fqn: str, node: dict) -> str:

@@ -589,6 +589,85 @@ class FileBasedVariableManager(VariableManager):
                     return child
         return None
 
+    def _read_variable_folder_config(self, folder: Path) -> Dict[str, str]:
+        """Read folder/.config.yaml as a name -> filename-stem map.
+
+        The .config.yaml file maps version names to file basenames (no
+        extension). For example::
+
+            default: generic
+            aggregation: agg_v2
+            research: deep_research_v3
+
+        Returns an empty dict if the file is missing or malformed (silent
+        on errors -- callers fall back to other resolution paths).
+        """
+        config_file = folder / ".config.yaml"
+        if not config_file.is_file():
+            return {}
+        try:
+            import yaml
+
+            config_data = yaml.safe_load(config_file.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+        if not isinstance(config_data, dict):
+            return {}
+        return {
+            str(k): str(v) for k, v in config_data.items() if v is not None
+        }
+
+    def _find_in_variable_folder(
+        self,
+        folder: Path,
+        name: Optional[str],
+    ) -> Optional[Path]:
+        """Find a file inside a single variable folder by name.
+
+        Resolution order:
+          1. <folder>/<name><override_suffix><ext>   (if ``enable_overrides``)
+          2. <folder>/<name><ext>                    (direct file)
+          3. <folder>/.config.yaml[<name>] -> <folder>/<value><ext>  (alias map)
+
+        No default fallback (caller's responsibility -- e.g., Pass 2 calls
+        this helper with ``name="default"``).
+
+        Args:
+            folder: Variable folder to search inside.
+            name: Version/filename-stem to look up. None or empty -> None.
+
+        Returns:
+            Path to the resolved file, or None if not found.
+        """
+        if not name or not folder.is_dir():
+            return None
+
+        # 1. Override-suffixed variant
+        if self.config.enable_overrides:
+            for ext in self.config.file_extensions:
+                override_path = folder / f"{name}{self.config.override_suffix}{ext}"
+                if override_path.is_file():
+                    return override_path
+
+        # 2. Direct file <name>.<ext>
+        for ext in self.config.file_extensions:
+            direct_path = folder / f"{name}{ext}"
+            if direct_path.is_file():
+                return direct_path
+
+        # 3. .config.yaml alias map (with path-traversal guard:
+        # the alias value must be a bare filename stem, not a relative path).
+        alias_map = self._read_variable_folder_config(folder)
+        if name in alias_map:
+            alias_value = alias_map[name]
+            if "/" not in alias_value and "\\" not in alias_value:
+                for ext in self.config.file_extensions:
+                    alias_path = folder / f"{alias_value}{ext}"
+                    if alias_path.is_file():
+                        return alias_path
+
+        return None
+
     def _find_variable_file(
         self,
         variable_name: str,
@@ -596,6 +675,25 @@ class FileBasedVariableManager(VariableManager):
         version: str = "",
     ) -> Tuple[Optional[Path], Optional[str]]:
         """Find the variable file for a given variable name.
+
+        Two-pass + fallback search (Refactor 12):
+
+        - **Pass 1** (only if ``version`` set): for each cascade level, for each
+          path_variant, search version-specific locations: flat-versioned
+          (``<name>.<version><ext>``), per-folder version
+          (``<name>/<version><ext>`` or ``.config.yaml[<version>]``), and
+          folder-version-subdir (``<name>/<version>/...``).
+        - **Pass 2** (only if ``version`` set): for each cascade level, for each
+          path_variant, search default in folder
+          (``<name>/default<ext>`` or ``.config.yaml[default]``).
+        - **Pass 3** (always, unless earlier pass returned): for each cascade
+          level, for each path_variant, search unversioned flat
+          (``<name><ext>`` or override-suffixed).
+
+        First match wins. Pass 1's cross-cascade sweep ensures that an
+        explicit version request at a more general cascade level wins over a
+        default/unversioned file at a more specific level (specificity beats
+        proximity for explicit version requests).
 
         Args:
             variable_name: Variable name (e.g., "notes_mindset")
@@ -606,40 +704,67 @@ class FileBasedVariableManager(VariableManager):
             Tuple of (file_path, resolved_name) or (None, None) if not found
         """
         if "/" in variable_name:
-            for cascade_path in cascade_paths:
-                versioned_variants: List[str] = []
-                if version and self.config.enable_overrides:
-                    versioned_variants.append(
-                        f"{variable_name}.{version}{self.config.override_suffix}"
-                    )
-                if self.config.enable_overrides:
-                    versioned_variants.append(
-                        f"{variable_name}{self.config.override_suffix}"
-                    )
-                if version:
-                    versioned_variants.append(f"{variable_name}.{version}")
-                versioned_variants.append(variable_name)
-                for file_variant in versioned_variants:
-                    for ext in self.config.file_extensions:
-                        file_path = cascade_path / f"{file_variant}{ext}"
-                        if file_path.exists() and file_path.is_file():
-                            return file_path, variable_name
-                target_dir = cascade_path / variable_name
-                if target_dir.is_dir():
-                    resolved = self._resolve_variable_folder(target_dir)
-                    if resolved is not None:
-                        return resolved, variable_name
-            return None, None
+            return self._find_variable_file_with_slash(
+                variable_name, cascade_paths, version
+            )
 
         possible_paths = self._generate_underscore_splits(variable_name)
 
-        for cascade_path in cascade_paths:
-            matches_at_level = []
+        # ----- PASS 1: version-specific search across all cascade levels -----
+        if version:
+            for cascade_path in cascade_paths:
+                # Directory config discovery (returns immediately if hit)
+                if self.config.directory_config_filename_patterns:
+                    dir_path = cascade_path / variable_name
+                    if dir_path.is_dir():
+                        match = self._match_filename_patterns(
+                            dir_path,
+                            self.config.directory_config_filename_patterns,
+                        )
+                        if match is not None:
+                            return (match, variable_name)
 
-            # Directory config discovery: check <cascade>/<name>/<pattern>
-            # Returns immediately if found (avoids false AmbiguousVariableError
-            # when a flat file with the same name also exists).
-            if self.config.directory_config_filename_patterns:
+                for path_variant in possible_paths:
+                    # Phase 1.a: flat-versioned + override variants
+                    versioned_variants: List[str] = []
+                    if self.config.enable_overrides:
+                        versioned_variants.append(
+                            f"{path_variant}.{version}{self.config.override_suffix}"
+                        )
+                    versioned_variants.append(f"{path_variant}.{version}")
+                    for file_variant in versioned_variants:
+                        for ext in self.config.file_extensions:
+                            file_path = cascade_path / f"{file_variant}{ext}"
+                            if file_path.is_file():
+                                return (file_path, variable_name)
+
+                    # Phase 1.b (NEW): per-folder version file or .config.yaml alias
+                    folder = cascade_path / path_variant
+                    in_folder = self._find_in_variable_folder(folder, version)
+                    if in_folder is not None:
+                        return (in_folder, variable_name)
+
+                    # Phase 1.c: <path_variant>/<version>/ subdir fallback
+                    folder_subdir = folder / version
+                    if folder_subdir.is_dir():
+                        resolved = self._resolve_variable_folder(folder_subdir)
+                        if resolved is not None:
+                            return (resolved, variable_name)
+
+        # ----- PASS 2: default search across all cascade levels -----
+        if version:
+            for cascade_path in cascade_paths:
+                for path_variant in possible_paths:
+                    folder = cascade_path / path_variant
+                    resolved = self._find_in_variable_folder(folder, "default")
+                    if resolved is not None:
+                        return (resolved, variable_name)
+
+        # ----- PASS 3: unversioned flat fallback -----
+        for cascade_path in cascade_paths:
+            # Directory config discovery for the no-version case
+            # (Pass 1 already handled it when version was set).
+            if not version and self.config.directory_config_filename_patterns:
                 dir_path = cascade_path / variable_name
                 if dir_path.is_dir():
                     match = self._match_filename_patterns(
@@ -650,59 +775,84 @@ class FileBasedVariableManager(VariableManager):
                         return (match, variable_name)
 
             for path_variant in possible_paths:
-                # Build version resolution order — split into versioned and unversioned
-                versioned_variants = []
-                if version and self.config.enable_overrides:
-                    versioned_variants.append(
-                        f"{path_variant}.{version}{self.config.override_suffix}"
-                    )
+                unversioned_variants: List[str] = []
                 if self.config.enable_overrides:
-                    versioned_variants.append(
+                    unversioned_variants.append(
                         f"{path_variant}{self.config.override_suffix}"
                     )
-                if version:
-                    versioned_variants.append(f"{path_variant}.{version}")
+                unversioned_variants.append(path_variant)
+                for file_variant in unversioned_variants:
+                    for ext in self.config.file_extensions:
+                        file_path = cascade_path / f"{file_variant}{ext}"
+                        if file_path.is_file():
+                            return (file_path, variable_name)
 
-                # Phase 1: Check versioned file variants (including overrides)
-                found_for_this_variant = False
+        return None, None
+
+    def _find_variable_file_with_slash(
+        self,
+        variable_name: str,
+        cascade_paths: List[Path],
+        version: str,
+    ) -> Tuple[Optional[Path], Optional[str]]:
+        """Two-pass search for variable names containing an explicit slash.
+
+        Mirrors the underscore-split path's two-pass structure but treats
+        ``variable_name`` as the single path variant (no split inference).
+        """
+        # Pass 1: version search across all cascade levels
+        if version:
+            for cascade_path in cascade_paths:
+                versioned_variants: List[str] = []
+                if self.config.enable_overrides:
+                    versioned_variants.append(
+                        f"{variable_name}.{version}{self.config.override_suffix}"
+                    )
+                versioned_variants.append(f"{variable_name}.{version}")
                 for file_variant in versioned_variants:
                     for ext in self.config.file_extensions:
                         file_path = cascade_path / f"{file_variant}{ext}"
-                        if file_path.exists():
-                            matches_at_level.append((file_path, variable_name))
-                            found_for_this_variant = True
-                            break
-                    if found_for_this_variant:
-                        break
+                        if file_path.exists() and file_path.is_file():
+                            return (file_path, variable_name)
 
-                # Phase 2: Folder-based fallback for versioned variables
-                if not found_for_this_variant and version:
-                    folder_path = cascade_path / path_variant / version
-                    if folder_path.is_dir():
-                        resolved = self._resolve_variable_folder(folder_path)
-                        if resolved is not None:
-                            matches_at_level.append((resolved, variable_name))
-                            found_for_this_variant = True
+                folder = cascade_path / variable_name
+                in_folder = self._find_in_variable_folder(folder, version)
+                if in_folder is not None:
+                    return (in_folder, variable_name)
 
-                # Phase 3: Unversioned file fallback
-                if not found_for_this_variant:
-                    for ext in self.config.file_extensions:
-                        file_path = cascade_path / f"{path_variant}{ext}"
-                        if file_path.exists():
-                            matches_at_level.append((file_path, variable_name))
-                            found_for_this_variant = True
-                            break
+                folder_subdir = folder / version
+                if folder_subdir.is_dir():
+                    resolved = self._resolve_variable_folder(folder_subdir)
+                    if resolved is not None:
+                        return (resolved, variable_name)
 
-                if found_for_this_variant:
-                    break
+        # Pass 2: default search across all cascade levels
+        if version:
+            for cascade_path in cascade_paths:
+                folder = cascade_path / variable_name
+                resolved = self._find_in_variable_folder(folder, "default")
+                if resolved is not None:
+                    return (resolved, variable_name)
 
-            # Check ambiguity at this cascade level
-            if len(matches_at_level) > 1:
-                raise AmbiguousVariableError(
-                    variable_name, [str(m[0]) for m in matches_at_level]
+        # Pass 3: unversioned + folder fallback
+        for cascade_path in cascade_paths:
+            unversioned_variants: List[str] = []
+            if self.config.enable_overrides:
+                unversioned_variants.append(
+                    f"{variable_name}{self.config.override_suffix}"
                 )
-            if len(matches_at_level) == 1:
-                return matches_at_level[0]
+            unversioned_variants.append(variable_name)
+            for file_variant in unversioned_variants:
+                for ext in self.config.file_extensions:
+                    file_path = cascade_path / f"{file_variant}{ext}"
+                    if file_path.exists() and file_path.is_file():
+                        return (file_path, variable_name)
+
+            target_dir = cascade_path / variable_name
+            if target_dir.is_dir():
+                resolved = self._resolve_variable_folder(target_dir)
+                if resolved is not None:
+                    return (resolved, variable_name)
 
         return None, None
 
@@ -722,20 +872,13 @@ class FileBasedVariableManager(VariableManager):
                 return default_file
 
         # 2. Check for .config.yaml with "default" key
-        config_file = folder_path / ".config.yaml"
-        if config_file.is_file():
-            import yaml
-
-            try:
-                config_data = yaml.safe_load(config_file.read_text(encoding="utf-8"))
-            except Exception:
-                config_data = None
-            if isinstance(config_data, dict) and "default" in config_data:
-                default_name = config_data["default"]
-                for ext in self.config.file_extensions:
-                    target = folder_path / f"{default_name}{ext}"
-                    if target.is_file():
-                        return target
+        alias_map = self._read_variable_folder_config(folder_path)
+        if "default" in alias_map:
+            default_name = alias_map["default"]
+            for ext in self.config.file_extensions:
+                target = folder_path / f"{default_name}{ext}"
+                if target.is_file():
+                    return target
 
         # 3. Collect all content files (exclude dotfiles like .config.yaml)
         content_files = [
