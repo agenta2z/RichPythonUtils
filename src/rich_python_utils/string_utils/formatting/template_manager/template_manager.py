@@ -36,6 +36,59 @@ if TYPE_CHECKING:
     from .variable_manager import VariableLoader
 
 
+# Extensions checked when resolving variable files (priority order).
+_VARIABLE_FILE_EXTENSIONS: tuple = (".jinja2", ".jinja", ".j2", ".hbs", ".txt", "")
+
+
+def _find_in_variable_folder(folder: Path, name: Optional[str]) -> Optional[Path]:
+    """Look up ``<name>.<ext>`` or ``.config.yaml[<name>] -> <value>.<ext>``
+    inside a single variable folder.
+
+    Mirrors :meth:`FileBasedVariableManager._find_in_variable_folder` but as
+    a standalone helper used by the simple, no-VariableLoader path of
+    :meth:`TemplateManager.load_variable`.
+
+    Resolution order:
+      1. ``<folder>/<name><ext>``        (direct file)
+      2. ``<folder>/.config.yaml[<name>] -> <folder>/<value><ext>``  (alias map)
+
+    No default fallback (caller's responsibility -- e.g., Pass 2 calls this
+    helper with ``name="default"``).
+
+    Returns ``None`` if ``name`` is empty, the folder does not exist, or no
+    matching file is found.
+    """
+    if not name or not folder.is_dir():
+        return None
+
+    # 1. Direct file <name>.<ext>
+    for ext in _VARIABLE_FILE_EXTENSIONS:
+        direct_path = folder / f"{name}{ext}"
+        if direct_path.is_file():
+            return direct_path
+
+    # 2. .config.yaml alias map
+    config_file = folder / ".config.yaml"
+    if config_file.is_file():
+        try:
+            import yaml
+
+            data = yaml.safe_load(config_file.read_text(encoding="utf-8"))
+        except Exception:
+            data = None
+        if isinstance(data, dict) and data.get(name) is not None:
+            alias = str(data[name])
+            # Path-traversal guard: alias must be a bare filename stem,
+            # not a relative path like "../../etc/passwd".
+            if "/" not in alias and "\\" not in alias:
+                for ext in _VARIABLE_FILE_EXTENSIONS:
+                    alias_path = folder / f"{alias}{ext}"
+                    if alias_path.is_file():
+                        return alias_path
+
+    return None
+
+
 class TemplateRootPriority(enum.Enum):
     """Priority when adding a template root to an existing TemplateManager.
 
@@ -193,6 +246,17 @@ class TemplateManager:
     template_variable_extractor: Union[str, Callable, None] = attrib(default="default")
     cross_space_root: Optional[str] = attrib(default=None)
     default_template_key: str = attrib(default="")
+    # When True (and ``predefined_variables=True``), variable resolution at
+    # render time falls back across ALL roots' VariableLoaders in priority
+    # order: origin root's loader is highest priority; remaining loaders
+    # iterated in ``_original_templates_paths`` order fill keys not resolved
+    # by origin. When False (default), each template's variables are resolved
+    # ONLY by the loader for its origin root (strict per-root isolation,
+    # preserved for backward compatibility). The flag has no effect when
+    # ``predefined_variables=False`` or when ``predefined_variables`` is a
+    # static Mapping/VariableLoader (those code paths don't use per-root
+    # loaders). See Refactor 17.
+    cross_root_variable_lookup: bool = attrib(default=False)
 
     # Internal tracking for idempotent add_template_root calls
     _injected_roots: set = attrib(factory=set, init=False, repr=False)
@@ -485,37 +549,105 @@ class TemplateManager:
         """Return a copy of the original template source paths (read-only)."""
         return list(self._original_templates_paths)
 
+    def _find_version_only_across_roots(
+        self,
+        var_name: str,
+        version: str,
+        root_space: str,
+        type_: str,
+    ) -> Optional[str]:
+        """Cross-root Pass-1 (version-only) variable search.
+
+        Iterates ``_variable_loaders_by_root`` entries in
+        ``_original_templates_paths`` priority order. For each loader,
+        searches its cascade for an EXACT version match — never default
+        fallback. Returns the file content of the first hit, or None if
+        no root has the variable defined at the requested version.
+
+        Used by ``cross_root_variable_lookup=True`` to make exact-version
+        matches in higher-priority roots win over default-fallback
+        matches in the origin root.
+        """
+        if not version or not self._variable_loaders_by_root:
+            return None
+        for tmpl_path in self._original_templates_paths:
+            loader = self._variable_loaders_by_root.get(tmpl_path)
+            if loader is None:
+                continue
+            cascade_paths = loader._get_cascade_paths(
+                variable_root_space=root_space,
+                variable_type=type_,
+            )
+            possible_paths = loader._generate_underscore_splits(var_name)
+            for cascade_path in cascade_paths:
+                for path_variant in possible_paths:
+                    folder = cascade_path / path_variant
+                    hit = loader._find_in_variable_folder(folder, version)
+                    if hit is not None:
+                        try:
+                            return loader._read_file_content(hit)
+                        except Exception:  # pragma: no cover — defensive
+                            continue
+        return None
+
     def load_variable(
         self,
         var_name: str,
-        variant: str,
+        version: str,
         root_space: Optional[str] = None,
-    ) -> str:
-        """Load a specific variant of a predefined variable file.
+    ) -> Optional[str]:
+        """Load a specific version of a predefined variable file.
 
-        Looks for ``<root>/<root_space>/<active_template_type>/_variables/<var_name>/<variant>.jinja2``
-        in each template root path.
+        Two-pass per-folder version search across all template roots
+        (Refactor 12):
+
+        - **Pass 1** — for each template root, look up
+          ``<root>/<root_space>/<tmpl_type>/_variables/<var_name>/<version>.<ext>``
+          (or ``.config.yaml[<version>]`` alias).
+        - **Pass 2** — if Pass 1 misses, look up ``default.<ext>`` (or
+          ``.config.yaml[default]``) in the same folders.
 
         Args:
             var_name: Variable name (maps to subdirectory under ``_variables/``).
-            variant: Variant file name (without extension).
-            root_space: Template root space.  Defaults to ``active_template_root_space``.
+            version: Version filename-stem (without extension), e.g.
+                ``"aggregation"``. Empty string disables both passes; the
+                method then returns None.
+            root_space: Template root space.  Defaults to
+                ``active_template_root_space``.
 
         Returns:
-            File content as a string, or empty string if not found.
+            File content as a string, or ``None`` if not found anywhere
+            (distinct from ``""`` which means an empty file was found).
         """
+        if not version:
+            return None
+
         if root_space is None:
             root_space = self.active_template_root_space or ""
         tmpl_type = self.active_template_type or "main"
+
+        # Build per-root variable folders
+        folders: List[Path] = []
         for tmpl_path in self._original_templates_paths:
             parts = [tmpl_path]
             if root_space:
                 parts.append(root_space)
-            parts.extend([tmpl_type, "_variables", var_name, f"{variant}.jinja2"])
-            candidate = Path(*parts)
-            if candidate.is_file():
-                return candidate.read_text(encoding=self.template_encoding)
-        return None  # not found (distinct from "" = empty file)
+            parts.extend([tmpl_type, "_variables", var_name])
+            folders.append(Path(*parts))
+
+        # Pass 1: version-specific search across all roots
+        for folder in folders:
+            resolved = _find_in_variable_folder(folder, version)
+            if resolved is not None:
+                return resolved.read_text(encoding=self.template_encoding)
+
+        # Pass 2: default fallback across all roots
+        for folder in folders:
+            resolved = _find_in_variable_folder(folder, "default")
+            if resolved is not None:
+                return resolved.read_text(encoding=self.template_encoding)
+
+        return None
 
     def add_template_root(
         self,
@@ -1560,7 +1692,7 @@ class TemplateManager:
         predefined_vars = {}
         if not skip_predefined:
             if self._variable_loader is not None or self._variable_loaders_by_root:
-                # Pick the right loader based on template origin (variable isolation)
+                # Pick the right loader based on template origin (variable isolation).
                 origin = getattr(template, "_origin_root", None)
                 loader = (
                     self._variable_loaders_by_root.get(origin, self._variable_loader)
@@ -1582,6 +1714,89 @@ class TemplateManager:
                     )
                     if yaml_vars:
                         predefined_vars = {**yaml_vars, **predefined_vars}
+
+                    # Refactor 17: cross-root variable fallback.
+                    # When enabled, two complementary mechanisms ensure that
+                    # an exact-version match in any root wins over a
+                    # default-fallback match in the origin root:
+                    #
+                    # (A) For each detected variable, scan all roots'
+                    #     loaders in priority order for an EXACT version
+                    #     match (no default fallback). The first hit wins
+                    #     and overrides whatever origin's resolve_from_template
+                    #     returned (which may have been a default fallback).
+                    #
+                    # (B) For variables NOT detected in origin's resolve
+                    #     (e.g., variables nested under
+                    #     ``<root>/<space>/<type>/_variables/`` not at the
+                    #     loader's top-level cascade path): use
+                    #     ``self.load_variable`` (Refactor 12 cross-root) to
+                    #     fill them. Yaml sidecar variables from other
+                    #     roots also fill remaining gaps.
+                    if (
+                        self.cross_root_variable_lookup
+                        and self._variable_loaders_by_root
+                    ):
+                        try:
+                            extractor = loader._get_variable_extractor(
+                                file_path=None
+                            )
+                        except Exception:  # pragma: no cover — defensive
+                            extractor = None
+                        var_names: set = set()
+                        if extractor is not None:
+                            try:
+                                var_names = set(extractor(str(template)))
+                            except Exception:  # pragma: no cover — defensive
+                                var_names = set()
+                        var_names.update(predefined_vars.keys())
+
+                        # Mechanism (A): version-only scan in priority order.
+                        # For each detected variable, iterate roots' loaders
+                        # in priority order. For each loader, ask whether it
+                        # has a Pass-1 (exact version) match for the variable
+                        # in its cascade — by reaching into ``_find_variable_file``
+                        # via the loader's internals. First version-match wins.
+                        if self.template_version:
+                            for var_name in var_names:
+                                priority_value = (
+                                    self._find_version_only_across_roots(
+                                        var_name=var_name,
+                                        version=self.template_version,
+                                        root_space=_orig_root_space or "",
+                                        type_=_orig_type or "main",
+                                    )
+                                )
+                                if priority_value is not None:
+                                    predefined_vars[var_name] = priority_value
+
+                        # Mechanism (B): fill keys still missing via
+                        # ``self.load_variable`` (which also tries default
+                        # fallback across roots) AND yaml sidecars.
+                        for var_name in var_names:
+                            if var_name in predefined_vars:
+                                continue
+                            fallback = self.load_variable(
+                                var_name,
+                                version=self.template_version,
+                                root_space=_orig_root_space or "",
+                            )
+                            if fallback is not None:
+                                predefined_vars[var_name] = fallback
+
+                        # Yaml sidecar variables from other roots fill gaps.
+                        for tmpl_path in self._original_templates_paths:
+                            other_loader = self._variable_loaders_by_root.get(
+                                tmpl_path
+                            )
+                            if other_loader is None or other_loader is loader:
+                                continue
+                            other_yaml_vars = other_loader.get_all_variables(
+                                variable_root_space=_orig_root_space or "",
+                                variable_type=_orig_type or "main",
+                            )
+                            for k, v in other_yaml_vars.items():
+                                predefined_vars.setdefault(k, v)
             elif self._static_predefined_vars is not None:
                 predefined_vars = dict(self._static_predefined_vars)
 

@@ -457,6 +457,36 @@ class TestVariableIsolation:
         assert str(with_vars) in tm._variable_loaders_by_root
         assert str(without_vars) not in tm._variable_loaders_by_root
 
+    def test_cross_root_render_no_variables_root_uses_fallback(self, tmp_path):
+        """Template from a root WITHOUT _variables/ renders with variables
+        resolved from the first root's loader (the fallback _variable_loader).
+
+        This is the exact production scenario for the template split: wrapper
+        templates live in AgentFoundation (no _variables/), variables live in
+        OpenStartup (has _variables/).  The fallback path must produce a fully
+        rendered string containing the variable content.
+        """
+        vars_root = tmp_path / "vars_root"       # has _variables/, no template for "Greet"
+        template_root = tmp_path / "template_root"  # has template, no _variables/
+
+        _make_root(vars_root, {"main/default": "unused"}, variables={"greeting": "HELLO-FROM-VARS-ROOT"})
+        _make_root(template_root, {"main/Greet": "{{notes_greeting}} {{user}}!"})
+        # template_root intentionally has NO _variables/
+
+        tm = TemplateManager(
+            templates=[str(vars_root), str(template_root)],
+            predefined_variables=True,
+            active_template_type="main",
+        )
+
+        # "Greet" only exists in template_root (no _variables/ → no origin-matched
+        # loader → falls back to _variable_loader which is vars_root's loader).
+        result = tm("Greet", user="Alice")
+        assert "HELLO-FROM-VARS-ROOT" in result, (
+            "Variable from vars_root must resolve for template in template_root"
+        )
+        assert "Alice" in result
+
     def test_backward_compat_single_root(self, tmp_path):
         """Single root with predefined_variables=True still works exactly as before."""
         root = tmp_path / "root"
