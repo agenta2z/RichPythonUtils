@@ -1,7 +1,7 @@
 import re
 from typing import Mapping, Callable, Dict, Optional, Any, List, Union, Tuple, Set
 
-from jinja2 import Template, meta, Environment
+from jinja2 import Template, meta, Environment, ChainableUndefined
 
 from rich_python_utils.common_utils import dict_
 
@@ -86,8 +86,11 @@ def compile_template(
         ...     print(f"Validation failed: {e}")
         Validation failed: Missing required variables in template: {'name'}
     """
-    # Compile the template first
-    jinja_template = Template(template)
+    # Compile with ChainableUndefined so chained attribute access on
+    # undefined variables (e.g., {{ notes.local_search_efficiency }})
+    # silently renders empty instead of raising UndefinedError.
+    _env = Environment(undefined=ChainableUndefined)
+    jinja_template = _env.from_string(template)
 
     # Only parse template for variables if we need them
     if return_variables or required_variables is not None:
