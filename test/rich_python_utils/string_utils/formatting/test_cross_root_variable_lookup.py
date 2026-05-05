@@ -350,35 +350,30 @@ class TestMultiLevelVariantSelection:
             active_template_root_space="plan",
             predefined_variables=False,
         )
-        assert (
-            tm.load_variable(
-                "task_preamble",
-                "understand_codebase/meta_mrs_rankevolve",
-                "plan",
-            )
-            == "RANKEVOLVE"
+        result = tm.load_variables(
+            {"task_preamble": "understand_codebase/meta_mrs_rankevolve"},
+            root_space="plan",
         )
-        assert (
-            tm.load_variable(
-                "task_preamble",
-                "understand_codebase/meta_mrs_attention",
-                "plan",
-            )
-            == "ATTENTION"
+        assert result["task_preamble"] == "RANKEVOLVE"
+
+        result = tm.load_variables(
+            {"task_preamble": "understand_codebase/meta_mrs_attention"},
+            root_space="plan",
         )
-        assert (
-            tm.load_variable(
-                "task_preamble",
-                "understand_codebase/generic",
-                "plan",
-            )
-            == "GENERIC"
+        assert result["task_preamble"] == "ATTENTION"
+
+        result = tm.load_variables(
+            {"task_preamble": "understand_codebase/generic"},
+            root_space="plan",
         )
-        # Plain version with multiple files + no default → None (load_variable)
-        assert (
-            tm.load_variable("task_preamble", "understand_codebase", "plan")
-            is None
+        assert result["task_preamble"] == "GENERIC"
+
+        # Plain version with multiple files + no default → falls back to literal
+        result = tm.load_variables(
+            {"task_preamble": "understand_codebase"},
+            root_space="plan",
         )
+        assert result["task_preamble"] == "understand_codebase"
 
 
 class TestCrossRootWithMissingVersion:

@@ -590,64 +590,174 @@ class TemplateManager:
                             continue
         return None
 
-    def load_variable(
+    def _cascade_load_variable(
         self,
         var_name: str,
         version: str,
-        root_space: Optional[str] = None,
+        root_space: str,
+        tmpl_type: str,
     ) -> Optional[str]:
-        """Load a specific version of a predefined variable file.
+        """Resolve one variable using cascading paths across all roots.
 
-        Two-pass per-folder version search across all template roots
-        (Refactor 12):
+        Cascade priority (level-major, root-interleaved at each level):
 
-        - **Pass 1** — for each template root, look up
-          ``<root>/<root_space>/<tmpl_type>/_variables/<var_name>/<version>.<ext>``
-          (or ``.config.yaml[<version>]`` alias).
-        - **Pass 2** — if Pass 1 misses, look up ``default.<ext>`` (or
-          ``.config.yaml[default]``) in the same folders.
+        1. ``<root>/<space>/<type>/_variables/<var>/``  (template-specific)
+        2. ``<root>/<space>/_variables/<var>/``          (space-level)
+        3. ``<root>/_variables/<var>/``                  (global shared)
 
-        Args:
-            var_name: Variable name (maps to subdirectory under ``_variables/``).
-            version: Version filename-stem (without extension), e.g.
-                ``"aggregation"``. Empty string disables both passes; the
-                method then returns None.
-            root_space: Template root space.  Defaults to
-                ``active_template_root_space``.
+        Within each level, roots are checked in ``_original_templates_paths``
+        order (higher-priority root first).  This extends the existing
+        ``load_variable()`` cross-root behavior to two additional cascade
+        levels while preserving the root-interleaved ordering at Level 1.
 
-        Returns:
-            File content as a string, or ``None`` if not found anywhere
-            (distinct from ``""`` which means an empty file was found).
+        Two-pass version search at each cascade level:
+
+        - **Pass 1** — exact ``<version>.<ext>`` (or ``.config.yaml``
+          alias).
+        - **Pass 2** — ``default.<ext>`` fallback.
+
+        Returns file content as a string, or ``None`` if not found.
         """
-        if not version:
-            return None
-
-        if root_space is None:
-            root_space = self.active_template_root_space or ""
-        tmpl_type = self.active_template_type or "main"
-
-        # Build per-root variable folders
         folders: List[Path] = []
+
+        # Level 1: space/type/_variables/ (most specific)
         for tmpl_path in self._original_templates_paths:
-            parts = [tmpl_path]
+            parts: list = [tmpl_path]
             if root_space:
                 parts.append(root_space)
             parts.extend([tmpl_type, "_variables", var_name])
             folders.append(Path(*parts))
 
-        # Pass 1: version-specific search across all roots
+        # Level 2: space/_variables/
+        if root_space:
+            for tmpl_path in self._original_templates_paths:
+                folders.append(
+                    Path(tmpl_path, root_space, "_variables", var_name)
+                )
+
+        # Level 3: _variables/ (global shared)
+        for tmpl_path in self._original_templates_paths:
+            folders.append(Path(tmpl_path, "_variables", var_name))
+
+        # Pass 1: version-specific search across all cascade levels
         for folder in folders:
             resolved = _find_in_variable_folder(folder, version)
             if resolved is not None:
                 return resolved.read_text(encoding=self.template_encoding)
 
-        # Pass 2: default fallback across all roots
+        # Pass 2: default fallback across all cascade levels
         for folder in folders:
             resolved = _find_in_variable_folder(folder, "default")
             if resolved is not None:
                 return resolved.read_text(encoding=self.template_encoding)
 
         return None
+
+    def load_variables(
+        self,
+        variable_specs: Dict[str, Any],
+        root_space: Optional[str] = None,
+        default_version: str = "",
+    ) -> Dict[str, Any]:
+        """Batch-load template variables with cascade resolution.
+
+        Unified API that combines per-variable version selection,
+        ``@``-strict mode, ``=``-literal mode, and fallback-to-literal
+        with cascading file resolution (space/type → space → global).
+
+        Args:
+            variable_specs: Dict mapping variable names to version specs.
+
+                **Key format** — plain or dot-separated:
+
+                - ``"task_preamble"`` — flat key, result is
+                  ``{"task_preamble": "<content>"}``
+                - ``"notes.local_search_efficiency"`` — dot key, splits
+                  into ``var_name="notes"`` + ``version="local_search_efficiency"``,
+                  result is nested: ``{"notes": {"local_search_efficiency": "<content>"}}``
+                  for Jinja2 ``{{ notes.local_search_efficiency }}`` access.
+
+                **Value conventions** (prefix semantics):
+
+                - ``"aggregation"`` — try file, fall back to literal string
+                - ``"@aggregation"`` — strict: raise if file not found
+                - ``"=literal text"`` — force literal, skip file lookup
+                - ``None`` / ``""`` — for dot keys, version is derived from
+                  the dot suffix; for plain keys, uses *default_version*
+                - Non-string value — pass through unchanged
+
+            root_space: Template root space (e.g. ``"plan"``).
+                Defaults to ``active_template_root_space``.
+            default_version: Fallback version for plain-key specs with
+                ``None`` or empty values.
+
+        Returns:
+            Dict mapping variable names to resolved content.
+            Dot keys produce nested dicts.
+        """
+        if root_space is None:
+            root_space = self.active_template_root_space or ""
+        tmpl_type = self.active_template_type or "main"
+
+        result: Dict[str, Any] = {}
+
+        def _store(base: str, nested_key: Optional[str], content: Any) -> None:
+            if nested_key is not None:
+                result.setdefault(base, {})[nested_key] = content
+            else:
+                result[base] = content
+
+        for raw_key, spec in variable_specs.items():
+            # Dot-key: "notes.local_search_efficiency" → nested dict output
+            # for Jinja2 {{ notes.local_search_efficiency }} access.
+            # Splits into var_name="notes" (directory) + nested_key="local_search_efficiency" (file).
+            if "." in raw_key:
+                base_var, nested_key = raw_key.split(".", 1)
+            else:
+                base_var, nested_key = raw_key, None
+
+            value = spec
+
+            # For dot-keys, the nested_key IS the default version
+            # (e.g., "notes.local_search_efficiency": null → version="local_search_efficiency").
+            # For plain keys, fall back to default_version as before.
+            if not value:
+                value = nested_key if nested_key else default_version
+            if not value:
+                _store(base_var, nested_key, "")
+                continue
+
+            # Non-string pass-through
+            if not isinstance(value, str):
+                _store(base_var, nested_key, value)
+                continue
+
+            # @-prefix: strict file lookup (raise if not found)
+            if value.startswith("@"):
+                version = value[1:]
+                loaded = self._cascade_load_variable(
+                    base_var, version, root_space, tmpl_type
+                )
+                if loaded is None:
+                    raise FileNotFoundError(
+                        f"load_variables: no variable file for "
+                        f"@{version} (var={base_var}, space={root_space})"
+                    )
+                _store(base_var, nested_key, loaded)
+                continue
+
+            # =-prefix: force literal value
+            if value.startswith("="):
+                _store(base_var, nested_key, value[1:])
+                continue
+
+            # Default: try file, fall back to literal string
+            loaded = self._cascade_load_variable(
+                base_var, value, root_space, tmpl_type
+            )
+            _store(base_var, nested_key, loaded if loaded is not None else value)
+
+        return result
 
     def add_template_root(
         self,
@@ -1730,9 +1840,9 @@ class TemplateManager:
                     #     (e.g., variables nested under
                     #     ``<root>/<space>/<type>/_variables/`` not at the
                     #     loader's top-level cascade path): use
-                    #     ``self.load_variable`` (Refactor 12 cross-root) to
-                    #     fill them. Yaml sidecar variables from other
-                    #     roots also fill remaining gaps.
+                    #     ``_cascade_load_variable`` to fill them. Yaml
+                    #     sidecar variables from other roots also fill
+                    #     remaining gaps.
                     if (
                         self.cross_root_variable_lookup
                         and self._variable_loaders_by_root
@@ -1771,18 +1881,21 @@ class TemplateManager:
                                     predefined_vars[var_name] = priority_value
 
                         # Mechanism (B): fill keys still missing via
-                        # ``self.load_variable`` (which also tries default
-                        # fallback across roots) AND yaml sidecars.
-                        for var_name in var_names:
-                            if var_name in predefined_vars:
-                                continue
-                            fallback = self.load_variable(
-                                var_name,
-                                version=self.template_version,
-                                root_space=_orig_root_space or "",
-                            )
-                            if fallback is not None:
-                                predefined_vars[var_name] = fallback
+                        # cascade resolution (try file, skip if not found)
+                        # AND yaml sidecars.
+                        _fb_version = self.template_version
+                        if _fb_version:
+                            _fb_type = _orig_type or "main"
+                            _fb_space = _orig_root_space or ""
+                            for var_name in var_names:
+                                if var_name in predefined_vars:
+                                    continue
+                                fallback = self._cascade_load_variable(
+                                    var_name, _fb_version,
+                                    _fb_space, _fb_type,
+                                )
+                                if fallback is not None:
+                                    predefined_vars[var_name] = fallback
 
                         # Yaml sidecar variables from other roots fill gaps.
                         for tmpl_path in self._original_templates_paths:
