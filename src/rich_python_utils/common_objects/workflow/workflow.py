@@ -1239,6 +1239,8 @@ class Workflow(WorkNodeBase, ABC):
                         self.log_error({
                             'step_failed': i,
                             'result_save_on_error_enabled': result_save_on_error_enabled,
+                            'exception_type': type(err).__name__,
+                            'exception_message': str(err),
                         })
 
                         if i > 0 and result_save_on_error_enabled:
@@ -1567,6 +1569,8 @@ class Workflow(WorkNodeBase, ABC):
                         self.log_error({
                             'step_failed': i,
                             'result_save_on_error_enabled': result_save_on_error_enabled,
+                            'exception_type': type(err).__name__,
+                            'exception_message': str(err),
                         })
 
                         if i > 0 and result_save_on_error_enabled:

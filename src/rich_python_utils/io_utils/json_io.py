@@ -9,6 +9,24 @@ from itertools import chain, islice
 from os import path
 from typing import Any as TypingAny, Union, Iterable, Iterator, Dict, List, Mapping, Type, Callable, Sequence, Optional
 
+def _json_safe_default(o):
+    """Fallback serializer for ``json.dumps`` — degrades unknown types to strings.
+
+    Called ONLY for objects that ``json.dumps`` cannot serialize natively
+    (dict, list, str, int, float, bool, None all pass through unchanged).
+    Prevents serialization crashes in logging/checkpoint paths.
+    """
+    if callable(o):
+        return f"<callable:{getattr(o, '__qualname__', repr(o))}>"
+    try:
+        import attr
+        if attr.has(type(o)):
+            return attr.asdict(o, recurse=False)
+    except Exception:
+        pass
+    return f"<unserializable:{type(o).__name__}>"
+
+
 from rich_python_utils.common_objects.partial import Partial
 from rich_python_utils.common_utils import dict__, get_relevant_named_args
 from rich_python_utils.common_utils.iter_helper import iter__
@@ -224,7 +242,8 @@ def _serialize_value(value, ensure_ascii=False):
     """Serialize a value to string for writing to a parts file."""
     if isinstance(value, str):
         return value
-    return json.dumps(value, ensure_ascii=ensure_ascii, indent=2)
+    return json.dumps(value, ensure_ascii=ensure_ascii, indent=2,
+                       default=_json_safe_default)
 
 
 def _resolve_parts_references(obj, parts_dir):
@@ -702,7 +721,7 @@ def _write_type_file(type_map, data_file_path, type_file_path=None):
         type_file_path = data_file_path + ".types.json"
     os.makedirs(os.path.dirname(type_file_path) or ".", exist_ok=True)
     with open(type_file_path, "w", encoding="utf-8") as f:
-        f.write(json.dumps(type_map, indent=2))
+        f.write(json.dumps(type_map, indent=2, default=_json_safe_default))
     return type_file_path
 
 
@@ -947,14 +966,16 @@ def iter_all_json_strs(json_obj_iter, process_func=None, indent=None, ensure_asc
     if process_func:
         for json_obj in json_obj_iter:
             try:
-                yield json.dumps(process_func(json_obj), indent=indent, ensure_ascii=ensure_ascii, **kwargs)
+                yield json.dumps(process_func(json_obj), indent=indent, ensure_ascii=ensure_ascii,
+                                 default=_json_safe_default, **kwargs)
             except Exception as ex:
                 print(json_obj)
                 raise ex
     else:
         for json_obj in json_obj_iter:
             try:
-                yield json.dumps(json_obj, indent=indent, ensure_ascii=ensure_ascii, **kwargs)
+                yield json.dumps(json_obj, indent=indent, ensure_ascii=ensure_ascii,
+                                 default=_json_safe_default, **kwargs)
             except Exception as ex:
                 print(json_obj)
                 raise ex
@@ -2087,9 +2108,11 @@ def write_json(
 
     with open_(file_path, 'a' if append else 'w', encoding=encoding, **other_kwargs) as fout:
         fout.write(
-            json.dumps(obj, indent=indent, ensure_ascii=ensure_ascii, **kwargs_others)
+            json.dumps(obj, indent=indent, ensure_ascii=ensure_ascii,
+                       default=_json_safe_default, **kwargs_others)
             if encoding
-            else json.dumps(obj, indent=indent, **other_kwargs)
+            else json.dumps(obj, indent=indent, default=_json_safe_default,
+                            **other_kwargs)
         )
         fout.write('\n')
         fout.flush()
