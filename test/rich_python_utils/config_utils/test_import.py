@@ -10,6 +10,7 @@ from rich_python_utils.config_utils._instantiate import (
     _ImportFactory,
     _resolve_import_,
 )
+from rich_python_utils.config_utils._lazy_config_factory import LazyConfigFactory
 
 
 # ---------------------------------------------------------------------------
@@ -268,10 +269,11 @@ def factory_dir(tmp_path):
 
 
 class TestImportFactory:
-    def test_single_factory_returns_import_factory(self, factory_dir):
+    def test_single_factory_returns_lazy_config_factory(self, factory_dir):
+        """After Fix #9+#10, ALL *_factory entries get LazyConfigFactory."""
         cfg = load_config(str(factory_dir / "outer.yaml"))
         result = instantiate(cfg)
-        assert isinstance(result.worker_factory, _ImportFactory)
+        assert isinstance(result.worker_factory, LazyConfigFactory)
 
     def test_factory_call_creates_fresh_instances(self, factory_dir):
         cfg = load_config(str(factory_dir / "outer.yaml"))
@@ -281,17 +283,19 @@ class TestImportFactory:
         assert id(w1) != id(w2)
         assert id(w1.child) != id(w2.child)
 
-    def test_factory_accepts_extra_kwargs(self, factory_dir):
+    def test_factory_call_with_no_args(self, factory_dir):
+        """LazyConfigFactory has strict no-args signature."""
         cfg = load_config(str(factory_dir / "outer.yaml"))
         result = instantiate(cfg)
-        w = result.worker_factory(sub_query="test", index=0)
+        w = result.worker_factory()
         assert w.model == "opus"
 
-    def test_dict_of_factories_mixed(self, factory_dir):
+    def test_dict_of_factories_all_lazy(self, factory_dir):
+        """After Fix #9, ALL dict factory entries become LazyConfigFactory."""
         cfg = load_config(str(factory_dir / "outer_dict.yaml"))
         result = instantiate(cfg)
-        assert isinstance(result.worker_factory["type_a"], _ImportFactory)
-        assert isinstance(result.worker_factory["type_b"], functools.partial)
+        assert isinstance(result.worker_factory["type_a"], LazyConfigFactory)
+        assert isinstance(result.worker_factory["type_b"], LazyConfigFactory)
 
     def test_dict_factory_fresh_instances(self, factory_dir):
         cfg = load_config(str(factory_dir / "outer_dict.yaml"))
@@ -301,10 +305,11 @@ class TestImportFactory:
         assert id(w1) != id(w2)
         assert id(w1.child) != id(w2.child)
 
-    def test_import_shared_in_factory_field_returns_partial(self, factory_dir):
+    def test_import_shared_in_factory_field_returns_lazy(self, factory_dir):
+        """Even _import_shared_ in *_factory fields now becomes LazyConfigFactory."""
         cfg = load_config(str(factory_dir / "outer_shared.yaml"))
         result = instantiate(cfg)
-        assert isinstance(result.worker_factory, functools.partial)
+        assert isinstance(result.worker_factory, LazyConfigFactory)
 
     def test_dot_notation_overrides_on_factory_import(self, factory_dir):
         cfg = load_config(

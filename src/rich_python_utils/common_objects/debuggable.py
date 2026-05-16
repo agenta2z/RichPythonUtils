@@ -291,20 +291,44 @@ class Debuggable(Identifiable, ABC):
                 return name
         return f'logger_{index}'
 
+    def _resolve_auto_logger(self):
+        """Resolve ``logger='auto'`` to Python's builtin logger.
+
+        Creates ``logging.getLogger(self.log_name)`` with a colored
+        ``StreamHandler`` on stdout.  Subclasses (e.g., InferencerBase)
+        override to add workspace-derived loggers while calling
+        ``super()._resolve_auto_logger()`` as a console-logging fallback.
+        """
+        default_logger = logging.getLogger(self.log_name)
+        if not default_logger.handlers:
+            import sys
+            handler = logging.StreamHandler(sys.stdout)
+            if self.log_time:
+                formatter = _ColoredLogFormatter(
+                    fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                    datefmt=self.log_time,
+                )
+            else:
+                formatter = _ColoredLogFormatter(
+                    fmt="%(name)s - %(levelname)s - %(message)s"
+                )
+            handler.setFormatter(formatter)
+            default_logger.addHandler(handler)
+            default_logger.setLevel(logging.DEBUG)
+        self.logger = {"_default": default_logger}
+
     def _normalize_loggers(self):
         """
         Normalize ``self.logger`` into a dict ``{name: logger_object}`` and
         build ``self._resolved_logger_configs`` from inline configs and ``logger_configs``.
 
         Supports ``logger="auto"`` — delegates to ``_resolve_auto_logger()``
-        hook (implemented by subclasses like InferencerBase) to create a
-        workspace-derived logger. If the hook can't resolve yet (no workspace),
-        normalization is deferred.
+        to create a logger. If the hook leaves ``self.logger`` as a string
+        (e.g., deferred until workspace is assigned), normalization is deferred.
         """
-        # Handle "auto" logger — delegate to subclass hook
+        # Handle "auto" logger — delegate to hook (base or subclass override)
         if isinstance(self.logger, str) and self.logger == "auto":
-            if hasattr(self, "_resolve_auto_logger"):
-                self._resolve_auto_logger()
+            self._resolve_auto_logger()
             if isinstance(self.logger, str):
                 # Still unresolved (e.g., no workspace yet) — defer
                 return

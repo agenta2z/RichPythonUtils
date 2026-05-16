@@ -321,7 +321,7 @@ async def async_execute_with_retry(
                 transition_exception = e
                 total_attempts_across_chain += 1
 
-                logging.getLogger(__name__).info(
+                logging.getLogger(__name__).warning(
                     "Retry attempt %d/%d after %s: %s",
                     attempt + 1,
                     current_max_attempts,
@@ -344,7 +344,7 @@ async def async_execute_with_retry(
                 transition_exception = e
                 total_attempts_across_chain += 1
 
-                logging.getLogger(__name__).info(
+                logging.getLogger(__name__).warning(
                     "Retry attempt %d/%d after %s: %s",
                     attempt + 1,
                     current_max_attempts,

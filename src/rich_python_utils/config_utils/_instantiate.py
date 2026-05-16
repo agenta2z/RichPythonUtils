@@ -35,35 +35,24 @@ _IMPORT_SHARED_KEY = "_import_shared_"
 _FACTORY_MARKER = "_factory_"
 
 
-class _ImportFactory:
-    """Lazy factory: re-instantiates from resolved config on each call.
+from rich_python_utils.config_utils._lazy_config_factory import LazyConfigFactory
 
-    Created by ``_filter_attrs_keys()`` for ``_import_`` configs inside
-    ``*_factory`` fields.  Exposes ``template_extra_feed`` dict so that
-    ``_for_each_child_inferencer`` duck-typing picks it up for propagation.
+
+class _ImportFactory(LazyConfigFactory):
+    """Deprecated alias for ``LazyConfigFactory``.
+
+    Kept for backward compatibility with ``_import_:``-tagged YAML factories.
+    Use ``LazyConfigFactory`` directly in new code.
     """
 
     def __init__(self, config_dict: dict, injectables: dict | None = None) -> None:
-        self._config_dict = config_dict
-        self._injectables = injectables or {}
-        self.template_extra_feed: dict = {}
-
-    def __call__(self, **_kwargs):
-        from omegaconf import OmegaConf
-
-        config = copy.deepcopy(self._config_dict)
-        for k, v in self._injectables.items():
-            injectable_key = f"_{k}"
-            if injectable_key in config:
-                config[injectable_key] = copy.deepcopy(v)
-        instance = instantiate(OmegaConf.create(config))
-        if self.template_extra_feed and hasattr(instance, "template_extra_feed"):
-            instance.template_extra_feed.update(self.template_extra_feed)
-        return instance
-
-    def __repr__(self) -> str:
-        target = self._config_dict.get("_target_", "?")
-        return f"_ImportFactory({target})"
+        import warnings
+        warnings.warn(
+            "_ImportFactory is deprecated; use LazyConfigFactory instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(config_dict=config_dict, injectables=injectables)
 
 
 def _deep_merge(base: dict, overrides: dict) -> dict:
@@ -348,17 +337,30 @@ def instantiate(config, _convert_: str = "all", **kwargs) -> Any:
     ensure_resolvers()
     config, factory_configs = _resolve_and_preprocess(config)
     result = _hydra_instantiate(config, _convert_=_convert_, **kwargs)
-    for field_name, child_key, raw_config, injectables in factory_configs:
-        _apply_import_factory(result, field_name, child_key, raw_config, injectables)
+    for owner_path, field_name, child_key, raw_config, injectables in factory_configs:
+        _apply_lazy_factory(result, owner_path, field_name, child_key, raw_config, injectables)
     return result
 
 
-def _apply_import_factory(obj, field_name, child_key, raw_config, injectables=None):
-    """Replace a Hydra-created partial with an ``_ImportFactory``."""
+def _apply_lazy_factory(root, owner_path, field_name, child_key, raw_config, injectables=None):
+    """Replace a Hydra-created partial with a ``LazyConfigFactory``.
+
+    Navigates the instantiated object tree via *owner_path* (a dot-separated
+    string of attr names recorded during ``_walk``) to find the object that
+    owns *field_name*, then replaces the partial at that location.
+
+    Deterministic — no heuristic search, no false positives.
+    """
+    obj = root
+    if owner_path:
+        for part in owner_path.split("."):
+            obj = getattr(obj, part, None)
+            if obj is None:
+                return
     container = getattr(obj, field_name, None)
     if container is None:
         return
-    factory = _ImportFactory(raw_config, injectables=injectables)
+    factory = LazyConfigFactory(raw_config, injectables=injectables)
     if child_key is None:
         setattr(obj, field_name, factory)
     elif isinstance(container, dict):
@@ -396,6 +398,7 @@ def _walk(
     _injectables: Optional[Dict[str, Any]] = None,
     _factory_configs: Optional[List[tuple]] = None,
     _expected_cls: Optional[type] = None,
+    _owner_path: str = "",
 ) -> None:
     """Recursively process a mutable dict/list tree.
 
@@ -473,7 +476,7 @@ def _walk(
                     )
                 cls = _import_target(node["_target_"])
                 if cls is not None:
-                    _filter_attrs_keys(node, cls, _factory_configs, local_injectables)
+                    _filter_attrs_keys(node, cls, _factory_configs, local_injectables, _owner_path=_owner_path)
 
         # 1a. Remove injectable source keys that survived _filter_attrs_keys.
         #     _filter_attrs_keys already removed _-prefixed keys that ARE attrs
@@ -553,16 +556,18 @@ def _walk(
                 nested_alias = _check_yaml_default_nested(cls, key)
                 if nested_alias is not None:
                     v["_target_"] = nested_alias
+            child_path = f"{_owner_path}.{key}" if _owner_path else key
             _walk(
                 v,
                 _injectables=local_injectables,
                 _factory_configs=_factory_configs,
                 _expected_cls=child_expected_cls,
+                _owner_path=child_path,
             )
 
     elif isinstance(node, list):
         for item in node:
-            _walk(item, _injectables=_injectables, _factory_configs=_factory_configs, _expected_cls=None)
+            _walk(item, _injectables=_injectables, _factory_configs=_factory_configs, _expected_cls=None, _owner_path=_owner_path)
 
 
 # ---------------------------------------------------------------------------
@@ -883,6 +888,7 @@ def _filter_attrs_keys(
     cls: type,
     _factory_configs: Optional[List[tuple]] = None,
     _injectables: Optional[Dict[str, Any]] = None,
+    _owner_path: str = "",
 ) -> None:
     """For ``@attrs`` classes, remove YAML keys that aren't valid ``__init__`` params.
 
@@ -937,10 +943,11 @@ def _filter_attrs_keys(
         del node[k]
 
     # Auto-partial / auto-factory for *_factory fields.
-    # Dicts tagged with _factory_ (from _import_) get the marker stripped,
-    # _partial_: true injected (so Hydra creates a functools.partial), and
-    # the raw config recorded for post-Hydra replacement with _ImportFactory.
-    # Untagged dicts simply get _partial_: true.
+    # Auto-factory for *_factory fields: capture raw config and inject
+    # _partial_: true so Hydra creates a functools.partial. Post-Hydra,
+    # _apply_lazy_factory replaces the partial with a LazyConfigFactory
+    # that deep-copies config and re-instantiates per call — producing
+    # completely fresh sub-trees with NO shared inner instances.
     for a in attr.fields(cls):
         if not a.name.endswith("_factory") or a.name not in node:
             continue
@@ -949,12 +956,12 @@ def _filter_attrs_keys(
             continue
         if "_target_" in val:
             # Single factory: worker_factory: {_target_: RovoChat, ...}
+            raw = copy.deepcopy(val)
             if _FACTORY_MARKER in val:
-                raw = copy.deepcopy(val)
                 del raw[_FACTORY_MARKER]
                 del val[_FACTORY_MARKER]
-                if _factory_configs is not None:
-                    _factory_configs.append((a.name, None, raw, _injectables or {}))
+            if _factory_configs is not None:
+                _factory_configs.append((_owner_path, a.name, None, raw, _injectables or {}))
             val["_partial_"] = True
         else:
             # Dict of factories: worker_factory: {type1: {_target_: ...}, ...}
@@ -962,10 +969,10 @@ def _filter_attrs_keys(
                 if k.startswith("_") and k not in _DATA_KEYS:
                     continue  # skip Hydra/injectable keys but NOT data keys like __default__
                 if isinstance(v, dict) and "_target_" in v:
+                    raw = copy.deepcopy(v)
                     if _FACTORY_MARKER in v:
-                        raw = copy.deepcopy(v)
                         del raw[_FACTORY_MARKER]
                         del v[_FACTORY_MARKER]
-                        if _factory_configs is not None:
-                            _factory_configs.append((a.name, k, raw, _injectables or {}))
+                    if _factory_configs is not None:
+                        _factory_configs.append((_owner_path, a.name, k, raw, _injectables or {}))
                     v["_partial_"] = True

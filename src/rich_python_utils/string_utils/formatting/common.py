@@ -158,13 +158,23 @@ def resolve_templated_feed(
         feed_deps = referenced & feed_keys
         feed_deps.discard(key)
         if not feed_deps:
-            resolved[key] = value
+            # No inter-feed dependencies.  Still render through the
+            # template engine so that Jinja2 control structures ({% if %})
+            # and undefined-variable conditionals evaluate correctly
+            # (e.g., {% if session_root_path %} hides when absent).
+            if "{%" in value or "{{" in value:
+                try:
+                    resolved[key] = render_template(value, {**feed, **resolved})
+                except Exception:
+                    resolved[key] = value
+            else:
+                resolved[key] = value
         else:
             deps_map[key] = feed_deps
             templates[key] = value
 
     if not deps_map:
-        return dict(feed)
+        return resolved
 
     # Phase 2: Build in-degree + reverse adjacency for Kahn's algorithm
     in_degree: dict[str, int] = {}

@@ -553,6 +553,7 @@ def find_conflicting_and_agreed_files(
         if not os.path.isdir(root_dir):
             continue
         for dirpath, dirs, files in os.walk(root_dir):
+            dirs[:] = [d for d in dirs if d != "final_deliverables"]
             for fname in files:
                 abs_path = os.path.join(dirpath, fname)
                 rel_path = os.path.relpath(abs_path, root_dir)
