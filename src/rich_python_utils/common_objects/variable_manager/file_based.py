@@ -708,6 +708,16 @@ class FileBasedVariableManager(VariableManager):
                 variable_name, cascade_paths, version
             )
 
+        # Dot-to-slash: treat dots as directory separators
+        # (e.g., "notes.local_search_efficiency" → "notes/local_search_efficiency").
+        if "." in variable_name:
+            slash_name = variable_name.replace(".", "/")
+            result = self._find_variable_file_with_slash(
+                slash_name, cascade_paths, version
+            )
+            if result[0] is not None:
+                return (result[0], variable_name)
+
         possible_paths = self._generate_underscore_splits(variable_name)
 
         # ----- PASS 1: version-specific search across all cascade levels -----
@@ -786,6 +796,18 @@ class FileBasedVariableManager(VariableManager):
                         file_path = cascade_path / f"{file_variant}{ext}"
                         if file_path.is_file():
                             return (file_path, variable_name)
+
+            # Folder-default fallback: if the variable name maps to a
+            # directory containing default.<ext>, use it.  This is the
+            # no-version counterpart of Pass 2's folder-default search
+            # and honours the convention that default.jinja2 IS the
+            # "no version specified" fallback.
+            for path_variant in possible_paths:
+                folder = cascade_path / path_variant
+                if folder.is_dir():
+                    resolved = self._find_in_variable_folder(folder, "default")
+                    if resolved is not None:
+                        return (resolved, variable_name)
 
         return None, None
 

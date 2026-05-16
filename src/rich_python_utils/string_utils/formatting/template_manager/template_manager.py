@@ -724,7 +724,15 @@ class TemplateManager:
             if not value:
                 value = nested_key if nested_key else default_version
             if not value:
-                _store(base_var, nested_key, "")
+                # Try "default" as fallback — honours the convention that
+                # _variables/<name>/default.<ext> is the no-version fallback.
+                loaded = self._cascade_load_variable(
+                    base_var, "default", root_space, tmpl_type
+                )
+                if loaded is not None:
+                    _store(base_var, nested_key, loaded)
+                else:
+                    _store(base_var, nested_key, "")
                 continue
 
             # Non-string pass-through

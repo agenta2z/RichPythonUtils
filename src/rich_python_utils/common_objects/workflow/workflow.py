@@ -7,7 +7,7 @@ import re
 import shutil
 from abc import ABC
 from datetime import datetime, timezone
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any, Dict, List, Optional, Sequence, Callable, Union
 
 from attr import attrs, attrib
@@ -31,6 +31,12 @@ from rich_python_utils.common_objects.workflow.common.worknode_base import WorkN
 from rich_python_utils.common_utils.async_utils import call_maybe_async
 from rich_python_utils.io_utils.artifact import artifact_type
 from rich_python_utils.io_utils.pickle_io import _get_field_names
+
+
+class WorkflowLogTypes(StrEnum):
+    StepError = 'WorkflowStepError'
+    CheckpointWarning = 'WorkflowCheckpointWarning'
+    ExpansionWarning = 'WorkflowExpansionWarning'
 
 
 # Forward reference: CheckpointState is defined after Workflow to avoid circular dependency.
@@ -355,7 +361,8 @@ class Workflow(WorkNodeBase, ABC):
         if self._expansion_count >= self.max_expansion_events:
             self.log_warning(
                 f"Expansion limit reached ({self.max_expansion_events}). "
-                f"Ignoring expansion at step index {step_index}."
+                f"Ignoring expansion at step index {step_index}.",
+                log_type=WorkflowLogTypes.ExpansionWarning,
             )
             return expansion_result.result
 
@@ -1083,7 +1090,8 @@ class Workflow(WorkNodeBase, ABC):
                     )
                 except Exception:
                     self.log_warning(
-                        "Checkpoint result file not found, falling back to backward scan"
+                        "Checkpoint result file not found, falling back to backward scan",
+                        log_type=WorkflowLogTypes.CheckpointWarning,
                     )
                     _checkpoint = None
 
@@ -1238,10 +1246,11 @@ class Workflow(WorkNodeBase, ABC):
 
                         self.log_error({
                             'step_failed': i,
+                            'step_name': step_name,
                             'result_save_on_error_enabled': result_save_on_error_enabled,
                             'exception_type': type(err).__name__,
                             'exception_message': str(err),
-                        })
+                        }, log_type=WorkflowLogTypes.StepError)
 
                         if i > 0 and result_save_on_error_enabled:
                             self._save_result(
@@ -1416,7 +1425,8 @@ class Workflow(WorkNodeBase, ABC):
                     )
                 except Exception:
                     self.log_warning(
-                        "Checkpoint result file not found, falling back to backward scan"
+                        "Checkpoint result file not found, falling back to backward scan",
+                        log_type=WorkflowLogTypes.CheckpointWarning,
                     )
                     _checkpoint = None
 
@@ -1568,10 +1578,11 @@ class Workflow(WorkNodeBase, ABC):
 
                         self.log_error({
                             'step_failed': i,
+                            'step_name': step_name,
                             'result_save_on_error_enabled': result_save_on_error_enabled,
                             'exception_type': type(err).__name__,
                             'exception_message': str(err),
-                        })
+                        }, log_type=WorkflowLogTypes.StepError)
 
                         if i > 0 and result_save_on_error_enabled:
                             self._save_result(

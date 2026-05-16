@@ -93,9 +93,9 @@ class TestPass2DefaultFallback:
         assert path is not None
         assert path.name == "generic.j2"
 
-    def test_pass2_skipped_when_version_empty(self, manager, tmp_path):
-        # Even though default.j2 exists, version="" means Pass 1+2 skipped.
-        # Pass 3 looks for unversioned task_instructions.j2 (which doesn't exist).
+    def test_pass3_folder_default_fallback_when_version_empty(self, manager, tmp_path):
+        # When version="" and a folder with default.j2 exists,
+        # Pass 3's folder-default fallback finds it.
         folder = tmp_path / "task_instructions"
         folder.mkdir()
         (folder / "default.j2").write_text("default content", encoding="utf-8")
@@ -103,8 +103,8 @@ class TestPass2DefaultFallback:
         path, _ = manager._find_variable_file(
             "task_instructions", [tmp_path], version=""
         )
-        # Pass 3 searches for task_instructions.j2 directly, not folder/default.j2
-        assert path is None
+        assert path is not None
+        assert path.name == "default.j2"
 
 
 # ---------------------------------------------------------------------------
@@ -267,3 +267,140 @@ class TestPass3Fallback:
             "task_preamble", [tmp_path], version="aggregation"
         )
         assert path is None
+
+
+# ---------------------------------------------------------------------------
+# Dot-to-slash conversion (dots treated as directory separators)
+# ---------------------------------------------------------------------------
+
+
+class TestDotToSlashConversion:
+    """Variables using dot syntax (e.g., ``notes.local_search_efficiency``)
+    should resolve to ``notes/local_search_efficiency.<ext>`` on disk."""
+
+    def test_dot_syntax_finds_nested_file(self, manager, tmp_path):
+        """``notes.local_search_efficiency`` finds
+        ``notes/local_search_efficiency.j2``."""
+        folder = tmp_path / "notes"
+        folder.mkdir()
+        target = folder / "local_search_efficiency.j2"
+        target.write_text("dot content", encoding="utf-8")
+
+        path, name = manager._find_variable_file(
+            "notes.local_search_efficiency", [tmp_path], version=""
+        )
+        assert path == target
+        assert name == "notes.local_search_efficiency"
+
+    def test_dot_syntax_with_version(self, manager, tmp_path):
+        """Dot-to-slash also works when a version is specified."""
+        folder = tmp_path / "notes"
+        folder.mkdir()
+        target = folder / "local_search_efficiency.j2"
+        target.write_text("versioned dot content", encoding="utf-8")
+
+        path, _ = manager._find_variable_file(
+            "notes.local_search_efficiency", [tmp_path], version="v1"
+        )
+        # Falls back to the unversioned file since v1 variant doesn't exist
+        assert path == target
+
+    def test_dot_syntax_multi_level(self, manager, tmp_path):
+        """Multiple dots: ``a.b.c`` → ``a/b/c.<ext>``."""
+        deep = tmp_path / "a" / "b"
+        deep.mkdir(parents=True)
+        target = deep / "c.j2"
+        target.write_text("deep content", encoding="utf-8")
+
+        path, name = manager._find_variable_file(
+            "a.b.c", [tmp_path], version=""
+        )
+        assert path == target
+        assert name == "a.b.c"
+
+    def test_dot_syntax_does_not_shadow_flat_file(self, manager, tmp_path):
+        """When both ``foo.bar.j2`` (flat) and ``foo/bar.j2`` (nested) exist,
+        the nested (dot-to-slash) path wins because it's checked first."""
+        folder = tmp_path / "foo"
+        folder.mkdir()
+        nested = folder / "bar.j2"
+        nested.write_text("nested", encoding="utf-8")
+        flat = tmp_path / "foo.bar.j2"
+        flat.write_text("flat", encoding="utf-8")
+
+        path, _ = manager._find_variable_file(
+            "foo.bar", [tmp_path], version=""
+        )
+        # Dot-to-slash is tried before underscore splits
+        assert path == nested
+
+    def test_dot_syntax_falls_through_when_no_match(self, manager, tmp_path):
+        """If dot-to-slash finds nothing, falls through to underscore splits."""
+        # Create a file that matches underscore split but NOT dot-to-slash
+        folder = tmp_path / "notes.local"
+        folder.mkdir()
+        target = folder / "search_efficiency.j2"
+        target.write_text("underscore content", encoding="utf-8")
+
+        path, _ = manager._find_variable_file(
+            "notes.local_search_efficiency", [tmp_path], version=""
+        )
+        # Dot-to-slash tried "notes/local_search_efficiency.j2" — not found
+        # Falls through to underscore splits: "notes.local/search_efficiency.j2" — found
+        assert path == target
+
+    def test_dot_syntax_cascade_resolution(self, tmp_path):
+        """Dot variables respect cascade order (specific → general)."""
+        from rich_python_utils.common_objects.variable_manager.config import (
+            VariableSyntax,
+        )
+
+        specific = tmp_path / "specific"
+        general = tmp_path / "general"
+        for d in (specific, general):
+            d.mkdir()
+            (d / "notes").mkdir()
+
+        (general / "notes" / "safety.j2").write_text("general safety")
+        (specific / "notes" / "safety.j2").write_text("specific safety")
+
+        mgr = FileBasedVariableManager(base_path=str(tmp_path))
+        path, _ = mgr._find_variable_file(
+            "notes.safety", [specific, general], version=""
+        )
+        assert path == specific / "notes" / "safety.j2"
+
+    def test_dot_syntax_composition_inside_variable(self, tmp_path):
+        """Dot variables resolve during composition within loaded content."""
+        from rich_python_utils.common_objects.variable_manager.config import (
+            VariableSyntax,
+        )
+
+        vars_dir = tmp_path / "_variables"
+        vars_dir.mkdir()
+        notes_dir = vars_dir / "notes"
+        notes_dir.mkdir()
+        (notes_dir / "safety.j2").write_text("DO NOT rm -rf /")
+
+        # A variable whose content references another via dot syntax
+        parent_dir = vars_dir / "instructions"
+        parent_dir.mkdir()
+        (parent_dir / "default.j2").write_text(
+            "Follow these rules:\n{{ notes.safety }}"
+        )
+
+        mgr = FileBasedVariableManager(
+            base_path=str(tmp_path),
+            config=VariableManagerConfig(
+                variables_folder_name="_variables",
+                variable_syntax=VariableSyntax.JINJA2,
+                file_extensions=[".j2", ""],
+            ),
+        )
+
+        result = mgr.resolve_from_content(
+            "{{ instructions }}",
+            variable_root_space="", variable_type="", version="",
+        )
+        assert "instructions" in result
+        assert "DO NOT rm -rf /" in result["instructions"]
