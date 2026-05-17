@@ -397,8 +397,14 @@ class TemplateManager:
         self._variable_loaders_by_root: Dict = {}
         self._static_predefined_vars = None
 
+        # Auto-init variable loaders whenever template roots contain _variables/
+        # or .variables.yaml, regardless of predefined_variables flag.
+        # This enables composition ({{ X }} refs inside variable files) via
+        # load_variables() without requiring predefined_variables=True.
+        # Loader creation is cheap (no I/O until queried).
+        self._init_variable_loaders()
         if self.predefined_variables is True:
-            self._init_variable_loaders()
+            pass  # loaders already initialized above
         elif (
             self.predefined_variables is not None
             and self.predefined_variables is not False
@@ -590,33 +596,20 @@ class TemplateManager:
                             continue
         return None
 
-    def _cascade_load_variable(
+    def _cascade_load_variable_path(
         self,
         var_name: str,
         version: str,
         root_space: str,
         tmpl_type: str,
-    ) -> Optional[str]:
+    ) -> "Tuple[Optional[str], Optional[Path]]":
         """Resolve one variable using cascading paths across all roots.
 
-        Cascade priority (level-major, root-interleaved at each level):
+        Like ``_cascade_load_variable`` but also returns the resolved file
+        path so callers (``load_variables``) can drive sibling-aware
+        composition over the content.
 
-        1. ``<root>/<space>/<type>/_variables/<var>/``  (template-specific)
-        2. ``<root>/<space>/_variables/<var>/``          (space-level)
-        3. ``<root>/_variables/<var>/``                  (global shared)
-
-        Within each level, roots are checked in ``_original_templates_paths``
-        order (higher-priority root first).  This extends the existing
-        ``load_variable()`` cross-root behavior to two additional cascade
-        levels while preserving the root-interleaved ordering at Level 1.
-
-        Two-pass version search at each cascade level:
-
-        - **Pass 1** — exact ``<version>.<ext>`` (or ``.config.yaml``
-          alias).
-        - **Pass 2** — ``default.<ext>`` fallback.
-
-        Returns file content as a string, or ``None`` if not found.
+        Returns ``(content, file_path)`` or ``(None, None)`` if not found.
         """
         folders: List[Path] = []
 
@@ -643,15 +636,53 @@ class TemplateManager:
         for folder in folders:
             resolved = _find_in_variable_folder(folder, version)
             if resolved is not None:
-                return resolved.read_text(encoding=self.template_encoding)
+                return (
+                    resolved.read_text(encoding=self.template_encoding),
+                    resolved,
+                )
 
         # Pass 2: default fallback across all cascade levels
         for folder in folders:
             resolved = _find_in_variable_folder(folder, "default")
             if resolved is not None:
-                return resolved.read_text(encoding=self.template_encoding)
+                return (
+                    resolved.read_text(encoding=self.template_encoding),
+                    resolved,
+                )
 
-        return None
+        return (None, None)
+
+    def _cascade_load_variable(
+        self,
+        var_name: str,
+        version: str,
+        root_space: str,
+        tmpl_type: str,
+    ) -> Optional[str]:
+        """Backward-compatible wrapper. Returns raw file content WITHOUT
+        composition. Use ``load_variables()`` if you need ``{{ X }}``
+        references inside the content to be resolved.
+        """
+        content, _ = self._cascade_load_variable_path(
+            var_name, version, root_space, tmpl_type
+        )
+        return content
+
+    def _loader_for_path(self, file_path: "Path") -> "Optional[Any]":
+        """Find the VariableLoader whose template root is an ancestor of
+        ``file_path``. Returns None if no loader exists.
+        """
+        if not self._variable_loaders_by_root:
+            return None
+        fp = str(file_path.resolve())
+        best_root = None
+        for root in self._variable_loaders_by_root:
+            rp = str(Path(root).resolve())
+            if fp.startswith(rp) and (
+                best_root is None or len(root) > len(best_root)
+            ):
+                best_root = root
+        return self._variable_loaders_by_root.get(best_root) if best_root else None
 
     def load_variables(
         self,
@@ -701,69 +732,101 @@ class TemplateManager:
 
         result: Dict[str, Any] = {}
 
-        def _store(base: str, nested_key: Optional[str], content: Any) -> None:
-            if nested_key is not None:
-                result.setdefault(base, {})[nested_key] = content
-            else:
-                result[base] = content
+        def _store_nested(parts: List[str], content: Any) -> None:
+            """Store ``content`` at ``result[parts[0]][parts[1]]...[parts[-1]]``.
+
+            Intermediate dicts are created on demand. Assertion guards
+            against silent shadowing if a caller mixes flat and nested
+            keys that share a prefix (e.g., {"a": "x", "a.b": "y"}).
+            """
+            if len(parts) == 1:
+                result[parts[0]] = content
+                return
+            d = result
+            for part in parts[:-1]:
+                nxt = d.setdefault(part, {})
+                assert isinstance(nxt, dict), (
+                    f"load_variables: cannot nest key {'.'.join(parts)!r}; "
+                    f"segment {part!r} is bound to a non-dict "
+                    f"({type(nxt).__name__}). Don't mix flat and nested "
+                    f"keys that share a prefix."
+                )
+                d = nxt
+            d[parts[-1]] = content
+
+        def _load_and_compose(var_dir: str, version: str) -> Optional[str]:
+            """Load variable via cascade and compose nested {{ X }} refs."""
+            content, file_path = self._cascade_load_variable_path(
+                var_dir, version, root_space, tmpl_type
+            )
+            if content is not None and file_path is not None:
+                loader = self._loader_for_path(file_path)
+                if loader is not None:
+                    try:
+                        content = loader._resolve_content(
+                            content,
+                            variable_root_space=root_space,
+                            variable_type=tmpl_type,
+                            version=version,
+                            resolution_stack=[],
+                            current_file_path=file_path,
+                        )
+                    except Exception:
+                        pass  # degrade gracefully; return raw content
+            return content
 
         for raw_key, spec in variable_specs.items():
-            # Dot-key: "notes.local_search_efficiency" → nested dict output
-            # for Jinja2 {{ notes.local_search_efficiency }} access.
-            # Splits into var_name="notes" (directory) + nested_key="local_search_efficiency" (file).
+            # Dot-key: ALL dots become path separators; LAST segment is file stem.
+            #   "notes.local_search_efficiency"
+            #     → var_dir="notes", file_stem="local_search_efficiency"
+            #   "instructions.behavior.file_reading_fallback"
+            #     → var_dir="instructions/behavior", file_stem="file_reading_fallback"
             if "." in raw_key:
-                base_var, nested_key = raw_key.split(".", 1)
+                parts = raw_key.split(".")
+                var_dir = "/".join(parts[:-1])
+                file_stem = parts[-1]
+                nested_path = parts
             else:
-                base_var, nested_key = raw_key, None
+                var_dir = raw_key
+                file_stem = None
+                nested_path = [raw_key]
 
             value = spec
 
-            # For dot-keys, the nested_key IS the default version
-            # (e.g., "notes.local_search_efficiency": null → version="local_search_efficiency").
+            # For dot-keys, file_stem IS the default version.
             # For plain keys, fall back to default_version as before.
             if not value:
-                value = nested_key if nested_key else default_version
+                value = file_stem if file_stem else default_version
             if not value:
-                # Try "default" as fallback — honours the convention that
-                # _variables/<name>/default.<ext> is the no-version fallback.
-                loaded = self._cascade_load_variable(
-                    base_var, "default", root_space, tmpl_type
-                )
-                if loaded is not None:
-                    _store(base_var, nested_key, loaded)
-                else:
-                    _store(base_var, nested_key, "")
+                loaded = _load_and_compose(var_dir, "default")
+                _store_nested(nested_path, loaded if loaded is not None else "")
                 continue
 
             # Non-string pass-through
             if not isinstance(value, str):
-                _store(base_var, nested_key, value)
+                _store_nested(nested_path, value)
                 continue
 
             # @-prefix: strict file lookup (raise if not found)
             if value.startswith("@"):
                 version = value[1:]
-                loaded = self._cascade_load_variable(
-                    base_var, version, root_space, tmpl_type
-                )
+                loaded = _load_and_compose(var_dir, version)
                 if loaded is None:
                     raise FileNotFoundError(
                         f"load_variables: no variable file for "
-                        f"@{version} (var={base_var}, space={root_space})"
+                        f"@{version} (var={var_dir}, space={root_space})"
                     )
-                _store(base_var, nested_key, loaded)
+                _store_nested(nested_path, loaded)
                 continue
 
             # =-prefix: force literal value
             if value.startswith("="):
-                _store(base_var, nested_key, value[1:])
+                _store_nested(nested_path, value[1:])
                 continue
 
             # Default: try file, fall back to literal string
-            loaded = self._cascade_load_variable(
-                base_var, value, root_space, tmpl_type
-            )
-            _store(base_var, nested_key, loaded if loaded is not None else value)
+            loaded = _load_and_compose(var_dir, value)
+            _store_nested(nested_path, loaded if loaded is not None else value)
 
         return result
 
