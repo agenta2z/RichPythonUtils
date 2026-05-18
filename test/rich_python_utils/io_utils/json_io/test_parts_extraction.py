@@ -1374,6 +1374,178 @@ class TestIsArtifact:
 
 
 # ---------------------------------------------------------------------------
+# Tests for is_artifact bypass of parts_min_size
+# ---------------------------------------------------------------------------
+
+class TestIsArtifactBypassesPartsMinSize:
+    """is_artifact=True should extract values regardless of parts_min_size."""
+
+    def test_artifact_bypasses_parts_min_size(self, tmp_path):
+        """is_artifact=True extracts small values even with a high parts_min_size."""
+        log_file = str(tmp_path / 'output.json')
+        data = {'content': 'short', 'meta': 'x'}
+        write_json(
+            data, log_file,
+            is_artifact=True,
+            parts_min_size=999999,
+        )
+
+        parts_dir = log_file + '.parts'
+        assert os.path.isdir(parts_dir)
+        all_files = []
+        for _, _, files in os.walk(parts_dir):
+            all_files.extend(files)
+        assert len(all_files) >= 1, f"Expected parts files, got none in {parts_dir}"
+
+    def test_non_artifact_respects_parts_min_size(self, tmp_path):
+        """is_artifact=False still obeys parts_min_size — small values stay inline."""
+        log_file = str(tmp_path / 'output.json')
+        data = {'content': 'short', 'meta': 'x'}
+        write_json(
+            data, log_file,
+            is_artifact=False,
+            parts_key_paths='*',
+            parts_min_size=999999,
+        )
+
+        parts_dir = log_file + '.parts'
+        if os.path.isdir(parts_dir):
+            file_count = sum(len(f) for _, _, f in os.walk(parts_dir))
+            assert file_count == 0
+
+    def test_artifact_bypass_with_parts_key_path_root(self, tmp_path):
+        """Bypass works with parts_key_path_root (the inferencer logging pattern)."""
+        log_file = str(tmp_path / 'output.json')
+        data = {
+            'type': 'InferenceInput',
+            'item': 'tiny prompt',
+            'level': 20,
+            'name': 'TestInferencer',
+        }
+        write_json(
+            data, log_file,
+            is_artifact=True,
+            parts_key_path_root='item',
+            parts_min_size=999999,
+        )
+
+        parts_dir = log_file + '.parts'
+        assert os.path.isdir(parts_dir)
+        all_files = []
+        for _, _, files in os.walk(parts_dir):
+            all_files.extend(files)
+        assert len(all_files) >= 1
+
+    def test_artifact_bypass_dict_item(self, tmp_path):
+        """Bypass extracts dict sub-fields when item is a dict."""
+        log_file = str(tmp_path / 'output.json')
+        data = {
+            'type': 'InferenceResponse',
+            'item': {'success': True, 'return_code': 0, 'output': 'ok'},
+        }
+        write_json(
+            data, log_file,
+            is_artifact=True,
+            parts_key_path_root='item',
+            parts_min_size=999999,
+        )
+
+        parts_dir = log_file + '.parts'
+        assert os.path.isdir(parts_dir)
+        all_files = []
+        for _, _, files in os.walk(parts_dir):
+            all_files.extend(files)
+        assert len(all_files) == 3, f"Expected 3 parts files (success, return_code, output), got {len(all_files)}"
+
+    def test_artifact_tuple_type_match_bypasses(self, tmp_path):
+        """is_artifact as tuple of types bypasses parts_min_size when content matches."""
+        log_file = str(tmp_path / 'output.json')
+        data = {'type': 'Test', 'item': 'short string'}
+        write_json(
+            data, log_file,
+            is_artifact=(str,),
+            parts_key_path_root='item',
+            parts_min_size=999999,
+        )
+
+        parts_dir = log_file + '.parts'
+        assert os.path.isdir(parts_dir)
+        all_files = []
+        for _, _, files in os.walk(parts_dir):
+            all_files.extend(files)
+        assert len(all_files) >= 1
+
+    def test_artifact_tuple_type_no_match_no_bypass(self, tmp_path):
+        """is_artifact tuple that doesn't match content type produces no extraction."""
+        log_file = str(tmp_path / 'output.json')
+        data = {'type': 'Test', 'item': {'key': 'value'}}
+        write_json(
+            data, log_file,
+            is_artifact=(str,),
+            parts_key_path_root='item',
+            parts_min_size=999999,
+        )
+
+        parts_dir = log_file + '.parts'
+        if os.path.isdir(parts_dir):
+            file_count = sum(len(f) for _, _, f in os.walk(parts_dir))
+            assert file_count == 0
+
+    def test_artifacts_as_parts_does_not_bypass(self, tmp_path):
+        """artifacts_as_parts should NOT bypass parts_min_size (only is_artifact does)."""
+        from rich_python_utils.io_utils.json_io import artifact_field
+
+        @artifact_field('content', type='txt')
+        class _ArtifactObj:
+            def __init__(self):
+                self.content = 'tiny'
+
+        log_file = str(tmp_path / 'output.json')
+        write_json(
+            _ArtifactObj(), log_file,
+            artifacts_as_parts=True,
+            parts_min_size=999999,
+        )
+
+        parts_dir = log_file + '.parts'
+        if os.path.isdir(parts_dir):
+            file_count = sum(len(f) for _, _, f in os.walk(parts_dir))
+            assert file_count == 0
+
+    def test_empty_dict_artifact_no_crash(self, tmp_path):
+        """is_artifact=True with empty dict produces zero parts files, no crash."""
+        log_file = str(tmp_path / 'output.json')
+        write_json(
+            {}, log_file,
+            is_artifact=True,
+            parts_min_size=999999,
+        )
+
+        parts_dir = log_file + '.parts'
+        if os.path.isdir(parts_dir):
+            file_count = sum(len(f) for _, _, f in os.walk(parts_dir))
+            assert file_count == 0
+
+    def test_artifact_bypass_round_trip(self, tmp_path):
+        """Tiny values extracted via bypass survive round-trip with resolve_parts."""
+        log_file = str(tmp_path / 'output.jsonl')
+        data = {'status': True, 'code': 0, 'msg': 'ok'}
+        write_json(
+            data, log_file,
+            is_artifact=True,
+            parts_min_size=999999,
+            append=True,
+        )
+
+        results = list(iter_json_objs(log_file, resolve_parts=True))
+        assert len(results) == 1
+        restored = results[0]
+        assert restored['status'] is True
+        assert restored['code'] == 0
+        assert restored['msg'] == 'ok'
+
+
+# ---------------------------------------------------------------------------
 # Tests for parts resolution (read side)
 # ---------------------------------------------------------------------------
 

@@ -1231,6 +1231,11 @@ class Workflow(WorkNodeBase, ABC):
                         # For the very first step (i=0), there's no previous result.
                         step_result = this_step(*args, **kwargs)
 
+                except WorkflowAborted:
+                    # WorkflowAborted is a control-flow signal (e.g. consensus
+                    # reached), not an error. Let it propagate directly to the
+                    # outer handler instead of being logged as WorkflowStepError.
+                    raise
                 except Exception as err:
                     error_handler = getattr(this_step, 'error_handler', None)
                     if error_handler is not None:
@@ -1563,6 +1568,11 @@ class Workflow(WorkNodeBase, ABC):
                     else:
                         step_result = await call_maybe_async(this_step, *args, **kwargs)
 
+                except WorkflowAborted:
+                    # WorkflowAborted is a control-flow signal (e.g. consensus
+                    # reached), not an error. Let it propagate directly to the
+                    # outer handler instead of being logged as WorkflowStepError.
+                    raise
                 except Exception as err:
                     error_handler = getattr(this_step, 'error_handler', None)
                     if error_handler is not None:
