@@ -1841,7 +1841,7 @@ def jsonfy(
                 continue
 
             serialized = _serialize_value(value, ensure_ascii=ensure_ascii)
-            if len(serialized) < parts_min_size:
+            if not is_artifact and len(serialized) < parts_min_size:
                 continue
 
             # Determine extension (normalize: 'html' → '.html')
