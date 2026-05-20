@@ -1,0 +1,16 @@
+load("@fbcode_macros//build_defs:python_library.bzl", "python_library")
+
+oncall("ml_oncall")
+
+python_library(
+    name = "rich_python_utils",
+    srcs = glob([
+        "rich_python_utils/**/*.py",
+    ]),
+    base_module = "",
+    typing = False,
+    visibility = ["PUBLIC"],
+    deps = [
+        "fbsource//third-party/pypi/attrs:attrs",
+    ],
+)
