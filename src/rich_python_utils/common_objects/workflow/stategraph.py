@@ -29,6 +29,14 @@ from rich_python_utils.algorithms.graph.node import Node
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class ThreadSpawnRequest:
+    """A deferred thread spawn from a __goto__ ... __afterwards__ directive."""
+    target_phase: str
+    source_phase: str
+    wait_duration: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # StateNode
 # ---------------------------------------------------------------------------
@@ -59,6 +67,15 @@ class StateNode(Node):
     foreach_item_var: str = attrib(default=None)
     foreach_collection_var: str = attrib(default=None)
     foreach_sequential: bool = attrib(default=False)
+    # __goto__ Phase X __afterwards__ [__wait__ duration]
+    goto_afterwards: bool = attrib(default=False)
+    goto_wait_duration: str = attrib(default=None)
+    # __branch__ [`var`]
+    branch: bool = attrib(default=False)
+    branch_source_var: str = attrib(default=None)
+    # != polarity inversion for conditions
+    goto_condition_negate: bool = attrib(default=False)
+    gate_negate: bool = attrib(default=False)
 
     def __attrs_post_init__(self) -> None:
         if self.value is None:
@@ -157,13 +174,18 @@ class StateGraphTracker:
         truly_completed = self._get_truly_completed()
 
         # Process __go to__: re-enable target states
+        # Skip goto_afterwards nodes — those spawn separate threads via
+        # get_pending_thread_spawns(), not inline re-enabling.
         for node in self.graph.nodes:
             if node.id not in truly_completed:
                 continue
             if not node.goto_target:
                 continue
+            if getattr(node, "goto_afterwards", False):
+                continue
             if not self._check_condition(
-                node.goto_condition_var, node.goto_condition_value
+                node.goto_condition_var, node.goto_condition_value,
+                negate=getattr(node, "goto_condition_negate", False),
             ):
                 continue
             goto_key = f"{node.id}->{node.goto_target}"
@@ -181,7 +203,8 @@ class StateGraphTracker:
             if not all(d in truly_completed for d in node.depends_on):
                 continue
             if node.gate_var and not self._check_condition(
-                node.gate_var, node.gate_value
+                node.gate_var, node.gate_value,
+                negate=getattr(node, "gate_negate", False),
             ):
                 continue
             if node.foreach_collection_var:
@@ -203,6 +226,53 @@ class StateGraphTracker:
                 if m:
                     missing[node.id] = m
         return missing
+
+    def get_pending_thread_spawns(self) -> list[ThreadSpawnRequest]:
+        """Return deferred thread spawns from completed nodes with goto_afterwards=True."""
+        spawns: list[ThreadSpawnRequest] = []
+        truly_completed = self._get_truly_completed()
+        for node in self.graph.nodes:
+            if node.id not in truly_completed:
+                continue
+            if not getattr(node, "goto_afterwards", False):
+                continue
+            if not node.goto_target:
+                continue
+            if not self._check_condition(
+                node.goto_condition_var, node.goto_condition_value,
+                negate=getattr(node, "goto_condition_negate", False),
+            ):
+                continue
+            goto_key = f"{node.id}->{node.goto_target}"
+            if self.goto_counts.get(goto_key, 0) >= self.max_goto_iterations:
+                continue
+            spawns.append(ThreadSpawnRequest(
+                target_phase=node.goto_target,
+                source_phase=node.id,
+                wait_duration=getattr(node, "goto_wait_duration", None),
+            ))
+        return spawns
+
+    def get_branch_items(self, node_id: str) -> list[Any] | None:
+        """For branch nodes, look up the source variable in state_outputs."""
+        node = self.graph.get_node(node_id)
+        if node is None:
+            return None
+        source_var = getattr(node, "branch_source_var", None)
+        if source_var:
+            items = self.state_outputs.get(source_var)
+            if items is not None and not isinstance(items, list):
+                items = [items]
+            return items
+        if getattr(node, "branch", False):
+            for dep_id in node.depends_on:
+                dep_node = self.graph.get_node(dep_id)
+                if dep_node and dep_node.outputs:
+                    for out_name in dep_node.outputs:
+                        val = self.state_outputs.get(out_name)
+                        if isinstance(val, list):
+                            return val
+        return None
 
     @property
     def status(self) -> str:
@@ -258,11 +328,15 @@ class StateGraphTracker:
                     truly.add(node.id)
         return truly
 
-    def _check_condition(self, var: str | None, value: str | None) -> bool:
+    def _check_condition(
+        self, var: str | None, value: str | None, negate: bool = False,
+    ) -> bool:
         """Check a gate/goto condition against state_outputs."""
         if not var:
             return True
         actual = self.state_outputs.get(var)
         if value is not None:
-            return str(actual) == value
-        return bool(actual)
+            result = str(actual) == value
+        else:
+            result = bool(actual)
+        return (not result) if negate else result

@@ -89,6 +89,64 @@ def _find_in_variable_folder(folder: Path, name: Optional[str]) -> Optional[Path
     return None
 
 
+def _set_nested_key(
+    target: dict,
+    key: str,
+    value: Any,
+    overwrite: bool = True,
+    strict: bool = False,
+) -> None:
+    """Canonical helper to assign ``value`` into ``target`` under ``key``,
+    auto-nesting dotted keys into nested dicts.
+
+    A flat key (``"foo"``) is stored as ``target["foo"] = value``.
+    A dotted key (``"foo.bar.baz"``) is stored as
+    ``target["foo"]["bar"]["baz"] = value``, creating intermediate dicts as needed.
+
+    This is the single source of truth for translating dotted-key variable
+    names (e.g. ``context.user_request_with_task_preamble``) into the nested
+    structure that Jinja2's attribute access (``{{ context.user_request_with_task_preamble }}``)
+    can resolve. All call sites in this module (``load_variables``,
+    ``__call__`` predefined-vars merge, cross-root fallback mechanisms) MUST
+    use this helper to keep dotted-key semantics consistent.
+
+    Args:
+        target: The dict to mutate.
+        key: Variable name. May be flat (``"foo"``) or dotted (``"a.b.c"``).
+        value: Value to assign at the final segment.
+        overwrite: If ``True`` (default), replace any existing value at the
+            final segment. If ``False``, only set when the final segment is
+            absent (used by lower-priority fallback sources like sibling-root
+            YAML sidecars).
+        strict: If ``True``, raise ``AssertionError`` when a dotted key would
+            shadow a non-dict intermediate segment (used by ``load_variables``
+            where caller mixing flat+nested keys with shared prefixes is a
+            programming error). If ``False`` (default), silently replace the
+            non-dict intermediate with a fresh dict so the assignment succeeds.
+    """
+    if "." not in key:
+        if overwrite or key not in target:
+            target[key] = value
+        return
+    parts = key.split(".")
+    d = target
+    for part in parts[:-1]:
+        nxt = d.get(part)
+        if not isinstance(nxt, dict):
+            if strict and nxt is not None:
+                raise AssertionError(
+                    f"_set_nested_key: cannot nest key {key!r}; segment "
+                    f"{part!r} is bound to a non-dict ({type(nxt).__name__}). "
+                    f"Don't mix flat and nested keys that share a prefix."
+                )
+            nxt = {}
+            d[part] = nxt
+        d = nxt
+    last = parts[-1]
+    if overwrite or last not in d:
+        d[last] = value
+
+
 class TemplateRootPriority(enum.Enum):
     """Priority when adding a template root to an existing TemplateManager.
 
@@ -392,6 +450,18 @@ class TemplateManager:
         if not self.default_template and not self.templates:
             raise ValueError("No templates were provided.")
 
+        # Initialize FileSpaceManager for variable cascade resolution.
+        # This replaces the inline cascade + _find_in_variable_folder duplication.
+        # Only created when filesystem roots exist (not for in-memory dict templates).
+        from rich_python_utils.common_objects.file_space import FileSpaceManager
+
+        self._file_space = FileSpaceManager(
+            roots=self._original_templates_paths,
+            reserved_subfolder_canonical="variables",
+            reserved_subfolder_prefixes=("_", "."),
+            file_extensions=_VARIABLE_FILE_EXTENSIONS,
+        ) if self._original_templates_paths else None
+
         # Initialize predefined_variables handling
         self._variable_loader = None
         self._variable_loaders_by_root: Dict = {}
@@ -573,6 +643,12 @@ class TemplateManager:
         Used by ``cross_root_variable_lookup=True`` to make exact-version
         matches in higher-priority roots win over default-fallback
         matches in the origin root.
+
+        Note: this method does NOT use ``master_version`` — it is called
+        from ``__call__()`` (predefined-variable auto-discovery) which
+        passes ``self.template_version``, not a per-inferencer master.
+        The ``master_version`` threading happens at the ``load_variables()``
+        → ``_cascade_load_variable_path()`` layer instead.
         """
         if not version or not self._variable_loaders_by_root:
             return None
@@ -588,11 +664,11 @@ class TemplateManager:
             for cascade_path in cascade_paths:
                 for path_variant in possible_paths:
                     folder = cascade_path / path_variant
-                    hit = loader._find_in_variable_folder(folder, version)
+                    hit = self._file_space.find_in_folder(folder, version) if self._file_space else None
                     if hit is not None:
                         try:
-                            return loader._read_file_content(hit)
-                        except Exception:  # pragma: no cover — defensive
+                            return hit.read_text(encoding=self.template_encoding)
+                        except Exception:
                             continue
         return None
 
@@ -602,53 +678,26 @@ class TemplateManager:
         version: str,
         root_space: str,
         tmpl_type: str,
+        master_version: Optional[str] = None,
     ) -> "Tuple[Optional[str], Optional[Path]]":
         """Resolve one variable using cascading paths across all roots.
 
-        Like ``_cascade_load_variable`` but also returns the resolved file
-        path so callers (``load_variables``) can drive sibling-aware
-        composition over the content.
-
-        Returns ``(content, file_path)`` or ``(None, None)`` if not found.
+        Delegates to ``FileSpaceManager.resolve()`` for cascade + version +
+        master_version resolution, then returns ``(content, file_path)``
+        or ``(None, None)`` if not found.
         """
-        folders: List[Path] = []
-
-        # Level 1: space/type/_variables/ (most specific)
-        for tmpl_path in self._original_templates_paths:
-            parts: list = [tmpl_path]
-            if root_space:
-                parts.append(root_space)
-            parts.extend([tmpl_type, "_variables", var_name])
-            folders.append(Path(*parts))
-
-        # Level 2: space/_variables/
-        if root_space:
-            for tmpl_path in self._original_templates_paths:
-                folders.append(
-                    Path(tmpl_path, root_space, "_variables", var_name)
-                )
-
-        # Level 3: _variables/ (global shared)
-        for tmpl_path in self._original_templates_paths:
-            folders.append(Path(tmpl_path, "_variables", var_name))
-
-        # Pass 1: version-specific search across all cascade levels
-        for folder in folders:
-            resolved = _find_in_variable_folder(folder, version)
-            if resolved is not None:
-                return (
-                    resolved.read_text(encoding=self.template_encoding),
-                    resolved,
-                )
-
-        # Pass 2: default fallback across all cascade levels
-        for folder in folders:
-            resolved = _find_in_variable_folder(folder, "default")
-            if resolved is not None:
-                return (
-                    resolved.read_text(encoding=self.template_encoding),
-                    resolved,
-                )
+        if self._file_space is None:
+            return (None, None)
+        resolved = self._file_space.resolve(
+            space=root_space,
+            type_=tmpl_type,
+            name=var_name,
+            version=version,
+            master_version=master_version,
+        )
+        if resolved is None:
+            return (None, None)
+        return (resolved.read(), resolved.path)
 
         return (None, None)
 
@@ -658,13 +707,14 @@ class TemplateManager:
         version: str,
         root_space: str,
         tmpl_type: str,
+        master_version: Optional[str] = None,
     ) -> Optional[str]:
         """Backward-compatible wrapper. Returns raw file content WITHOUT
         composition. Use ``load_variables()`` if you need ``{{ X }}``
         references inside the content to be resolved.
         """
         content, _ = self._cascade_load_variable_path(
-            var_name, version, root_space, tmpl_type
+            var_name, version, root_space, tmpl_type, master_version
         )
         return content
 
@@ -689,6 +739,7 @@ class TemplateManager:
         variable_specs: Dict[str, Any],
         root_space: Optional[str] = None,
         default_version: str = "",
+        master_version: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Batch-load template variables with cascade resolution.
 
@@ -735,29 +786,19 @@ class TemplateManager:
         def _store_nested(parts: List[str], content: Any) -> None:
             """Store ``content`` at ``result[parts[0]][parts[1]]...[parts[-1]]``.
 
-            Intermediate dicts are created on demand. Assertion guards
-            against silent shadowing if a caller mixes flat and nested
-            keys that share a prefix (e.g., {"a": "x", "a.b": "y"}).
+            Thin adapter around the module-level ``_set_nested_key`` helper
+            that converts the list-of-parts signature used here into the
+            dotted-key signature the canonical helper expects. Uses
+            ``strict=True`` because mixing flat and nested keys with shared
+            prefixes inside a single ``load_variables`` call is a caller
+            programming error and should fail loudly.
             """
-            if len(parts) == 1:
-                result[parts[0]] = content
-                return
-            d = result
-            for part in parts[:-1]:
-                nxt = d.setdefault(part, {})
-                assert isinstance(nxt, dict), (
-                    f"load_variables: cannot nest key {'.'.join(parts)!r}; "
-                    f"segment {part!r} is bound to a non-dict "
-                    f"({type(nxt).__name__}). Don't mix flat and nested "
-                    f"keys that share a prefix."
-                )
-                d = nxt
-            d[parts[-1]] = content
+            _set_nested_key(result, ".".join(parts), content, strict=True)
 
         def _load_and_compose(var_dir: str, version: str) -> Optional[str]:
             """Load variable via cascade and compose nested {{ X }} refs."""
             content, file_path = self._cascade_load_variable_path(
-                var_dir, version, root_space, tmpl_type
+                var_dir, version, root_space, tmpl_type, master_version
             )
             if content is not None and file_path is not None:
                 loader = self._loader_for_path(file_path)
@@ -793,11 +834,17 @@ class TemplateManager:
 
             value = spec
 
-            # For dot-keys, file_stem IS the default version.
-            # For plain keys, fall back to default_version as before.
-            if not value:
+            # Distinguish None (caller didn't specify, use default) from
+            # "" (caller EXPLICITLY chose empty, respect their intent).
+            # ``not value`` conflates these; checking ``is None`` does not.
+            if value is None:
                 value = file_stem if file_stem else default_version
-            if not value:
+            if value is None or value == "":
+                if value == "":
+                    # Caller explicitly suppressed this variable.
+                    _store_nested(nested_path, "")
+                    continue
+                # Truly unspecified: fall back to default.jinja2 cascade.
                 loaded = _load_and_compose(var_dir, "default")
                 _store_nested(nested_path, loaded if loaded is not None else "")
                 continue
@@ -949,6 +996,7 @@ class TemplateManager:
         template_key: str = None,
         active_template_type: str = None,
         active_template_root_space: str = None,
+        master_version: str = None,
     ) -> Optional[str]:
         """
         Return raw template content before rendering.
@@ -995,6 +1043,17 @@ class TemplateManager:
             resolved_space_key = _resolve_template_space_key_with_root_space_and_type(
                 main_space_key
             )
+            if master_version:
+                mv_space_key = (
+                    f"{resolved_space_key}{self.template_key_parts_sep}{master_version}"
+                    if resolved_space_key
+                    else master_version
+                )
+                result, _ = self._try_versioned_and_unversioned_lookup(
+                    mv_space_key, item_key
+                )
+                if result is not None:
+                    return result
             result, _ = self._try_versioned_and_unversioned_lookup(
                 resolved_space_key, item_key
             )
@@ -1276,11 +1335,28 @@ class TemplateManager:
         versioned_default_name = f"{self.default_template_name}{self.template_version_sep}{self.template_version}"
         return self._get_template_and_components_key(space_key, versioned_default_name)
 
-    def _resolve_templated_feed(self, merged_feed: dict) -> dict:
+    def _resolve_templated_feed(
+        self,
+        merged_feed: dict,
+        root_space: str = "",
+        tmpl_type: str = "main",
+    ) -> dict:
         """Resolve feed values that reference other feed values via template syntax.
 
-        Delegates to the engine-independent resolve_templated_feed utility,
-        using this TemplateManager's configured extractor and formatter.
+        Delegates to the engine-independent resolve_templated_feed utility for
+        top-level values, then:
+
+        1. **Re-composes wrapper variables** from raw source files. Wrapper
+           variables (e.g. ``context.user_request_with_task_preamble``) are
+           composed during auto-discovery, which resolves inner ``{{ X }}``
+           references using default versions. If the caller provided explicit
+           top-level values (e.g., ``task_preamble`` via ``load_variables``
+           with ``master_version``), the composed wrapper is stale — its inner
+           references were baked in with the wrong values. Re-loading the raw
+           file and re-rendering it against the resolved feed fixes this.
+
+        2. **Recursively renders** remaining ``{{ }}`` references in nested
+           dict/list string values against the resolved top-level feed.
         """
         extractor = self.template_variable_extractor
         formatter = self.template_formatter
@@ -1291,11 +1367,64 @@ class TemplateManager:
             resolve_templated_feed,
         )
 
-        return resolve_templated_feed(
+        resolved = resolve_templated_feed(
             merged_feed,
             extract_variables=extractor,
             render_template=lambda tmpl, ctx: formatter(tmpl, feed=ctx),
         )
+
+        # Step 1: Re-compose wrapper variables from raw source files.
+        # Auto-discovery resolves {{ task_preamble }} inside wrappers using
+        # the TemplateManager's version (typically empty → default.jinja2),
+        # baking in stale content. The caller's explicit load_variables()
+        # result provides the correct value at the top level, but the wrapper
+        # has it baked in as literal text. Re-loading the raw wrapper file
+        # and re-rendering against the resolved feed (which has the caller's
+        # values) produces the correct output.
+        if hasattr(self, "_file_space") and self._file_space is not None:
+            cascade = self._file_space.build_cascade(root_space, tmpl_type)
+            for key, val in resolved.items():
+                if not isinstance(val, dict):
+                    continue
+                for subkey, subval in list(val.items()):
+                    if not isinstance(subval, str):
+                        continue
+                    for cascade_folder in cascade:
+                        folder = cascade_folder / key
+                        raw_path = self._file_space.find_in_folder(folder, subkey)
+                        if raw_path is not None:
+                            raw_content = raw_path.read_text(
+                                encoding=self.template_encoding
+                            )
+                            if extractor(raw_content):
+                                try:
+                                    val[subkey] = formatter(
+                                        raw_content, feed=resolved
+                                    )
+                                except Exception:
+                                    pass
+                            break
+
+        # Step 2: Recursive pass — render remaining {{ }} references in
+        # nested dicts/lists against the resolved top-level feed.
+        def _walk(node):
+            if isinstance(node, dict):
+                return {k: _walk(v) for k, v in node.items()}
+            if isinstance(node, list):
+                return [_walk(v) for v in node]
+            if isinstance(node, str) and extractor(node):
+                try:
+                    return formatter(node, feed=resolved)
+                except Exception:
+                    return node
+            return node
+
+        # Only walk container values (dicts/lists). Top-level strings are
+        # already handled by resolve_templated_feed above.
+        return {
+            k: _walk(v) if isinstance(v, (dict, list)) else v
+            for k, v in resolved.items()
+        }
 
     def __call__(
         self,
@@ -1306,6 +1435,7 @@ class TemplateManager:
         active_template_type: str = None,
         active_template_root_space: str = None,
         skip_predefined: bool = False,
+        master_version: str = None,
         **kwargs,
     ) -> Union[str, Iterator[str]]:
         """
@@ -1748,10 +1878,21 @@ class TemplateManager:
             )
 
         def _try_get_template(main_space_key, item_key):
-            """Helper to resolve and get template with current state"""
+            """Helper to resolve and get template with current state."""
             resolved_space_key = _resolve_template_space_key_with_root_space_and_type(
                 main_space_key
             )
+            if master_version:
+                mv_space_key = (
+                    f"{resolved_space_key}{self.template_key_parts_sep}{master_version}"
+                    if resolved_space_key
+                    else master_version
+                )
+                result = self._try_versioned_and_unversioned_lookup(
+                    mv_space_key, item_key
+                )
+                if result[0] is not None:
+                    return result
             return self._try_versioned_and_unversioned_lookup(
                 resolved_space_key, item_key
             )
@@ -1881,7 +2022,7 @@ class TemplateManager:
                     else self._variable_loader
                 )
                 if loader:
-                    predefined_vars = loader.resolve_from_template(
+                    _flat_predefined = loader.resolve_from_template(
                         template_content=template,
                         template_root_space=_orig_root_space or "",
                         template_type=_orig_type or "main",
@@ -1894,7 +2035,13 @@ class TemplateManager:
                         variable_type=_orig_type or "main",
                     )
                     if yaml_vars:
-                        predefined_vars = {**yaml_vars, **predefined_vars}
+                        _flat_predefined = {**yaml_vars, **_flat_predefined}
+                    # Re-nest dotted keys (e.g. "context.user_request_with_task_preamble")
+                    # into nested dicts so Jinja2's attribute access resolves correctly.
+                    # Without this, {{ context.foo }} silently returns Undefined.
+                    predefined_vars = {}
+                    for _k, _v in _flat_predefined.items():
+                        _set_nested_key(predefined_vars, _k, _v)
 
                     # Refactor 17: cross-root variable fallback.
                     # When enabled, two complementary mechanisms ensure that
@@ -1949,7 +2096,9 @@ class TemplateManager:
                                     )
                                 )
                                 if priority_value is not None:
-                                    predefined_vars[var_name] = priority_value
+                                    _set_nested_key(
+                                        predefined_vars, var_name, priority_value,
+                                    )
 
                         # Mechanism (B): fill keys still missing via
                         # cascade resolution (try file, skip if not found)
@@ -1959,14 +2108,32 @@ class TemplateManager:
                             _fb_type = _orig_type or "main"
                             _fb_space = _orig_root_space or ""
                             for var_name in var_names:
+                                # Skip if already set (flat OR nested form)
                                 if var_name in predefined_vars:
                                     continue
+                                if "." in var_name:
+                                    parts = var_name.split(".")
+                                    cur = predefined_vars.get(parts[0])
+                                    already_set = False
+                                    for part in parts[1:]:
+                                        if not isinstance(cur, dict):
+                                            already_set = False
+                                            break
+                                        if part not in cur:
+                                            already_set = False
+                                            break
+                                        cur = cur[part]
+                                        already_set = True
+                                    if already_set:
+                                        continue
                                 fallback = self._cascade_load_variable(
                                     var_name, _fb_version,
                                     _fb_space, _fb_type,
                                 )
                                 if fallback is not None:
-                                    predefined_vars[var_name] = fallback
+                                    _set_nested_key(
+                                        predefined_vars, var_name, fallback,
+                                    )
 
                         # Yaml sidecar variables from other roots fill gaps.
                         for tmpl_path in self._original_templates_paths:
@@ -1980,7 +2147,9 @@ class TemplateManager:
                                 variable_type=_orig_type or "main",
                             )
                             for k, v in other_yaml_vars.items():
-                                predefined_vars.setdefault(k, v)
+                                _set_nested_key(
+                                    predefined_vars, k, v, overwrite=False,
+                                )
             elif self._static_predefined_vars is not None:
                 predefined_vars = dict(self._static_predefined_vars)
 
@@ -1994,7 +2163,11 @@ class TemplateManager:
 
         # Resolve templated feed values if enabled
         if self.enable_templated_feed:
-            kwargs = self._resolve_templated_feed(kwargs)
+            kwargs = self._resolve_templated_feed(
+                kwargs,
+                root_space=_orig_root_space or "",
+                tmpl_type=_orig_type or "main",
+            )
 
         formatter = formatter or self.template_formatter
         if not formatter:
