@@ -2027,6 +2027,7 @@ class TemplateManager:
                         template_root_space=_orig_root_space or "",
                         template_type=_orig_type or "main",
                         version=self.template_version,
+                        master_version=master_version,
                     )
                     # Also include YAML sidecar variables (loaded via load_yaml_sidecar).
                     # These have lower priority than file-based resolved vars.
@@ -2129,6 +2130,7 @@ class TemplateManager:
                                 fallback = self._cascade_load_variable(
                                     var_name, _fb_version,
                                     _fb_space, _fb_type,
+                                    master_version,
                                 )
                                 if fallback is not None:
                                     _set_nested_key(

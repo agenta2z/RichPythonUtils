@@ -310,7 +310,7 @@ def merge_configs(*configs):
 # Instantiation
 # ---------------------------------------------------------------------------
 
-def instantiate(config, _convert_: str = "all", **kwargs) -> Any:
+def instantiate(config, _convert_: str = "all", merge_dict_typed_attributes: bool = True, **kwargs) -> Any:
     """Instantiate a Python object from *config* using Hydra.
 
     This is a thin wrapper around ``hydra.utils.instantiate`` that first:
@@ -335,7 +335,9 @@ def instantiate(config, _convert_: str = "all", **kwargs) -> Any:
     from hydra.utils import instantiate as _hydra_instantiate
 
     ensure_resolvers()
-    config, factory_configs = _resolve_and_preprocess(config)
+    config, factory_configs = _resolve_and_preprocess(
+        config, merge_dict_typed_attributes=merge_dict_typed_attributes
+    )
     result = _hydra_instantiate(config, _convert_=_convert_, **kwargs)
     for owner_path, field_name, child_key, raw_config, injectables in factory_configs:
         _apply_lazy_factory(result, owner_path, field_name, child_key, raw_config, injectables)
@@ -371,7 +373,7 @@ def _apply_lazy_factory(root, owner_path, field_name, child_key, raw_config, inj
 # Internal: single-pass tree walk
 # ---------------------------------------------------------------------------
 
-def _resolve_and_preprocess(config):
+def _resolve_and_preprocess(config, merge_dict_typed_attributes: bool = True):
     """Convert to plain dict, walk the tree, convert back to ``DictConfig``.
 
     Returns ``(DictConfig, factory_configs)`` where *factory_configs* is a
@@ -384,7 +386,8 @@ def _resolve_and_preprocess(config):
 
     raw = OmegaConf.to_container(config, resolve=False)
     factory_configs: List[tuple] = []
-    _walk(raw, _factory_configs=factory_configs)
+    _walk(raw, _factory_configs=factory_configs,
+          _merge_dict_typed_attributes=merge_dict_typed_attributes)
     return OmegaConf.create(raw), factory_configs
 
 
@@ -399,6 +402,7 @@ def _walk(
     _factory_configs: Optional[List[tuple]] = None,
     _expected_cls: Optional[type] = None,
     _owner_path: str = "",
+    _merge_dict_typed_attributes: bool = True,
 ) -> None:
     """Recursively process a mutable dict/list tree.
 
@@ -476,7 +480,8 @@ def _walk(
                     )
                 cls = _import_target(node["_target_"])
                 if cls is not None:
-                    _filter_attrs_keys(node, cls, _factory_configs, local_injectables, _owner_path=_owner_path)
+                    _filter_attrs_keys(node, cls, _factory_configs, local_injectables, _owner_path=_owner_path,
+                                       merge_dict_typed_attributes=_merge_dict_typed_attributes)
 
         # 1a. Remove injectable source keys that survived _filter_attrs_keys.
         #     _filter_attrs_keys already removed _-prefixed keys that ARE attrs
@@ -563,11 +568,13 @@ def _walk(
                 _factory_configs=_factory_configs,
                 _expected_cls=child_expected_cls,
                 _owner_path=child_path,
+                _merge_dict_typed_attributes=_merge_dict_typed_attributes,
             )
 
     elif isinstance(node, list):
         for item in node:
-            _walk(item, _injectables=_injectables, _factory_configs=_factory_configs, _expected_cls=None, _owner_path=_owner_path)
+            _walk(item, _injectables=_injectables, _factory_configs=_factory_configs, _expected_cls=None,
+                  _owner_path=_owner_path, _merge_dict_typed_attributes=_merge_dict_typed_attributes)
 
 
 # ---------------------------------------------------------------------------
@@ -889,6 +896,7 @@ def _filter_attrs_keys(
     _factory_configs: Optional[List[tuple]] = None,
     _injectables: Optional[Dict[str, Any]] = None,
     _owner_path: str = "",
+    merge_dict_typed_attributes: bool = True,
 ) -> None:
     """For ``@attrs`` classes, remove YAML keys that aren't valid ``__init__`` params.
 
@@ -976,3 +984,20 @@ def _filter_attrs_keys(
                     if _factory_configs is not None:
                         _factory_configs.append((_owner_path, a.name, k, raw, _injectables or {}))
                     v["_partial_"] = True
+
+    if merge_dict_typed_attributes:
+        for a in attr.fields(cls):
+            if a.name not in node or not isinstance(node[a.name], dict):
+                continue
+            default_val = None
+            if isinstance(a.default, attr.Factory):
+                if not a.default.takes_self:
+                    try:
+                        default_val = a.default.factory()
+                    except Exception:
+                        continue
+            elif isinstance(a.default, dict):
+                default_val = a.default
+            if not isinstance(default_val, dict):
+                continue
+            node[a.name] = _deep_merge(default_val, node[a.name])

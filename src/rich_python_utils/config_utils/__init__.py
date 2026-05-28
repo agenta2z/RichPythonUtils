@@ -57,9 +57,10 @@ def merge_configs(*configs):
     return _merge(*configs)
 
 
-def instantiate(config, _convert_="all", **kwargs):
+def instantiate(config, _convert_="all", merge_dict_typed_attributes=True, **kwargs):
     from rich_python_utils.config_utils._instantiate import instantiate as _inst
-    return _inst(config, _convert_=_convert_, **kwargs)
+    return _inst(config, _convert_=_convert_,
+                 merge_dict_typed_attributes=merge_dict_typed_attributes, **kwargs)
 
 
 __all__ = [

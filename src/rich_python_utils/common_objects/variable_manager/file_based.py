@@ -241,6 +241,7 @@ class FileBasedVariableManager(VariableManager):
         variable_root_space: str = "",
         variable_type: str = "",
         version: str = "",
+        master_version: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Auto-detect and resolve all variables from content.
 
@@ -253,6 +254,9 @@ class FileBasedVariableManager(VariableManager):
             variable_root_space: Root space for cascade resolution.
             variable_type: Variable type for cascade resolution.
             version: Version suffix for variable resolution.
+            master_version: When set, variables are first looked up under
+                a ``<var_name>/<master_version>/`` subdirectory before
+                falling back to the flat path.
 
         Returns:
             Dictionary mapping variable names to resolved content.
@@ -297,6 +301,7 @@ class FileBasedVariableManager(VariableManager):
                     is_optional,
                     resolution_stack=[],
                     current_level_path=None,
+                    master_version=master_version,
                 )
 
                 if resolved is not None:
@@ -317,6 +322,7 @@ class FileBasedVariableManager(VariableManager):
                     is_optional=False,
                     resolution_stack=[],
                     current_level_path=None,
+                    master_version=master_version,
                 )
 
                 if resolved is not None:
@@ -983,6 +989,7 @@ class FileBasedVariableManager(VariableManager):
         is_optional: bool,
         resolution_stack: List[str],
         current_level_path: Optional[Path] = None,
+        master_version: Optional[str] = None,
     ) -> Optional[str]:
         """Resolve a single variable.
 
@@ -995,6 +1002,8 @@ class FileBasedVariableManager(VariableManager):
             is_optional: Whether the variable is optional
             resolution_stack: Current resolution stack for circular detection
             current_level_path: Path of file containing reference (for "." scope)
+            master_version: When set, tries ``<var_name>/<master_version>/``
+                subdirectory before the flat path.
 
         Returns:
             Resolved content or None if not found
@@ -1037,6 +1046,11 @@ class FileBasedVariableManager(VariableManager):
                     file_path = candidate
                     break
 
+        if file_path is None and master_version:
+            file_path, _ = self._find_variable_file(
+                f"{variable_name}/{master_version}", cascade_paths, version
+            )
+
         if file_path is None:
             file_path, _ = self._find_variable_file(variable_name, cascade_paths, version)
 
@@ -1059,7 +1073,8 @@ class FileBasedVariableManager(VariableManager):
         # Recursively resolve any variable references in the content
         new_stack = resolution_stack + [variable_name]
         content = self._resolve_content(
-            content, variable_root_space, variable_type, version, new_stack, file_path
+            content, variable_root_space, variable_type, version, new_stack, file_path,
+            master_version=master_version,
         )
 
         return content
@@ -1072,6 +1087,7 @@ class FileBasedVariableManager(VariableManager):
         version: str,
         resolution_stack: List[str],
         current_file_path: Optional[Path] = None,
+        master_version: Optional[str] = None,
     ) -> str:
         """Resolve all variable references in content.
 
@@ -1082,6 +1098,8 @@ class FileBasedVariableManager(VariableManager):
             version: Version suffix
             resolution_stack: Current resolution stack
             current_file_path: Path of the file containing the content
+            master_version: When set, tries ``<var_name>/<master_version>/``
+                subdirectory before the flat path.
 
         Returns:
             Content with variables resolved
@@ -1109,6 +1127,7 @@ class FileBasedVariableManager(VariableManager):
                     is_optional,
                     resolution_stack,
                     current_file_path,
+                    master_version=master_version,
                 )
 
                 if resolved is not None:
@@ -1150,6 +1169,7 @@ class FileBasedVariableManager(VariableManager):
                     is_optional=False,
                     resolution_stack=resolution_stack,
                     current_level_path=current_file_path,
+                    master_version=master_version,
                 )
                 if resolved is not None:
                     resolved_vars[var_name] = resolved

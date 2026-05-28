@@ -111,6 +111,7 @@ class TemplateVariableManager(FileBasedVariableManager):
         template_root_space: str,
         template_type: str,
         version: str = "",
+        master_version: Optional[str] = None,
     ) -> Dict[str, str]:
         """Auto-detect and resolve all variables from template content.
 
@@ -122,6 +123,8 @@ class TemplateVariableManager(FileBasedVariableManager):
             template_root_space: Root space name (e.g., "action_agent").
             template_type: Template type (e.g., "main").
             version: Version suffix for variable resolution (default: "").
+            master_version: When set, variables are first looked up under
+                a ``<var_name>/<master_version>/`` subdirectory.
 
         Returns:
             Dictionary mapping variable names to resolved content.
@@ -132,6 +135,7 @@ class TemplateVariableManager(FileBasedVariableManager):
             variable_root_space=template_root_space,
             variable_type=template_type,
             version=version,
+            master_version=master_version,
         )
 
 
