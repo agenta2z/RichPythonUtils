@@ -164,6 +164,12 @@ class SOPPhase(StateNode):
 class SOP(StateGraph):
     """A Standard Operating Procedure — a StateGraph of SOPPhases."""
 
+    def __init__(self, nodes=None, keywords=None, example_requests=None, name=""):
+        super().__init__(nodes)
+        self.name: str = name
+        self.keywords: list[str] = keywords or []
+        self.example_requests: list[str] = example_requests or []
+
     @property
     def phases(self) -> list[SOPPhase]:
         return self.nodes
@@ -244,6 +250,18 @@ class SOPManager:
     def parse_markdown(content: str) -> SOP:
         phases: list[SOPPhase] = []
         matches = list(_PHASE_HEADING_RE.finditer(content))
+
+        # Extract preamble meta-tags (before first ## Phase heading)
+        preamble_end = matches[0].start() if matches else len(content)
+        preamble = content[:preamble_end]
+        keywords, example_requests = _extract_preamble_meta(preamble)
+
+        sop_name = ""
+        for pline in preamble.split("\n"):
+            pline_s = pline.strip()
+            if pline_s.startswith("# ") and not pline_s.startswith("## "):
+                sop_name = pline_s[2:].strip()
+                break
 
         for i, match in enumerate(matches):
             heading_level = len(match.group(1))
@@ -438,7 +456,7 @@ class SOPManager:
                 )
             )
 
-        return SOP(phases)
+        return SOP(phases, keywords=keywords, example_requests=example_requests, name=sop_name)
 
     # -- YAML parser -------------------------------------------------------
 
@@ -474,7 +492,7 @@ class SOPManager:
                     directives=entry.get("directives", []),
                 )
             )
-        return SOP(phases)
+        return SOP(phases, name=data.get("name", ""))
 
 
     # -- Guidance rendering ------------------------------------------------
@@ -566,27 +584,71 @@ class SOPManager:
 
     @staticmethod
     def render_for_mode(content: str, mode: str = "default") -> str:
-        """Re-render SOP markdown with mode-specific filtering.
+        """Return SOP markdown unchanged regardless of mode.
 
-        mode="yolo": strips [__requires confirmation__] tag lines and their
-        trailing instruction text. Only affects lines containing the literal
-        marker — code blocks and markdown links are unaffected.
-        mode="default": returns content unchanged.
+        Yolo mode no longer strips [__requires confirmation__] text —
+        instead, conversation tools get synthetic auto-advance responses
+        via ConversationalInferencer._synthesize_yolo_collected().
+        The [__requires confirmation__] tag stays visible to the LLM
+        so it still emits the conversation tool; the response is just
+        synthesized instead of blocking on user input.
         """
-        if mode != "yolo":
-            return content
-        lines = content.split("\n")
-        filtered = []
-        for line in lines:
-            if _REQUIRES_CONFIRMATION_RE.search(line):
-                continue
-            filtered.append(line)
-        return "\n".join(filtered)
+        return content
 
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _extract_preamble_meta(preamble: str) -> tuple[list[str], list[str]]:
+    """Extract SOP-level meta-tags from the text before the first phase heading.
+
+    Returns (keywords, example_requests).
+    """
+    keywords: list[str] = []
+    example_requests: list[str] = []
+    current_meta: str | None = None
+
+    for line in preamble.split("\n"):
+        stripped = line.strip()
+
+        # Match [__keywords__] or [__example_requests__] with optional trailing content
+        tag_match = re.match(
+            r"^\[?__(\w+)__\]?\s*(?::\s*)?(.*)$", stripped, re.IGNORECASE
+        )
+        if tag_match:
+            tag_name = tag_match.group(1).lower()
+            value = tag_match.group(2).strip()
+            if tag_name == "keywords":
+                current_meta = "keywords"
+                if value:
+                    keywords.extend(
+                        k.strip() for k in value.split(",") if k.strip()
+                    )
+            elif tag_name == "example_requests":
+                current_meta = "example_requests"
+                if value:
+                    example_requests.append(value)
+            else:
+                current_meta = None
+            continue
+
+        # Bullet list items under the current meta-tag
+        if current_meta and stripped.startswith("- "):
+            item = stripped[2:].strip()
+            if item:
+                if current_meta == "keywords":
+                    keywords.append(item)
+                elif current_meta == "example_requests":
+                    example_requests.append(item)
+            continue
+
+        # Non-tag, non-list line resets current_meta
+        if stripped and not stripped.startswith("#"):
+            current_meta = None
+
+    return keywords, example_requests
 
 
 def _extract_tag_lines(body: str) -> dict[str, Any]:

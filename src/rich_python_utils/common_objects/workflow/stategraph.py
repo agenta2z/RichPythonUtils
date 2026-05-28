@@ -154,6 +154,7 @@ class StateGraphTracker:
     def complete(self, state_id: str, **outputs: Any) -> None:
         """Mark a state as completed and record outputs."""
         self.state_status = "completed"
+        self.current_state = None
         if state_id not in self.completed_states:
             self.completed_states.append(state_id)
         self.state_outputs.update(outputs)
