@@ -23,6 +23,9 @@ _tmp*
 Thumbs.db
 .hypothesis/
 
-# Development directories — tracked here on dev, ignored on main
-# (main's .gitignore lists _dev/ _archive/ _docs/ _plan/)
+# Development directories (tracked on dev branch, ignored on main)
+_dev/
+_archive/
+_docs/
+_plan/
 **/bedrock_inferencers/_dev/
