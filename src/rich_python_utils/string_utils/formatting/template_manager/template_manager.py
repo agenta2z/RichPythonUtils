@@ -1373,14 +1373,16 @@ class TemplateManager:
             render_template=lambda tmpl, ctx: formatter(tmpl, feed=ctx),
         )
 
-        # Step 1: Re-compose wrapper variables from raw source files.
-        # Auto-discovery resolves {{ task_preamble }} inside wrappers using
-        # the TemplateManager's version (typically empty → default.jinja2),
-        # baking in stale content. The caller's explicit load_variables()
-        # result provides the correct value at the top level, but the wrapper
-        # has it baked in as literal text. Re-loading the raw wrapper file
-        # and re-rendering against the resolved feed (which has the caller's
-        # values) produces the correct output.
+        # Step 1: Re-compose wrapper variables that still contain
+        # unresolved {{ X }} references (e.g., feed variables like
+        # {{ input }} that file-based auto-discovery can't resolve).
+        #
+        # Two modes depending on whether the feed has ALL inner variables:
+        #   (a) All inner vars in feed → re-render from RAW source file
+        #       so explicit load_variables() values override auto-discovered ones.
+        #   (b) Some inner vars missing → re-render from CURRENT auto-discovered
+        #       value, preserving file-based resolutions while resolving
+        #       feed-only variables (like {{ input }}).
         if hasattr(self, "_file_space") and self._file_space is not None:
             cascade = self._file_space.build_cascade(root_space, tmpl_type)
             for key, val in resolved.items():
@@ -1396,13 +1398,22 @@ class TemplateManager:
                             raw_content = raw_path.read_text(
                                 encoding=self.template_encoding
                             )
-                            if extractor(raw_content):
-                                try:
-                                    val[subkey] = formatter(
-                                        raw_content, feed=resolved
-                                    )
-                                except Exception:
-                                    pass
+                            inner_vars = set(extractor(raw_content)) if extractor(raw_content) else set()
+                            if inner_vars:
+                                if inner_vars <= set(resolved.keys()):
+                                    try:
+                                        val[subkey] = formatter(
+                                            raw_content, feed=resolved
+                                        )
+                                    except Exception:
+                                        pass
+                                elif extractor(subval):
+                                    try:
+                                        val[subkey] = formatter(
+                                            subval, feed=resolved
+                                        )
+                                    except Exception:
+                                        pass
                             break
 
         # Step 2: Recursive pass — render remaining {{ }} references in
