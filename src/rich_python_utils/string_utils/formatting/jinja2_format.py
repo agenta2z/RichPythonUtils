@@ -3,6 +3,14 @@ from typing import Mapping, Callable, Dict, Optional, Any, List, Union, Tuple, S
 
 from jinja2 import Template, meta, Environment, ChainableUndefined
 
+
+class _FalsyChainableUndefined(ChainableUndefined):
+    """Chainable attribute access (``foo.bar.baz`` won't crash) but falsy in
+    boolean context so ``{% if foo %}`` correctly skips undefined variables."""
+
+    def __bool__(self) -> bool:
+        return False
+
 from rich_python_utils.common_utils import dict_
 
 
@@ -89,7 +97,7 @@ def compile_template(
     # Compile with ChainableUndefined so chained attribute access on
     # undefined variables (e.g., {{ notes.local_search_efficiency }})
     # silently renders empty instead of raising UndefinedError.
-    _env = Environment(undefined=ChainableUndefined)
+    _env = Environment(undefined=_FalsyChainableUndefined)
     jinja_template = _env.from_string(template)
 
     # Only parse template for variables if we need them

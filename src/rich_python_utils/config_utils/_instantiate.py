@@ -124,6 +124,181 @@ def _resolve_path_in_root(root_container, path_str):
     return cursor
 
 
+_REPEAT_KEY = "_repeat_"
+_FACTORY_DIRECTIVE = "_factory_"
+
+
+def _resolve_factory_directives(node: Any) -> Any:
+    """Convert ``_factory_: ClassName`` to ``_target_: ClassName`` everywhere.
+
+    ``_factory_:`` is syntactic sugar signaling "this config block is a
+    factory callable, not an object." The conversion to ``_target_:`` lets
+    the existing ``*_factory`` field detection in ``_filter_attrs_keys``
+    handle ``LazyConfigFactory`` wrapping — no separate mechanism needed.
+
+    Boolean ``_factory_: true`` (internal import marker) is left unchanged.
+    """
+    if isinstance(node, list):
+        return [_resolve_factory_directives(item) for item in node]
+    if not isinstance(node, dict):
+        return node
+
+    result: dict = {}
+    for k, v in node.items():
+        if k == _FACTORY_DIRECTIVE and isinstance(v, str):
+            result["_target_"] = v
+        else:
+            result[k] = _resolve_factory_directives(v)
+    return result
+
+
+def _resolve_repeat_(node: Any) -> Any:
+    """Expand ``_repeat_: N`` with optional distribution.
+
+    A list item ``{"_repeat_": 2, "key": "val"}`` becomes two independent
+    copies. If any nested value is a list of length N or a dict with
+    int values summing to N, it's treated as a distribution — each copy
+    gets a different value at its index.
+    """
+    if isinstance(node, list):
+        expanded: list = []
+        for item in node:
+            if isinstance(item, dict) and _REPEAT_KEY in item:
+                n = int(item[_REPEAT_KEY])
+                base = {k: v for k, v in item.items() if k != _REPEAT_KEY}
+                distributions = _collect_distributions(base, n)
+                for i in range(n):
+                    entry = copy.deepcopy(base)
+                    _apply_distributions(entry, distributions, i)
+                    expanded.append(entry)
+            else:
+                expanded.append(item)
+        return [_resolve_repeat_(item) for item in expanded]
+    if isinstance(node, dict):
+        return {k: _resolve_repeat_(v) for k, v in node.items()}
+    return node
+
+
+def _expand_distribution(val: Any, n: int) -> list | None:
+    """Convert a list or count-dict to a flat assignment list of length n."""
+    if isinstance(val, (list, tuple)):
+        if len(val) != n:
+            raise ValueError(
+                f"Distribution list length {len(val)} != _repeat_ {n}"
+            )
+        return list(val)
+    if isinstance(val, dict) and val and all(isinstance(v, int) for v in val.values()):
+        assignments: list = []
+        for k, count in val.items():
+            assignments.extend([k] * count)
+        if len(assignments) != n:
+            return None  # sum doesn't match _repeat_ — regular dict, not distribution
+        return assignments
+    return None
+
+
+def _collect_distributions(
+    node: Any, n: int, path: tuple = (),
+) -> list[tuple[tuple, list]]:
+    """Find all list/dict-with-counts values that match the repeat count."""
+    results: list[tuple[tuple, list]] = []
+    if not isinstance(node, dict):
+        return results
+    for key, val in node.items():
+        expanded = _expand_distribution(val, n)
+        if expanded is not None:
+            results.append((path + (key,), expanded))
+        elif isinstance(val, dict):
+            results.extend(_collect_distributions(val, n, path + (key,)))
+    return results
+
+
+def _apply_distributions(
+    entry: dict, distributions: list[tuple[tuple, list]], index: int,
+) -> None:
+    """Replace distribution fields with scalar value for this index."""
+    for path, assignments in distributions:
+        node = entry
+        for step in path[:-1]:
+            node = node[step]
+        node[path[-1]] = assignments[index]
+
+
+# ---------------------------------------------------------------------------
+# Sibling reference resolution ($name)
+# ---------------------------------------------------------------------------
+
+
+def _resolve_sibling_refs(node: Any, scope_chain: tuple = (), root: Any = None) -> Any:
+    """Resolve ``$name`` references — walk up scope chain until found.
+
+    When the referent is a dict, mirrors the current field name
+    (e.g., ``_target_: $sibling`` extracts ``sibling._target_``).
+    """
+    if root is None:
+        root = node
+    if isinstance(node, list):
+        result: list = []
+        for item in node:
+            if isinstance(item, str) and item.startswith("$") and not item.startswith("${"):
+                ref_val = _lookup_scope_chain(item[1:], scope_chain, root)
+                result.append(copy.deepcopy(ref_val) if ref_val is not None else item)
+            else:
+                result.append(_resolve_sibling_refs(item, scope_chain, root))
+        return result
+    if isinstance(node, dict):
+        child_scope = (node,) + scope_chain
+        resolved: dict = {}
+        for key, val in node.items():
+            if isinstance(val, str) and val.startswith("$") and not val.startswith("${"):
+                ref_name = val[1:]
+                ref_val = _lookup_scope_chain(ref_name, child_scope, root)
+                if ref_val is not None:
+                    if isinstance(ref_val, dict) and key in ref_val:
+                        resolved[key] = copy.deepcopy(ref_val[key])
+                    else:
+                        resolved[key] = copy.deepcopy(ref_val)
+                else:
+                    resolved[key] = val
+            elif isinstance(val, dict):
+                resolved[key] = _resolve_sibling_refs(val, child_scope, root)
+            elif isinstance(val, list):
+                resolved[key] = _resolve_sibling_refs(val, child_scope, root)
+            else:
+                resolved[key] = val
+        return resolved
+    return node
+
+
+def _has_repeat_or_ref(node: Any) -> bool:
+    """Quick check if the tree contains _repeat_ or $ref markers."""
+    if isinstance(node, dict):
+        if _REPEAT_KEY in node:
+            return True
+        for v in node.values():
+            if isinstance(v, str) and v.startswith("$") and not v.startswith("${"):
+                return True
+            if _has_repeat_or_ref(v):
+                return True
+    elif isinstance(node, list):
+        for item in node:
+            if isinstance(item, str) and item.startswith("$") and not item.startswith("${"):
+                return True
+            if _has_repeat_or_ref(item):
+                return True
+    return False
+
+
+def _lookup_scope_chain(name: str, scope_chain: tuple, root: Any) -> Any:
+    """Search scope chain (current dict → parent → ... → root) for name."""
+    for scope in scope_chain:
+        if isinstance(scope, dict) and name in scope:
+            return scope[name]
+    if isinstance(root, dict) and name in root:
+        return root[name]
+    return None
+
+
 def _resolve_inherits_(node, root_container, _resolution_stack=None):
     """Resolve ``_inherits_`` directives via deep-copy + override-merge.
 
@@ -221,9 +396,14 @@ def _resolve_import_(node, current_yaml_dir: Path):
     if import_key is not None:
         ref_path = (current_yaml_dir / node[import_key]).resolve()
         if not ref_path.exists():
-            raise FileNotFoundError(
-                f"{import_key}: referenced yaml not found: {ref_path}"
-            )
+            # Try with .yaml extension before raising
+            ref_yaml = ref_path.parent / f"{ref_path.name}.yaml"
+            if ref_yaml.exists():
+                ref_path = ref_yaml
+            else:
+                raise FileNotFoundError(
+                    f"{import_key}: referenced yaml not found: {ref_path}"
+                )
         from omegaconf import OmegaConf
 
         ref_cfg = OmegaConf.to_container(
@@ -237,7 +417,42 @@ def _resolve_import_(node, current_yaml_dir: Path):
             merged[_FACTORY_MARKER] = True
         return merged
 
-    return {k: _resolve_import_(v, current_yaml_dir) for k, v in node.items()}
+    # Alias-file cascade: when a non-Hydra key's value is a registered alias
+    # string, search for a YAML file at conventional paths before falling back
+    # to plain string shorthand expansion (which creates {_target_: Alias}
+    # with class defaults). Search order:
+    #   1. ./field_name/AliasName.yaml  (field-hierarchy path)
+    #   2. ./AliasName.yaml             (local to config dir)
+    #   3. Leave as string              (shorthand expansion in _walk)
+    for key, val in list(node.items()):
+        if key.startswith("_") or not isinstance(val, str) or val not in _registry:
+            continue
+        candidates = [
+            current_yaml_dir / key / f"{val}.yaml",
+            current_yaml_dir / f"{val}.yaml",
+        ]
+        for candidate in candidates:
+            if candidate.is_file():
+                from omegaconf import OmegaConf
+
+                ref_cfg = OmegaConf.to_container(
+                    OmegaConf.load(str(candidate)), resolve=False
+                )
+                ref_cfg = _resolve_import_(ref_cfg, candidate.parent)
+                node[key] = ref_cfg
+                break
+
+    # Field-hierarchy directory narrowing: when recursing into a dict key,
+    # if a subdirectory matching the key name exists, use it as the search
+    # root for nested _import_ and alias-file cascade resolution.
+    # E.g., base_inferencer.planner_inferencer._import_: foo
+    #   → searches configs/base_inferencer/planner_inferencer/foo.yaml
+    result = {}
+    for k, v in node.items():
+        child_dir = current_yaml_dir / k
+        narrowed = child_dir if child_dir.is_dir() else current_yaml_dir
+        result[k] = _resolve_import_(v, narrowed)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -273,6 +488,7 @@ def load_config(path: str, overrides: Optional[Dict[str, Any]] = None):
         # dot-notation overrides can patch into the expanded config.
         container = OmegaConf.to_container(cfg, resolve=False)
         container = _resolve_import_(container, Path(path).resolve().parent)
+        container = _resolve_factory_directives(container)
         # Resolve _inherits_ directives (deep-copy + override-merge from
         # another node within the same container). Runs after _import_ so
         # _inherits_ can reference imported nodes; runs before
@@ -281,9 +497,6 @@ def load_config(path: str, overrides: Optional[Dict[str, Any]] = None):
         container = _resolve_inherits_(container, container)
         cfg = OmegaConf.create(container)
         if overrides:
-            # Convert dotted override keys to nested dicts so that
-            # OmegaConf.merge treats them as nested paths.
-            # e.g., {"workspace.root": "/tmp"} → {"workspace": {"root": "/tmp"}}
             nested_overrides = {}
             for key, val in overrides.items():
                 parts = key.split(".")
@@ -292,8 +505,16 @@ def load_config(path: str, overrides: Optional[Dict[str, Any]] = None):
                     d = d.setdefault(part, {})
                 d[parts[-1]] = val
             cfg = OmegaConf.merge(cfg, nested_overrides)
-        # Eagerly resolve while the ContextVar is set.
+        # Eagerly resolve interpolations (${_params.*}, etc.)
         OmegaConf.resolve(cfg)
+        # _repeat_ runs AFTER resolution so ${_params} lists are available
+        # for distribution. $ref sibling resolution runs after repeat so
+        # distributed values are visible to sibling references.
+        container = OmegaConf.to_container(cfg, resolve=True)
+        if _has_repeat_or_ref(container):
+            container = _resolve_repeat_(container)
+            container = _resolve_sibling_refs(container)
+            cfg = OmegaConf.create(container)
         return cfg
     finally:
         _current_config_dir.reset(token)
@@ -393,7 +614,7 @@ def _resolve_and_preprocess(config, merge_dict_typed_attributes: bool = True):
 
 _HYDRA_KEYS = {"_target_", "_recursive_", "_convert_", "_partial_", "_args_"}
 # Keys starting with _ that are data (not injection sources) — preserved as-is.
-_DATA_KEYS = {"__default__"}
+_DATA_KEYS = {"_default"}
 
 
 def _walk(
@@ -975,7 +1196,7 @@ def _filter_attrs_keys(
             # Dict of factories: worker_factory: {type1: {_target_: ...}, ...}
             for k, v in list(val.items()):
                 if k.startswith("_") and k not in _DATA_KEYS:
-                    continue  # skip Hydra/injectable keys but NOT data keys like __default__
+                    continue  # skip Hydra/injectable keys but NOT data keys like _default
                 if isinstance(v, dict) and "_target_" in v:
                     raw = copy.deepcopy(v)
                     if _FACTORY_MARKER in v:

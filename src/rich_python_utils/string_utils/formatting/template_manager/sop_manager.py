@@ -86,10 +86,24 @@ _GOTO_AFTERWARDS_RE = re.compile(
     re.IGNORECASE,
 )
 
+# SOP directive tag constants — canonical strings stored in phase.directives.
+# Use these instead of hardcoding strings when checking directives.
+DIRECTIVE_REQUIRES_USER_INPUT = "requires user input"
+
+def normalize_tool_name(raw: str) -> str:
+    """Normalize a tool name from SOP text to canonical form.
+
+    ``"- /understand-codebase <path>"`` → ``"understand_codebase"``
+    ``"understand-data"`` → ``"understand_data"``
+    """
+    token = raw.strip().lstrip("- ").split()[0] if raw.strip().lstrip("- ") else ""
+    return token.lstrip("/").replace("-", "_")
+
+
 _BRANCH_RE = re.compile(r"__branch__(?:\s+`(\w+)`)?", re.IGNORECASE)
 _INITIAL_RE = re.compile(r"__initial__", re.IGNORECASE)
-_REQUIRES_CONFIRMATION_RE = re.compile(
-    r"__requires\s+confirmation__", re.IGNORECASE
+_REQUIRES_USER_INPUT_RE = re.compile(
+    r"__requires\s+user\s+input__", re.IGNORECASE
 )
 
 # ---------------------------------------------------------------------------
@@ -154,7 +168,7 @@ class SOPPhase(StateNode):
     subsections: list = attrib(factory=list)
     parent_id: str = attrib(default=None)
     directives: list = attrib(factory=list)
-    requires_confirmation: bool = attrib(default=False)
+    requires_user_input: bool = attrib(default=False)
     unknown_tags: list = attrib(factory=list)
 
     def __str__(self) -> str:
@@ -213,14 +227,12 @@ class SOP(StateGraph):
             for sub in phase.subsections:
                 if sub.name.lower() in ("tools", "command"):
                     for line in sub.content.split("\n"):
-                        line = line.strip().lstrip("- ")
-                        if line.startswith("/"):
-                            # Extract tool name: "/understand-codebase <path>" → "understand_codebase"
-                            tool_name = line.split()[0].lstrip("/").replace("-", "_")
-                            mapping[tool_name] = phase.id
+                        name = normalize_tool_name(line)
+                        if name:
+                            mapping[name] = phase.id
             # Also extract from phase body (e.g., "Command: `/research-propose <goal>`")
             for match in re.finditer(r"Command:\s*`/([a-zA-Z0-9_-]+)", phase.description):
-                tool_name = match.group(1).replace("-", "_")
+                tool_name = normalize_tool_name(match.group(1))
                 mapping[tool_name] = phase.id
         return mapping
 
@@ -313,7 +325,7 @@ class SOPManager:
             gate_negate = False
             branch = False
             branch_source_var = None
-            requires_confirmation = False
+            requires_user_input = False
             unknown_tags = []
 
             for part in raw_parts:
@@ -368,10 +380,10 @@ class SOPManager:
                     gate_value = if_match.group(2)
                     continue
 
-                # v2: __requires confirmation__
-                if re.search(r"__requires\s+confirmation__", part, re.IGNORECASE):
-                    requires_confirmation = True
-                    remaining_directives.append("requires confirmation")
+                # v2: __requires user input__
+                if _REQUIRES_USER_INPUT_RE.search(part):
+                    requires_user_input = True
+                    remaining_directives.append(DIRECTIVE_REQUIRES_USER_INPUT)
                     continue
 
                 # v2: __initial__
@@ -411,8 +423,8 @@ class SOPManager:
                 branch = True
             if tag_result.get("branch_source_var"):
                 branch_source_var = tag_result["branch_source_var"]
-            if tag_result.get("requires_confirmation"):
-                requires_confirmation = True
+            if tag_result.get("requires_user_input"):
+                requires_user_input = True
             for d in tag_result.get("directives", []):
                 if d not in remaining_directives:
                     remaining_directives.append(d)
@@ -451,7 +463,7 @@ class SOPManager:
                     subsections=subsections,
                     parent_id=parent_id,
                     directives=remaining_directives,
-                    requires_confirmation=requires_confirmation,
+                    requires_user_input=requires_user_input,
                     unknown_tags=unknown_tags,
                 )
             )
@@ -586,10 +598,10 @@ class SOPManager:
     def render_for_mode(content: str, mode: str = "default") -> str:
         """Return SOP markdown unchanged regardless of mode.
 
-        Yolo mode no longer strips [__requires confirmation__] text —
+        Yolo mode no longer strips [__requires user input__] text —
         instead, conversation tools get synthetic auto-advance responses
         via ConversationalInferencer._synthesize_yolo_collected().
-        The [__requires confirmation__] tag stays visible to the LLM
+        The [__requires user input__] tag stays visible to the LLM
         so it still emits the conversation tool; the response is just
         synthesized instead of blocking on user input.
         """
@@ -656,7 +668,7 @@ def _extract_tag_lines(body: str) -> dict[str, Any]:
 
     Returns a dict with parsed directives + 'remaining_body' (body with
     tag lines stripped). Tag lines with trailing text (e.g.,
-    '[__requires confirmation__] IMPORTANT: ...') preserve the trailing
+    '[__requires user input__] IMPORTANT: ...') preserve the trailing
     text in remaining_body.
     """
     result: dict[str, Any] = {
@@ -674,7 +686,7 @@ def _extract_tag_lines(body: str) -> dict[str, Any]:
         "gate_negate": False,
         "branch": False,
         "branch_source_var": None,
-        "requires_confirmation": False,
+        "requires_user_input": False,
     }
 
     lines = body.split("\n")
@@ -720,11 +732,11 @@ def _parse_single_tag(tag_text: str, result: dict[str, Any]) -> None:
             result["directives"].append("initial")
         return
 
-    # __requires confirmation__ (inside tag content, no brackets)
-    if re.search(r"__requires\s+confirmation__", tag_text, re.IGNORECASE):
-        result["requires_confirmation"] = True
-        if "requires confirmation" not in result["directives"]:
-            result["directives"].append("requires confirmation")
+    # __requires user input__
+    if _REQUIRES_USER_INPUT_RE.search(tag_text):
+        result["requires_user_input"] = True
+        if DIRECTIVE_REQUIRES_USER_INPUT not in result["directives"]:
+            result["directives"].append(DIRECTIVE_REQUIRES_USER_INPUT)
         return
 
     # __depends on__ Phase X, Y
