@@ -98,16 +98,16 @@ class FileSpaceManager:
         type_: str = "",
         name: str,
         version: str = "",
-        master_version: Optional[str] = None,
+        master_version: "Optional[str | list[str]]" = None,
     ) -> Optional[ResolvedContent]:
         """Full cascade + master + version + backend resolution.
 
         Search order (version specificity beats proximity — separated passes):
 
-        When master_version is set:
-          Pass 1: {cascade}/{name}/{master_version}/{version}.ext  (all levels)
-          Pass 2: {cascade}/{name}/{master_version}/default.ext    (all levels)
-          NO flat fallback.
+        When master_version is set (str or list — list is a fallback chain):
+          For each mv in the chain:
+            Pass 1: {cascade}/{name}/{mv}/{version}.ext  (all levels)
+            Pass 2: {cascade}/{name}/{mv}/default.ext    (all levels)
 
         When master_version is None:
           Pass 1: {cascade}/{name}/{version}.ext                   (all levels)
@@ -118,25 +118,37 @@ class FileSpaceManager:
         cascade = self.build_cascade(space, type_)
 
         if master_version:
-            search_folders = [c / name / master_version for c in cascade]
+            mv_chain = master_version if isinstance(master_version, list) else [master_version]
+            for mv in mv_chain:
+                search_folders = [c / name / mv for c in cascade]
+                if version:
+                    for folder in search_folders:
+                        for backend in self.backends:
+                            hit = backend.resolve(
+                                folder=folder, name=version, encoding=self.encoding
+                            )
+                            if hit is not None:
+                                return hit
+                for folder in search_folders:
+                    for backend in self.backends:
+                        hit = backend.resolve(
+                            folder=folder, name="default", encoding=self.encoding
+                        )
+                        if hit is not None:
+                            return hit
         else:
             search_folders = [c / name for c in cascade]
 
-        # Pass 1: version-specific across ALL cascade levels
-        if version:
-            for folder in search_folders:
-                for backend in self.backends:
-                    hit = backend.resolve(
-                        folder=folder, name=version, encoding=self.encoding
-                    )
-                    if hit is not None:
-                        return hit
+            if version:
+                for folder in search_folders:
+                    for backend in self.backends:
+                        hit = backend.resolve(
+                            folder=folder, name=version, encoding=self.encoding
+                        )
+                        if hit is not None:
+                            return hit
 
-                # Constraint H: subdirectory fallback (backward-compat)
-                # Only when master_version is None — if version names a
-                # directory (e.g., after migrating aggregation.jinja2 to
-                # aggregation/default.jinja2), look inside it.
-                if master_version is None:
+                    # Constraint H: subdirectory fallback (backward-compat)
                     subdir = folder / version
                     if subdir.is_dir():
                         for backend in self.backends:
@@ -146,14 +158,13 @@ class FileSpaceManager:
                             if hit is not None:
                                 return hit
 
-        # Pass 2: default fallback across ALL cascade levels
-        for folder in search_folders:
-            for backend in self.backends:
-                hit = backend.resolve(
-                    folder=folder, name="default", encoding=self.encoding
-                )
-                if hit is not None:
-                    return hit
+            for folder in search_folders:
+                for backend in self.backends:
+                    hit = backend.resolve(
+                        folder=folder, name="default", encoding=self.encoding
+                    )
+                    if hit is not None:
+                        return hit
 
         return None
 
@@ -170,7 +181,7 @@ class FileSpaceManager:
         type_: str = "",
         name: str,
         version: str = "",
-        master_version: Optional[str] = None,
+        master_version: "Optional[str | list[str]]" = None,
     ) -> List[Tuple[str, str, bool]]:
         """Return a list of (cascade_level_desc, search_uri, found) tuples.
 
@@ -179,10 +190,17 @@ class FileSpaceManager:
         cascade = self.build_cascade(space, type_)
         trace: List[Tuple[str, str, bool]] = []
 
-        if master_version:
-            search_folders = [c / name / master_version for c in cascade]
-        else:
-            search_folders = [c / name for c in cascade]
+        mv_chain = (
+            master_version if isinstance(master_version, list)
+            else [master_version] if master_version
+            else [None]
+        )
+        search_folders = []
+        for mv in mv_chain:
+            if mv:
+                search_folders.extend(c / name / mv for c in cascade)
+            else:
+                search_folders.extend(c / name for c in cascade)
 
         def _check(folder: Path, check_name: str, level_desc: str) -> None:
             for backend in self.backends:

@@ -254,6 +254,182 @@ class TestMasterVersion:
 
 
 # ---------------------------------------------------------------------------
+# T33-T43: list-based master_version fallback chain
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def chain_root(tmp_path):
+    """Root with research_propose + aggregation master_version dirs for chain tests."""
+    plan_vars = tmp_path / "plan" / "main" / "_variables"
+
+    # task_response_format: research_propose has it, aggregation has a different one
+    (plan_vars / "task_response_format" / "research_propose").mkdir(parents=True)
+    (plan_vars / "task_response_format" / "research_propose" / "default.jinja2").write_text(
+        "PROPOSAL_INDEX_FENCE"
+    )
+    (plan_vars / "task_response_format" / "aggregation").mkdir(parents=True)
+    (plan_vars / "task_response_format" / "aggregation" / "default.jinja2").write_text(
+        "GENERIC_AGGREGATION_FORMAT"
+    )
+
+    # task_preamble: ONLY in aggregation (not in research_propose)
+    (plan_vars / "task_preamble" / "aggregation").mkdir(parents=True)
+    (plan_vars / "task_preamble" / "aggregation" / "default.jinja2").write_text(
+        "UPSTREAM_ARTIFACTS_CONTEXT"
+    )
+
+    # task_instructions: ONLY in aggregation
+    (plan_vars / "task_instructions" / "aggregation").mkdir(parents=True)
+    (plan_vars / "task_instructions" / "aggregation" / "default.jinja2").write_text(
+        "MERGE_JSON_FENCES"
+    )
+
+    # task_response_format with version-specific files
+    (plan_vars / "task_response_format" / "research_propose" / "modeling.jinja2").write_text(
+        "MODELING_PROPOSAL_FENCE"
+    )
+    (plan_vars / "task_response_format" / "aggregation" / "special.jinja2").write_text(
+        "SPECIAL_AGG_FORMAT"
+    )
+
+    return tmp_path
+
+
+class TestMasterVersionChain:
+    """List-based master_version: try each in order, first match wins."""
+
+    def test_T33_list_first_found(self, chain_root):
+        """When first version has the variable, use it."""
+        fsm = FileSpaceManager(roots=[str(chain_root)])
+        r = fsm.resolve(
+            space="plan", type_="main", name="task_response_format",
+            master_version=["research_propose", "aggregation"],
+        )
+        assert r is not None
+        assert r.read() == "PROPOSAL_INDEX_FENCE"
+
+    def test_T34_list_fallback_to_second(self, chain_root):
+        """When first version lacks the variable, fall back to second."""
+        fsm = FileSpaceManager(roots=[str(chain_root)])
+        r = fsm.resolve(
+            space="plan", type_="main", name="task_preamble",
+            master_version=["research_propose", "aggregation"],
+        )
+        assert r is not None
+        assert r.read() == "UPSTREAM_ARTIFACTS_CONTEXT"
+
+    def test_T35_list_fallback_instructions(self, chain_root):
+        """task_instructions: not in research_propose, falls back to aggregation."""
+        fsm = FileSpaceManager(roots=[str(chain_root)])
+        r = fsm.resolve(
+            space="plan", type_="main", name="task_instructions",
+            master_version=["research_propose", "aggregation"],
+        )
+        assert r is not None
+        assert r.read() == "MERGE_JSON_FENCES"
+
+    def test_T36_list_all_miss_returns_none(self, chain_root):
+        """When no version in the chain has the variable, return None."""
+        fsm = FileSpaceManager(roots=[str(chain_root)])
+        r = fsm.resolve(
+            space="plan", type_="main", name="nonexistent_var",
+            master_version=["research_propose", "aggregation"],
+        )
+        assert r is None
+
+    def test_T37_single_string_unchanged(self, chain_root):
+        """Backward compat: single string still works exactly as before."""
+        fsm = FileSpaceManager(roots=[str(chain_root)])
+        r = fsm.resolve(
+            space="plan", type_="main", name="task_response_format",
+            master_version="aggregation",
+        )
+        assert r is not None
+        assert r.read() == "GENERIC_AGGREGATION_FORMAT"
+
+    def test_T38_list_with_version_first_found(self, chain_root):
+        """Version-specific file found in first master_version."""
+        fsm = FileSpaceManager(roots=[str(chain_root)])
+        r = fsm.resolve(
+            space="plan", type_="main", name="task_response_format",
+            master_version=["research_propose", "aggregation"],
+            version="modeling",
+        )
+        assert r is not None
+        assert r.read() == "MODELING_PROPOSAL_FENCE"
+
+    def test_T39_list_chain_order_beats_version_specificity(self, chain_root):
+        """Chain order wins: first entry's default beats second entry's version-specific.
+
+        With chain=["research_propose", "aggregation"] and version="special":
+        research_propose/special → miss → research_propose/default → HIT.
+        aggregation/special is never reached because research_propose has a default.
+        """
+        fsm = FileSpaceManager(roots=[str(chain_root)])
+        r = fsm.resolve(
+            space="plan", type_="main", name="task_response_format",
+            master_version=["research_propose", "aggregation"],
+            version="special",
+        )
+        assert r is not None
+        assert r.read() == "PROPOSAL_INDEX_FENCE"  # first chain entry's default wins
+
+    def test_T40_list_with_version_miss_falls_to_default(self, chain_root):
+        """Version not found in any chain entry, falls to default in first match."""
+        fsm = FileSpaceManager(roots=[str(chain_root)])
+        r = fsm.resolve(
+            space="plan", type_="main", name="task_response_format",
+            master_version=["research_propose", "aggregation"],
+            version="nonexistent_version",
+        )
+        assert r is not None
+        # Falls back to default.jinja2 in research_propose (first in chain)
+        assert r.read() == "PROPOSAL_INDEX_FENCE"
+
+    def test_T41_single_element_list_same_as_string(self, chain_root):
+        """List with one element behaves like a plain string."""
+        fsm = FileSpaceManager(roots=[str(chain_root)])
+        r_list = fsm.resolve(
+            space="plan", type_="main", name="task_response_format",
+            master_version=["aggregation"],
+        )
+        r_str = fsm.resolve(
+            space="plan", type_="main", name="task_response_format",
+            master_version="aggregation",
+        )
+        assert r_list is not None and r_str is not None
+        assert r_list.read() == r_str.read()
+
+    def test_T42_empty_list_same_as_none(self, chain_root):
+        """Empty list behaves like master_version=None."""
+        fsm = FileSpaceManager(roots=[str(chain_root)])
+        r = fsm.resolve(
+            space="plan", type_="main", name="task_response_format",
+            master_version=[],
+        )
+        # No master_version → looks in flat task_response_format/ → no default there
+        assert r is None
+
+    def test_T43_three_level_chain(self, chain_root):
+        """Three-level chain: first two miss, third hits."""
+        # Add a third master_version dir
+        plan_vars = chain_root / "plan" / "main" / "_variables"
+        (plan_vars / "rare_var" / "deep_fallback").mkdir(parents=True)
+        (plan_vars / "rare_var" / "deep_fallback" / "default.jinja2").write_text(
+            "FOUND_AT_LEVEL_3"
+        )
+
+        fsm = FileSpaceManager(roots=[str(chain_root)])
+        r = fsm.resolve(
+            space="plan", type_="main", name="rare_var",
+            master_version=["research_propose", "aggregation", "deep_fallback"],
+        )
+        assert r is not None
+        assert r.read() == "FOUND_AT_LEVEL_3"
+
+
+# ---------------------------------------------------------------------------
 # T18-T19: cascade cross-level + cross-space
 # ---------------------------------------------------------------------------
 

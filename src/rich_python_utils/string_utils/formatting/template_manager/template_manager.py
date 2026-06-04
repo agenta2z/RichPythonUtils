@@ -1044,16 +1044,18 @@ class TemplateManager:
                 main_space_key
             )
             if master_version:
-                mv_space_key = (
-                    f"{resolved_space_key}{self.template_key_parts_sep}{master_version}"
-                    if resolved_space_key
-                    else master_version
-                )
-                result, _ = self._try_versioned_and_unversioned_lookup(
-                    mv_space_key, item_key
-                )
-                if result is not None:
-                    return result
+                mv_chain = master_version if isinstance(master_version, list) else [master_version]
+                for mv in mv_chain:
+                    mv_space_key = (
+                        f"{resolved_space_key}{self.template_key_parts_sep}{mv}"
+                        if resolved_space_key
+                        else mv
+                    )
+                    result, _ = self._try_versioned_and_unversioned_lookup(
+                        mv_space_key, item_key
+                    )
+                    if result is not None:
+                        return result
             result, _ = self._try_versioned_and_unversioned_lookup(
                 resolved_space_key, item_key
             )
@@ -1894,16 +1896,18 @@ class TemplateManager:
                 main_space_key
             )
             if master_version:
-                mv_space_key = (
-                    f"{resolved_space_key}{self.template_key_parts_sep}{master_version}"
-                    if resolved_space_key
-                    else master_version
-                )
-                result = self._try_versioned_and_unversioned_lookup(
-                    mv_space_key, item_key
-                )
-                if result[0] is not None:
-                    return result
+                mv_chain = master_version if isinstance(master_version, list) else [master_version]
+                for mv in mv_chain:
+                    mv_space_key = (
+                        f"{resolved_space_key}{self.template_key_parts_sep}{mv}"
+                        if resolved_space_key
+                        else mv
+                    )
+                    result = self._try_versioned_and_unversioned_lookup(
+                        mv_space_key, item_key
+                    )
+                    if result[0] is not None:
+                        return result
             return self._try_versioned_and_unversioned_lookup(
                 resolved_space_key, item_key
             )
