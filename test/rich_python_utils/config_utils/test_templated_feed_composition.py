@@ -183,5 +183,131 @@ class TestCompositionWithMasterVersion(unittest.TestCase):
                              f"Raw template syntax leaked in output: {rendered[:200]}")
 
 
+class TestListMasterVersionAutoDiscovery(unittest.TestCase):
+    """List master_version through the auto-detection path (FileBasedVariableManager).
+
+    This is the test that would have caught the bug where
+    FileBasedVariableManager._resolve_single_variable stringified a list
+    master_version into a garbage path like "task_preamble/['a', 'b']".
+    """
+
+    def _build_tree_with_research_propose(self, root: Path) -> None:
+        """Template tree with research_propose + aggregation versions."""
+        _write(
+            root / "plan" / "main" / "initial.jinja2",
+            "{{ task_preamble }}\n---\n{{ task_response_format }}\n---\n{{ task_instructions }}",
+        )
+        _write(root / "_variables" / "task_preamble" / "default.jinja2", "GENERIC PREAMBLE")
+        _write(root / "_variables" / "task_preamble" / "aggregation" / "default.jinja2", "AGG PREAMBLE")
+        _write(root / "_variables" / "task_response_format" / "aggregation" / "default.jinja2", "AGG FORMAT")
+        _write(root / "_variables" / "task_response_format" / "research_propose" / "default.jinja2", "PROPOSAL INDEX FENCE")
+        _write(root / "_variables" / "task_instructions" / "default.jinja2", "GENERIC INSTRUCTIONS")
+        _write(root / "_variables" / "task_instructions" / "aggregation" / "default.jinja2", "AGG INSTRUCTIONS")
+
+    def test_list_master_version_first_wins(self):
+        """List ['research_propose', 'aggregation']: research_propose found first for task_response_format."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._build_tree_with_research_propose(root)
+
+            tm = TemplateManager(
+                templates=str(root),
+                template_formatter=format_template,
+                active_template_root_space="plan",
+                active_template_type="main",
+                predefined_variables=True,
+                enable_templated_feed=True,
+            )
+
+            rendered = tm(
+                "initial",
+                active_template_root_space="plan",
+                master_version=["research_propose", "aggregation"],
+                input="test",
+            )
+
+            self.assertIn("PROPOSAL INDEX FENCE", rendered,
+                          "research_propose version should win for task_response_format")
+            self.assertNotIn("AGG FORMAT", rendered,
+                             "aggregation version should NOT appear when research_propose is first")
+
+    def test_list_master_version_fallback_to_second(self):
+        """List ['research_propose', 'aggregation']: task_preamble not in research_propose, falls back to aggregation."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._build_tree_with_research_propose(root)
+
+            tm = TemplateManager(
+                templates=str(root),
+                template_formatter=format_template,
+                active_template_root_space="plan",
+                active_template_type="main",
+                predefined_variables=True,
+                enable_templated_feed=True,
+            )
+
+            rendered = tm(
+                "initial",
+                active_template_root_space="plan",
+                master_version=["research_propose", "aggregation"],
+                input="test",
+            )
+
+            self.assertIn("AGG PREAMBLE", rendered,
+                          "task_preamble should fall back to aggregation version")
+            self.assertNotIn("GENERIC PREAMBLE", rendered)
+
+    def test_list_master_version_instructions_fallback(self):
+        """task_instructions not in research_propose → falls back to aggregation."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._build_tree_with_research_propose(root)
+
+            tm = TemplateManager(
+                templates=str(root),
+                template_formatter=format_template,
+                active_template_root_space="plan",
+                active_template_type="main",
+                predefined_variables=True,
+                enable_templated_feed=True,
+            )
+
+            rendered = tm(
+                "initial",
+                active_template_root_space="plan",
+                master_version=["research_propose", "aggregation"],
+                input="test",
+            )
+
+            self.assertIn("AGG INSTRUCTIONS", rendered,
+                          "task_instructions should fall back to aggregation version")
+
+    def test_scalar_still_works(self):
+        """Backward compat: scalar master_version='aggregation' still works."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._build_tree_with_research_propose(root)
+
+            tm = TemplateManager(
+                templates=str(root),
+                template_formatter=format_template,
+                active_template_root_space="plan",
+                active_template_type="main",
+                predefined_variables=True,
+                enable_templated_feed=True,
+            )
+
+            rendered = tm(
+                "initial",
+                active_template_root_space="plan",
+                master_version="aggregation",
+                input="test",
+            )
+
+            self.assertIn("AGG FORMAT", rendered)
+            self.assertIn("AGG PREAMBLE", rendered)
+            self.assertNotIn("PROPOSAL INDEX FENCE", rendered)
+
+
 if __name__ == "__main__":
     unittest.main()
