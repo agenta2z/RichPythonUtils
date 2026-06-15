@@ -152,9 +152,14 @@ class Debuggable(Identifiable, ABC):
     A base class to provide debug logging capabilities for derived classes.
 
     Attributes:
-        debug_mode (bool):
+        debug_mode (Optional[bool]):
             Enables debug mode with additional error checking and logging.
             When True, `debug_mode_log_level` is used as the logging threshold, otherwise `log_level` is used.
+            Tri-state: ``None`` (default) means "unset/inherit" — a containing object may cascade a value
+            into it (e.g. a parent inferencer propagating ``debug_mode`` to children that have not set it).
+            ``True``/``False`` are explicit and suppress any such cascade (explicit value always wins).
+            For boolean evaluation (``if self.debug_mode:``), ``None`` behaves as ``False`` — existing
+            callers are unaffected; use ``is None`` / ``is True`` to distinguish "unset" from "explicitly False".
         logger (Union[Callable, logging.Logger, Sequence, Dict[str, ...]], optional):
             The logger (or collection of loggers) used for logging. Accepts multiple formats:
               - A callable that accepts a single dictionary,
@@ -225,7 +230,7 @@ class Debuggable(Identifiable, ABC):
         >>> obj.do_stuff()
         MyDebuggable_... - MyDebuggable - INFO - Message: Doing stuff...
     """
-    debug_mode: bool = attrib(default=False, kw_only=True)
+    debug_mode: Optional[bool] = attrib(default=None, kw_only=True)
     logger: Optional[Optional[Union[Sequence[LoggerType], LoggerType]]] = attrib(default=None, kw_only=True)
     always_add_logging_based_logger: bool = attrib(default=True, kw_only=True)
     log_level: int = attrib(default=logging.INFO, kw_only=True)

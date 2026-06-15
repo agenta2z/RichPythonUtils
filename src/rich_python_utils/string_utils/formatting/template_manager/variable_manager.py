@@ -112,6 +112,7 @@ class TemplateVariableManager(FileBasedVariableManager):
         template_type: str,
         version: str = "",
         master_version: Optional[str] = None,
+        skip_vars: Optional[set] = None,
     ) -> Dict[str, str]:
         """Auto-detect and resolve all variables from template content.
 
@@ -125,6 +126,8 @@ class TemplateVariableManager(FileBasedVariableManager):
             version: Version suffix for variable resolution (default: "").
             master_version: When set, variables are first looked up under
                 a ``<var_name>/<master_version>/`` subdirectory.
+            skip_vars: Variable names to skip (already resolved by
+                load_variables with per-variable versions).
 
         Returns:
             Dictionary mapping variable names to resolved content.
@@ -136,6 +139,7 @@ class TemplateVariableManager(FileBasedVariableManager):
             variable_type=template_type,
             version=version,
             master_version=master_version,
+            skip_vars=skip_vars,
         )
 
 

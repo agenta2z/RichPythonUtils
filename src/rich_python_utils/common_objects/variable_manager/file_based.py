@@ -76,7 +76,7 @@ class FileBasedVariableManager(VariableManager):
     # Group 1: scope modifier (^ or .)
     # Group 2: variable name (without braces)
     # Group 3: optional marker (?)
-    VARIABLE_PATTERN = re.compile(r"(\^|\.)?\{\{([^}]+)\}\}(\?)?")
+    VARIABLE_PATTERN = re.compile(r"(\.\.|\^|\.)?\{\{([^}]+)\}\}(\?)?")
 
     def __init__(
         self,
@@ -242,6 +242,7 @@ class FileBasedVariableManager(VariableManager):
         variable_type: str = "",
         version: str = "",
         master_version: Optional[str] = None,
+        skip_vars: Optional[set] = None,
     ) -> Dict[str, Any]:
         """Auto-detect and resolve all variables from content.
 
@@ -257,6 +258,8 @@ class FileBasedVariableManager(VariableManager):
             master_version: When set, variables are first looked up under
                 a ``<var_name>/<master_version>/`` subdirectory before
                 falling back to the flat path.
+            skip_vars: Variable names to skip (already resolved with
+                correct per-variable versions by load_variables).
 
         Returns:
             Dictionary mapping variable names to resolved content.
@@ -292,6 +295,12 @@ class FileBasedVariableManager(VariableManager):
                 if var_name in resolved_variables:
                     continue
 
+                # Skip variables already resolved with correct per-variable
+                # versions by load_variables (avoids re-resolving with the
+                # wrong generic version).
+                if skip_vars and var_name in skip_vars:
+                    continue
+
                 resolved = self._resolve_variable(
                     var_name,
                     variable_root_space,
@@ -311,6 +320,9 @@ class FileBasedVariableManager(VariableManager):
             var_names = extractor(content)
             for var_name in var_names:
                 if var_name in resolved_variables:
+                    continue
+
+                if skip_vars and var_name in skip_vars:
                     continue
 
                 resolved = self._resolve_variable(
@@ -1034,7 +1046,27 @@ class FileBasedVariableManager(VariableManager):
         # referenced from inside another variable file, the same-directory
         # sibling wins over the cascade.
         file_path: Optional[Path] = None
-        if (
+        if scope == ".." and current_level_path is not None:
+            # Parent-relative: go up one level from current file's directory,
+            # then resolve variable_name as a subdirectory.
+            # e.g., from aggregation/research_propose.jinja2,
+            # {{ ..research_propose }} → ../research_propose/default.jinja2
+            parent_dir = current_level_path.parent.parent
+            var_dir = parent_dir / variable_name
+            if var_dir.is_dir():
+                if version:
+                    for ext in self.config.file_extensions:
+                        candidate = var_dir / f"{version}{ext}"
+                        if candidate.is_file():
+                            file_path = candidate
+                            break
+                if file_path is None:
+                    for ext in self.config.file_extensions:
+                        candidate = var_dir / f"default{ext}"
+                        if candidate.is_file():
+                            file_path = candidate
+                            break
+        elif (
             current_level_path is not None
             and scope is None
             and "/" not in variable_name
@@ -1047,9 +1079,13 @@ class FileBasedVariableManager(VariableManager):
                     break
 
         if file_path is None and master_version:
-            file_path, _ = self._find_variable_file(
-                f"{variable_name}/{master_version}", cascade_paths, version
-            )
+            mv_chain = master_version if isinstance(master_version, list) else [master_version]
+            for mv in mv_chain:
+                file_path, _ = self._find_variable_file(
+                    f"{variable_name}/{mv}", cascade_paths, version
+                )
+                if file_path is not None:
+                    break
 
         if file_path is None:
             file_path, _ = self._find_variable_file(variable_name, cascade_paths, version)

@@ -2037,12 +2037,23 @@ class TemplateManager:
                     else self._variable_loader
                 )
                 if loader:
+                    # Skip variables already resolved by load_variables
+                    # (via template_variables with per-variable versions).
+                    # Those are in the feed dict and would override anyway,
+                    # but skipping avoids resolving them with the wrong
+                    # generic version.
+                    _skip = set()
+                    if feed:
+                        _skip.update(feed.keys())
+                    if kwargs:
+                        _skip.update(kwargs.keys())
                     _flat_predefined = loader.resolve_from_template(
                         template_content=template,
                         template_root_space=_orig_root_space or "",
                         template_type=_orig_type or "main",
                         version=self.template_version,
                         master_version=master_version,
+                        skip_vars=_skip,
                     )
                     # Also include YAML sidecar variables (loaded via load_yaml_sidecar).
                     # These have lower priority than file-based resolved vars.

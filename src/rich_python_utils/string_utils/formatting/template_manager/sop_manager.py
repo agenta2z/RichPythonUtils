@@ -43,6 +43,8 @@ _PHASE_HEADING_RE = re.compile(
 
 _OUTPUT_RE = re.compile(r"`(\w+)`")
 
+DIRECTIVE_MUST = "must"
+
 _SUBSECTION_RE = re.compile(
     r"^\*\*(\w+)\*\*"
     r"\s*(?:\[__(\w[\w\s]*)__\])?"
@@ -209,6 +211,26 @@ class SOP(StateGraph):
             if all(dep in completed_ids for dep in deps):
                 return phase
         return None
+
+    @property
+    def phase_required_tools(self) -> dict[str, set[str]]:
+        """Phase ID → set of required tool names (from ``Tools[__must__]`` only).
+
+        Used by ``_check_phase_completion`` to require ALL must-tools to have
+        executed before marking a phase complete — not just any single one.
+        """
+        result: dict[str, set[str]] = {}
+        for phase in self.phases:
+            tools: set[str] = set()
+            for sub in phase.subsections:
+                if sub.name.lower() in ("tools", "command") and sub.directive == DIRECTIVE_MUST:
+                    for line in sub.content.split("\n"):
+                        name = normalize_tool_name(line)
+                        if name:
+                            tools.add(name)
+            if tools:
+                result[phase.id] = tools
+        return result
 
     @property
     def tool_to_phase_map(self) -> dict[str, str]:
