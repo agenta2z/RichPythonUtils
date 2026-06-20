@@ -180,6 +180,16 @@ class _OriginTaggedStr(str):
         return (_OriginTaggedStr, (str(self), self._origin_root))
 
 
+class TemplateNotFoundError(LookupError):
+    """Raised when ``strict_lookup=True`` and an explicit template_key cannot
+    be resolved by any configured root or fallback level.
+
+    Carries diagnostic context (requested key, root spaces, type, attempted
+    roots) so the caller can pinpoint the misconfiguration without needing
+    to instrument the lookup chain.
+    """
+
+
 @attrs
 class TemplateManager:
     """
@@ -285,6 +295,17 @@ class TemplateManager:
     templates: Optional[Union[str, Mapping, List[Union[str, Mapping]]]] = attrib(
         default=None
     )
+    # When True, an explicit ``template_key`` that resolves to NOTHING (i.e.
+    # the multi-level fallback chain falls through to ``self.default_template``
+    # AND ``default_template`` is empty) raises ``TemplateNotFoundError``
+    # instead of silently producing an empty rendered output. This is the
+    # principled "fail loud" mode for production callers that pass a real
+    # template_key — if the configured roots are misconfigured, the failure
+    # surfaces at render time with full diagnostic context rather than
+    # propagating downstream as an empty prompt (which can hang LLM backends
+    # waiting for non-empty input). Default ``False`` preserves backward
+    # compatibility for permissive partial-override use cases.
+    strict_lookup: bool = attrib(default=False)
     active_template_type: Optional[str] = attrib(default="main")
     active_template_root_space: Optional[str] = attrib(default=None)
     template_encoding: str = attrib(default="utf-8")
@@ -2015,10 +2036,53 @@ class TemplateManager:
 
             # Fallback Level 5: Use system default template object
             # If nothing is found in the template store, use the configured default_template
+            _resolution_chain_exhausted = template is None
             if template is None:
                 template = self.default_template
                 template_components_key = self.template_components_key
             # endregion
+
+            # ── strict_lookup guard ──────────────────────────────────────
+            # If ``strict_lookup=True`` and the original caller passed an
+            # EXPLICIT non-empty ``template_key`` that the full multi-level
+            # resolution chain could not satisfy (i.e. fell through to
+            # ``self.default_template``) AND the default itself is empty,
+            # raise rather than silently returning "".
+            #
+            # This is the principled fix for a class of silent-failure bugs
+            # where misconfigured ``templates`` paths produce empty rendered
+            # output that hangs downstream consumers (e.g. an empty prompt
+            # passed to an LLM backend that then waits for stdin).
+            #
+            # We deliberately do NOT raise when:
+            #   * ``strict_lookup`` is False (backward compatible default).
+            #   * The chain landed on a non-empty default_template (a real
+            #     intentional fallback string was configured).
+            #   * The original template_key was empty/None (caller is
+            #     explicitly asking for the default).
+            if (
+                self.strict_lookup
+                and _resolution_chain_exhausted
+                and template_key
+                and not (template and str(template).strip())
+            ):
+                attempted_roots = list(self._original_templates_paths or [])
+                raise TemplateNotFoundError(
+                    f"TemplateManager(strict_lookup=True): no template found "
+                    f"for key={template_key!r} "
+                    f"(active_template_root_space={_orig_root_space!r}, "
+                    f"active_template_type={_orig_type!r}). "
+                    f"Resolution fell through every fallback level AND "
+                    f"default_template is empty. "
+                    f"Attempted template roots: {attempted_roots}. "
+                    f"Likely causes: (a) the file "
+                    f"{(_orig_root_space or '')}/{(_orig_type or '')}/"
+                    f"{template_key}.* does not exist in any configured "
+                    f"root; (b) the wrong ``templates=`` directory was "
+                    f"passed; (c) a missing fallback root needs to be "
+                    f"added via ``templates=[primary, fallback, ...]`` or "
+                    f"``add_template_root(...)``."
+                )
 
             template_components = self.templates.get(template_components_key, None)
 
