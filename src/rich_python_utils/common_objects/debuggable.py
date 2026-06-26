@@ -4,7 +4,7 @@ import traceback as _traceback_mod
 import warnings
 from abc import ABC
 from datetime import datetime
-from typing import Union, Callable, Any, Optional, Sequence, List, Dict, Set, Tuple
+from typing import Union, Callable, Any, Optional, Sequence, List, Dict, Set, Tuple, Protocol, runtime_checkable
 
 from attr import attrs, attrib
 
@@ -78,6 +78,28 @@ class _ColoredLogFormatter(logging.Formatter):
 DEFAULT_LOG_TYPE = 'Message'
 LOG_TYPE_PARENT_CHILD_DEBUGGABLE_LINK = 'ParentChildDebuggableLink'
 EXCEPTION_LOG_ITEM_KEY = '__exception__'
+
+
+@runtime_checkable
+class FileBasedLogger(Protocol):
+    """Structural marker for loggers that write to a file path.
+
+    A file-based logger exposes its current destination via a read-only
+    ``file_path`` property and — by contract — its logging call accepts an
+    optional ``file_path`` override (write *this* entry to the given path
+    instead of the baked default). :class:`rich_python_utils.io_utils.json_io.JsonLogger`
+    satisfies this natively.
+
+    :meth:`Debuggable.log` uses this marker to route a per-write path supplied
+    by the :meth:`Debuggable._log_path_override` hook, without depending on any
+    concrete logger type. The path is passed as a call argument and never
+    mutates the logger, so a single shared logger can serve concurrent callers
+    that each resolve a different destination.
+    """
+
+    @property
+    def file_path(self) -> Optional[str]:
+        ...
 
 
 @attrs
@@ -273,6 +295,10 @@ class Debuggable(Identifiable, ABC):
     )
 
     NON_CONFIG_ATTR_NAMES = ('id', '_raw_id', 'parent_debuggables', 'log_name', '_copy_debuggable_config_from', '_last_console_display_time', '_last_logging_time', '_resolved_logger_configs', '_console_suppression_counts', '_backend_suppression_counts')
+
+    # Don't traverse the parent back-reference when regenerating ids across a clone tree
+    # (``deepcopy_with_fresh_id``) — it would walk UP to parents instead of down to children.
+    _FRESH_ID_SKIP_TRAVERSE = frozenset({'parent_debuggables'})
 
     @staticmethod
     def _is_inline_config_pair(entry) -> bool:
@@ -622,6 +648,19 @@ class Debuggable(Identifiable, ABC):
 
         return True
 
+    def _log_path_override(self, logger_name, logger):
+        """Hook: a per-write ``file_path`` override for a file-based logger, or ``None``.
+
+        Default no-op — keeps ``Debuggable`` agnostic of run-contexts and
+        workspaces. Subclasses whose effective log location is resolved
+        dynamically (e.g. inferencers that derive it from an active run-context)
+        may override this to route a logger's write to that location *without
+        mutating the logger*. Only consulted for loggers satisfying
+        :class:`FileBasedLogger`; return ``None`` to leave the baked path
+        untouched.
+        """
+        return None
+
     def log(self, log_item: Any, log_type: str = None, log_level: Optional[int] = None,
             message_id: Optional[str] = None, **kwargs):
         """
@@ -906,6 +945,14 @@ class Debuggable(Identifiable, ABC):
                         exclusion=_partial_keywords,
                         **candidate_kwargs
                     )
+
+                    # Per-write file_path override for file-based loggers (e.g. a
+                    # run-context-resolved log path). Applied AFTER the exclusion
+                    # above, since file_path is a baked Partial keyword the filter
+                    # strips. By contract, a FileBasedLogger's call accepts it.
+                    _path_override = self._log_path_override(_logger_name, _logger)
+                    if _path_override is not None and isinstance(_logger, FileBasedLogger):
+                        _filtered_kwargs = {**(_filtered_kwargs or {}), "file_path": _path_override}
 
                     result = _logger(log_data, **_filtered_kwargs) if _filtered_kwargs else _logger(log_data)
 

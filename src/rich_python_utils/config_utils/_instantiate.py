@@ -1178,7 +1178,14 @@ def _filter_attrs_keys(
     # that deep-copies config and re-instantiates per call — producing
     # completely fresh sub-trees with NO shared inner instances.
     for a in attr.fields(cls):
-        if not a.name.endswith("_factory") or a.name not in node:
+        # Lazy-factory opt-in: a field whose name ends in ``_factory`` (the legacy
+        # naming convention) OR carries ``metadata={"lazy_config_factory": True}`` (the
+        # explicit, name-independent opt-in — lets a clean field name like
+        # ``worker_inferencers`` be lazy without a magic suffix).
+        if not (
+            a.name.endswith("_factory")
+            or a.metadata.get("lazy_config_factory", False)
+        ) or a.name not in node:
             continue
         val = node[a.name]
         if not isinstance(val, dict):
