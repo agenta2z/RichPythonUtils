@@ -75,6 +75,11 @@ class FakeBTA:
     breakdown_inferencer: Optional[Any] = attrib(default=None)
     aggregator_inferencer: Optional[Any] = attrib(default=None)
     worker_factory: Optional[Any] = attrib(default=None)
+    # Metadata-gated lazy field (name does NOT end in ``_factory``) — exercises the
+    # ``lazy_config_factory`` opt-in in ``_filter_attrs_keys``.
+    worker_inferencers: Optional[Any] = attrib(
+        default=None, metadata={"lazy_config_factory": True}
+    )
 
 
 # Subclass that adds a NEW slot default (atomic-bundle replacement

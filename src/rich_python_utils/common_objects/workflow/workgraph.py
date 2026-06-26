@@ -30,6 +30,14 @@ from rich_python_utils.common_utils.attr_helper import getattr_or_new
 from rich_python_utils.common_utils.async_utils import call_maybe_async, async_execute_with_retry
 
 
+# Module-level sentinel for "downstream result slot not yet filled" in the
+# ordered-async-merge path. The sync ``_run`` merge-filter (and the async
+# ``_arun`` path) both reference it; previously it was only defined locally in
+# the async path, so the sync path raised ``NameError: _DS_EMPTY`` on any
+# multi-parent merge. Hoisted here so both paths resolve the same sentinel.
+_DS_EMPTY = object()
+
+
 @attrs(slots=False)
 class WorkGraphNode(Node, WorkNodeBase):
     """
