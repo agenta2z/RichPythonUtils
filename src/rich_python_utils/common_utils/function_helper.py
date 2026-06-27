@@ -340,7 +340,7 @@ def execute_with_retry(
         min_retry_wait: float = 0,
         max_retry_wait: float = 0,
         retry_on_exceptions: List[type] = None,
-        output_validator: Callable[..., bool] = None,
+        output_validator: Callable = None,
         pre_condition: Callable[..., bool] = None,
         on_retry_callback: Callable = None,
         args: List = None,
@@ -570,16 +570,22 @@ def execute_with_retry(
             try:
                 result = current_func(*args, **kwargs)
 
-                if output_validator and not output_validator(result):
+                # Output validation: True = accept, False = reject (retry),
+                # string = reject with named recovery handler.
+                _verdict = output_validator(result) if output_validator else True
+                if _verdict is True or _verdict is None:
+                    return result
+                else:
                     execution_failed = True
-                    last_exception = ValueError("Output validation failed")
+                    if isinstance(_verdict, str):
+                        last_exception = ValueError("Output validation failed", _verdict)
+                    else:
+                        last_exception = ValueError("Output validation failed")
                     transition_exception = last_exception
                     # ON_FIRST_FAILURE for primary: validator failure triggers immediate transition
                     if is_primary and has_fallback and fallback_mode == FallbackMode.ON_FIRST_FAILURE:
                         total_attempts_across_chain += 1
                         break  # break inner while to transition
-                else:
-                    return result
 
             except Exception as e:
                 if retry_on_exceptions:

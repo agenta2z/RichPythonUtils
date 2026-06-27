@@ -74,7 +74,7 @@ async def async_execute_with_retry(
     max_retry_wait: float = 1.0,
     retry_on_exceptions: Tuple[type, ...] = (Exception,),
     non_retryable_exceptions: Tuple[type, ...] = (),
-    output_validator: Callable[..., bool] = None,
+    output_validator: Callable = None,
     pre_condition: Callable[..., bool] = None,
     default_return_or_raise: Any = None,
     on_retry_callback: Callable = None,
@@ -293,11 +293,17 @@ async def async_execute_with_retry(
                     result = current_func(*args, **kwargs)
                     result = await maybe_await(result)
 
-                # Output validation: check after successful execution
+                # Output validation: check after successful execution.
+                # Validator returns: True = accept, False = reject (plain retry),
+                # or a string = reject with a named recovery handler (the string
+                # is carried in last_exception.args[1] so the fallback can read it).
                 if output_validator is not None:
-                    is_valid = await call_maybe_async(output_validator, result)
-                    if not is_valid:
-                        last_exception = ValueError("Output validation failed")
+                    verdict = await call_maybe_async(output_validator, result)
+                    if verdict is not True and verdict is not None:
+                        if isinstance(verdict, str):
+                            last_exception = ValueError("Output validation failed", verdict)
+                        else:
+                            last_exception = ValueError("Output validation failed")
                         transition_exception = last_exception
                         total_attempts_across_chain += 1
 
