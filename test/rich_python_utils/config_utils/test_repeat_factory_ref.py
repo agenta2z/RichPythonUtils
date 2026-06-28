@@ -74,10 +74,22 @@ class TestRepeatDistribution:
         assert targets.count("X") == 2
         assert targets.count("Y") == 1
 
-    def test_list_length_mismatch_raises(self):
+    def test_list_shorter_than_repeat_pads_with_first(self):
+        # graceful: a distribution list shorter than _repeat_ pads with item[0]
         node = [{"_repeat_": 3, "val": [1, 2]}]
-        with pytest.raises(ValueError, match="length 2.*3"):
-            _resolve_repeat_(node)
+        result = _resolve_repeat_(node)
+        assert [r["val"] for r in result] == [1, 2, 1]
+
+    def test_list_longer_than_repeat_truncates(self):
+        # graceful: a distribution list longer than _repeat_ takes the first n
+        node = [{"_repeat_": 2, "val": [1, 2, 3]}]
+        result = _resolve_repeat_(node)
+        assert [r["val"] for r in result] == [1, 2]
+
+    def test_single_element_list_broadcasts(self):
+        node = [{"_repeat_": 3, "val": ["X"]}]
+        result = _resolve_repeat_(node)
+        assert [r["val"] for r in result] == ["X", "X", "X"]
 
     def test_dict_count_mismatch_not_distributed(self):
         """Dict with counts not summing to N is treated as regular dict (not distributed)."""

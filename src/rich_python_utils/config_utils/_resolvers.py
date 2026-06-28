@@ -46,6 +46,26 @@ def ensure_resolvers() -> None:
         base = Path(_current_config_dir.get())
         return str((base / relative).resolve())
 
+    def _len_resolver(seq: object) -> int:
+        """``${len:${some.list}}`` → number of elements in a list/sequence.
+
+        Used to *derive* a count from a list so the two cannot drift apart —
+        e.g. ``num_flows: ${len:${_params.flow_inferencers}}`` keeps the flow
+        count locked to the per-flow inferencer list (whose length the
+        ``_repeat_`` distribution requires to equal ``num_flows``). Returns an
+        ``int`` (a primitive), so it stores cleanly into a scalar config node —
+        unlike a resolver that returns a list, which OmegaConf cannot assign
+        in place during ``OmegaConf.resolve``.
+        """
+        try:
+            return len(seq)  # type: ignore[arg-type]
+        except TypeError as exc:
+            raise TypeError(
+                "${len:...} expects a sized value (list/str/dict), got "
+                f"{type(seq).__name__}"
+            ) from exc
+
     OmegaConf.register_new_resolver("path", _path_resolver, replace=True)
     OmegaConf.register_new_resolver("modpath", _modpath_resolver, replace=True)
+    OmegaConf.register_new_resolver("len", _len_resolver, replace=True)
     _registered = True

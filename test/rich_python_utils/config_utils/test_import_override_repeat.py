@@ -426,17 +426,17 @@ class TestFactoryRepeat:
 
 
 class TestEdgeCases:
-    def test_repeat_distribution_mismatch_raises(self, tmp_path):
-        """List distribution with wrong length raises ValueError."""
-        (tmp_path / "bad.yaml").write_text(textwrap.dedent("""\
+    def test_repeat_distribution_shorter_list_pads(self, tmp_path):
+        """A distribution list shorter than _repeat_ is padded with its first element."""
+        (tmp_path / "short.yaml").write_text(textwrap.dedent("""\
             items:
               - _repeat_: 3
                 val:
                   - only_two
                   - elements
         """))
-        with pytest.raises(ValueError, match="length 2"):
-            load_config(str(tmp_path / "bad.yaml"))
+        d = OmegaConf.to_container(load_config(str(tmp_path / "short.yaml")), resolve=True)
+        assert [it["val"] for it in d["items"]] == ["only_two", "elements", "only_two"]
 
     def test_import_chain_with_params(self, tmp_path):
         """Grandchild → child → parent chain with params override at each level."""
@@ -507,13 +507,17 @@ class TestEdgeCases:
         assert len(flows) == 3
         assert [f["initial_inferencer"]["_target_"] for f in flows] == ["A", "B", "C"]
 
-    def test_override_flow_inferencers_mismatch_raises(self, parameterized_topology):
-        """Overriding flow_inferencers to wrong length raises distribution error."""
-        with pytest.raises(ValueError, match="length 3"):
-            load_config(
-                str(parameterized_topology / "topology.yaml"),
-                overrides={
-                    "_params.workspace_root": "/tmp",
-                    "_params.flow_inferencers": ["A", "B", "C"],
-                },
-            )
+    def test_override_flow_inferencers_longer_truncates(self, parameterized_topology):
+        """Overriding flow_inferencers longer than num_flows truncates to num_flows
+        (graceful distribution; num_flows=2 in the fixture)."""
+        cfg = load_config(
+            str(parameterized_topology / "topology.yaml"),
+            overrides={
+                "_params.workspace_root": "/tmp",
+                "_params.flow_inferencers": ["A", "B", "C"],
+            },
+        )
+        d = OmegaConf.to_container(cfg, resolve=True)
+        flows = d["base_inferencer"]["worker_factory"]["flow_configs"]
+        assert len(flows) == 2
+        assert [f["initial_inferencer"]["_target_"] for f in flows] == ["A", "B"]

@@ -47,9 +47,9 @@ from rich_python_utils.config_utils._registry import (
 # This keeps the package usable without hydra/omegaconf installed.
 
 
-def load_config(path, overrides=None):
+def load_config(path, overrides=None, env_prefix=None, config_defaults=None):
     from rich_python_utils.config_utils._instantiate import load_config as _load
-    return _load(path, overrides)
+    return _load(path, overrides, env_prefix=env_prefix, config_defaults=config_defaults)
 
 
 def merge_configs(*configs):

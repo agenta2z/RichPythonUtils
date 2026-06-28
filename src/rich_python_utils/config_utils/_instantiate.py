@@ -11,7 +11,9 @@ import copy
 import functools
 import importlib
 import inspect
+import json
 import logging
+import os
 import typing
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -180,13 +182,38 @@ def _resolve_repeat_(node: Any) -> Any:
 
 
 def _expand_distribution(val: Any, n: int) -> list | None:
-    """Convert a list or count-dict to a flat assignment list of length n."""
+    """Convert a list or count-dict to a flat assignment list of length ``n``.
+
+    Lists are GRACEFULLY adapted to the ``_repeat_`` count ``n`` instead of
+    requiring an exact length match (so the count and the list can be set
+    independently — e.g. ``num_flows`` vs ``flow_inferencers``):
+
+      * ``len == n``      → used as-is
+      * ``len  > n``      → truncated to the first ``n`` elements
+      * ``0 < len < n``   → padded up to ``n`` by repeating the FIRST element
+      * ``len == 0``      → not treated as a distribution (returns ``None``)
+
+    A count-dict (``{key: int, ...}`` whose values sum to ``n``) is still
+    expanded positionally; if the sum doesn't match ``n`` it's a regular dict
+    (returns ``None``).
+    """
     if isinstance(val, (list, tuple)):
-        if len(val) != n:
-            raise ValueError(
-                f"Distribution list length {len(val)} != _repeat_ {n}"
+        items = list(val)
+        if not items:
+            return None  # empty list — nothing to distribute
+        if len(items) == n:
+            return items
+        if len(items) > n:
+            _logger.debug(
+                "_repeat_ distribution: list of %d truncated to %d", len(items), n
             )
-        return list(val)
+            return items[:n]
+        # 0 < len(items) < n → pad the tail with the first element
+        _logger.debug(
+            "_repeat_ distribution: list of %d padded to %d (first element)",
+            len(items), n,
+        )
+        return items + [items[0]] * (n - len(items))
     if isinstance(val, dict) and val and all(isinstance(v, int) for v in val.values()):
         assignments: list = []
         for k, count in val.items():
@@ -456,19 +483,223 @@ def _resolve_import_(node, current_yaml_dir: Path):
 
 
 # ---------------------------------------------------------------------------
+# _params environment overrides
+# ---------------------------------------------------------------------------
+#
+# Every key under ``_params`` is overridable by an environment variable named
+# ``<PREFIX>__<PARAM_NAME>`` (upper-cased, double-underscore separator), e.g.
+# ``TASK__NUM_FLOWS``, ``TASK__FLOW_INFERENCERS``. This keeps the YAML clean
+# (plain default values, no per-key ``${oc.env:...}`` clutter) — the loader
+# overlays env on top of the YAML defaults, and CLI ``overrides=`` still win
+# (they merge AFTER this, before interpolation resolves).
+#
+# PREFIX resolution: the explicit ``_params.env_prefix`` (or a top-level
+# ``env_prefix``) key wins; if absent and the YAML lives in a ``configs/``
+# folder, the parent-of-``configs`` directory name is used (e.g.
+# ``.../task/configs/x.yaml`` → ``TASK``). An explicit empty prefix disables
+# the feature. ``env_prefix`` is stripped from the config after resolution.
+
+_ENV_TRUE = frozenset({"1", "true", "yes", "on"})
+_ENV_FALSE = frozenset({"0", "false", "no", "off"})
+_ENV_NULL = frozenset({"null", "none", "~"})
+_ENV_PREFIX_KEY = "env_prefix"
+
+
+def _coerce_env_scalar(raw: str) -> Any:
+    """Best-effort scalar coercion when the param has no concrete type hint
+    (its YAML default is an interpolation like ``${len:...}``). Tries int, then
+    float, then bool/null, else returns the string unchanged. Int is tried
+    before bool so ``"1"`` → ``1`` (not ``True``)."""
+    s = raw.strip()
+    try:
+        return int(s)
+    except ValueError:
+        pass
+    try:
+        return float(s)
+    except ValueError:
+        pass
+    low = s.lower()
+    if low in ("true", "false"):
+        return low == "true"
+    if low in _ENV_NULL:
+        return None
+    return raw
+
+
+def _parse_env_list(raw: str) -> list:
+    """Parse an env string into a list. Accepts JSON (``["a","b"]``),
+    bracketed (``[a, b]``), or bare comma-separated (``a,b``). Elements are
+    scalar-coerced (so numeric lists work; names stay strings)."""
+    s = raw.strip()
+    if s.startswith("["):
+        try:
+            parsed = json.loads(s)
+            if isinstance(parsed, list):
+                return list(parsed)
+        except (ValueError, TypeError):
+            s = s[1:-1] if s.endswith("]") else s[1:]
+    return [_coerce_env_scalar(part.strip()) for part in s.split(",") if part.strip()]
+
+
+def _coerce_env_value(raw: str, default_val: Any) -> Any:
+    """Coerce an env string to the type of the param's YAML default.
+
+    ``bool`` is checked before ``int`` (``bool`` is an ``int`` subclass). A
+    plain string default takes the env verbatim; an interpolation-valued
+    default (``"${...}"``) or unknown type falls back to best-effort scalar
+    coercion.
+    """
+    if isinstance(default_val, bool):
+        low = raw.strip().lower()
+        if low in _ENV_TRUE:
+            return True
+        if low in _ENV_FALSE:
+            return False
+        raise ValueError(f"cannot parse bool from {raw!r}")
+    if isinstance(default_val, int):
+        return int(raw.strip())
+    if isinstance(default_val, float):
+        return float(raw.strip())
+    if isinstance(default_val, (list, tuple)):
+        return _parse_env_list(raw)
+    if isinstance(default_val, str) and "${" not in default_val:
+        return raw  # plain string param — take the env value verbatim
+    return _coerce_env_scalar(raw)  # interpolation / None / unknown
+
+
+def _resolve_env_prefix(
+    container: dict, yaml_path: str, env_prefix_override: Optional[str] = None
+) -> Optional[str]:
+    """Resolve (and strip) the env prefix for ``_params`` overrides.
+
+    Precedence (highest first):
+      1. ``env_prefix_override`` — externally passed by the caller (e.g. a
+         derived tool declaring its own env namespace via
+         ``derived_from.defaults.env_prefix``). This wins over everything.
+      2. explicit ``_params.env_prefix`` → top-level ``env_prefix`` in the YAML.
+      3. parent-of-``configs`` directory name.
+
+    Returns an upper-cased prefix, or ``None`` when the feature is disabled (no
+    prefix determinable, or an explicit empty prefix). Always pops the in-config
+    ``env_prefix`` marker (regardless of which level wins) so it never lingers
+    in the resolved config.
+    """
+    explicit: Any = None
+    params = container.get("_params")
+    if isinstance(params, dict) and _ENV_PREFIX_KEY in params:
+        explicit = params.pop(_ENV_PREFIX_KEY)
+    if _ENV_PREFIX_KEY in container:
+        top = container.pop(_ENV_PREFIX_KEY)
+        if explicit is None:
+            explicit = top
+
+    # 1. Externally-passed override wins (a tool's declared env namespace).
+    if env_prefix_override is not None:
+        return str(env_prefix_override).strip().upper() or None
+
+    # 2. Explicit in-config marker.
+    if explicit is not None:
+        prefix = str(explicit).strip()
+        return prefix.upper() or None  # explicit empty string disables the feature
+
+    # 3. parent-of-``configs`` directory name.
+    parent = Path(yaml_path).resolve().parent
+    if parent.name == "configs":
+        return parent.parent.name.upper()
+    return None
+
+
+def _apply_params_env_overrides(
+    container: Any, yaml_path: str, env_prefix_override: Optional[str] = None
+) -> Any:
+    """Overlay ``<PREFIX>__<KEY>`` env vars onto ``container["_params"]``.
+
+    Mutates and returns ``container``. Each present env var replaces the YAML
+    default for that ``_params`` key (coerced to the default's type). Always
+    strips the ``env_prefix`` marker. ``env_prefix_override`` (when given) is the
+    highest-priority source for the prefix. No-op when the feature is disabled.
+    """
+    prefix = _resolve_env_prefix(container, yaml_path, env_prefix_override)
+    params = container.get("_params") if isinstance(container, dict) else None
+    if not prefix or not isinstance(params, dict):
+        return container
+
+    for key in list(params.keys()):
+        env_name = f"{prefix}__{key.upper()}"
+        raw = os.environ.get(env_name)
+        if raw is None:
+            continue
+        try:
+            params[key] = _coerce_env_value(raw, params[key])
+        except (ValueError, TypeError) as exc:
+            raise ValueError(
+                f"env override {env_name}={raw!r} could not be coerced for "
+                f"_params.{key} (default {params[key]!r}): {exc}"
+            ) from exc
+        _logger.info("Applied env override %s -> _params.%s", env_name, key)
+    return container
+
+
+def _apply_config_defaults(container: Any, config_defaults: Dict[str, Any]) -> Any:
+    """Apply dot-path ``key -> value`` *tool defaults* onto the plain container.
+
+    Runs BEFORE the env hook so these act as a defaults layer that the env
+    overlay (and CLI ``overrides``) can still override. Precedence becomes:
+    ``CLI overrides > env (<PREFIX>__<KEY>) > config_defaults (tool) > YAML``.
+
+    Each dotted key descends (creating missing intermediate dicts, preserving
+    existing siblings) and sets the leaf. Mutates and returns ``container``.
+    Unlike a list-returning resolver, values are stored verbatim — including
+    interpolation strings like ``${_params.x}``, which resolve later.
+    """
+    if not isinstance(container, dict) or not config_defaults:
+        return container
+    for dotted, value in config_defaults.items():
+        parts = str(dotted).split(".")
+        node = container
+        for part in parts[:-1]:
+            child = node.get(part)
+            if not isinstance(child, dict):
+                child = {}
+                node[part] = child
+            node = child
+        node[parts[-1]] = value
+        _logger.info("Applied tool config default %s -> %r", dotted, value)
+    return container
+
+
+# ---------------------------------------------------------------------------
 # Config loading
 # ---------------------------------------------------------------------------
 
-def load_config(path: str, overrides: Optional[Dict[str, Any]] = None):
+def load_config(
+    path: str,
+    overrides: Optional[Dict[str, Any]] = None,
+    env_prefix: Optional[str] = None,
+    config_defaults: Optional[Dict[str, Any]] = None,
+):
     """Load a YAML file into an OmegaConf ``DictConfig``.
 
     Parameters
     ----------
     path : str
         Path to the YAML file.
+    env_prefix : str, optional
+        Highest-priority env prefix for ``_params`` overrides (overrides the
+        config's own ``env_prefix`` and the folder-derived default). Lets a
+        caller (e.g. a derived tool) give a SHARED config its own env namespace,
+        so ``<env_prefix>__<KEY>`` vars target this load only.
     overrides : dict, optional
         Key-value overrides merged on top of the loaded config via
-        ``OmegaConf.merge``.
+        ``OmegaConf.merge``. These are the HIGHEST priority (e.g. CLI
+        ``--override`` and per-invocation executor injections).
+    config_defaults : dict, optional
+        Dot-path ``key -> value`` *tool defaults* applied BEFORE the env hook,
+        so they sit below env (and ``overrides``) yet above the YAML defaults.
+        Full precedence: ``overrides > env > config_defaults > YAML``. Used by
+        derived tools to set tunable defaults (e.g. ``_params.plan_max_breakdown``)
+        that a user's ``<PREFIX>__<KEY>`` env var can still override.
 
     Notes
     -----
@@ -495,6 +726,15 @@ def load_config(path: str, overrides: Optional[Dict[str, Any]] = None):
         # OmegaConf.create so OmegaConf interpolations inside copied nodes
         # resolve naturally during the OmegaConf.resolve step below.
         container = _resolve_inherits_(container, container)
+        # Apply tool config_defaults BEFORE the env hook so they form a defaults
+        # layer that env (and CLI overrides) can still override:
+        #   overrides (CLI) > env (<PREFIX>__<KEY>) > config_defaults > YAML.
+        container = _apply_config_defaults(container, config_defaults)
+        # Overlay <PREFIX>__<KEY> env vars onto _params (after import/inherits
+        # merge so it sees the effective _params; before the CLI overrides and
+        # OmegaConf.resolve so CLI still wins and ${_params.*} refs pick up the
+        # env values). env_prefix (if passed) is the highest-priority prefix.
+        container = _apply_params_env_overrides(container, path, env_prefix)
         cfg = OmegaConf.create(container)
         if overrides:
             nested_overrides = {}
