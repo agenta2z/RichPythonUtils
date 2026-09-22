@@ -3,14 +3,14 @@ Unit tests for WorkNodeBase.arun() and _arun().
 
 Validates: Requirements 13.1, 13.2, 13.3, 13.4
 """
+
 import asyncio
 
 import pytest
 from attr import attrs
-
 from rich_python_utils.common_objects.workflow.common.worknode_base import (
-    WorkNodeBase,
     WorkGraphStopFlags,
+    WorkNodeBase,
 )
 
 
@@ -18,9 +18,11 @@ from rich_python_utils.common_objects.workflow.common.worknode_base import (
 # Concrete test subclass — overrides _arun() with a configurable async fn
 # ---------------------------------------------------------------------------
 
+
 @attrs(slots=False)
 class AsyncTestNode(WorkNodeBase):
     """Concrete subclass for testing arun/async behavior."""
+
     _async_fn = None  # Set in tests
 
     def _run(self, *args, **kwargs):
@@ -52,6 +54,7 @@ class BaseOnlyNode(WorkNodeBase):
 # 1. _arun() raises NotImplementedError on base class
 # ---------------------------------------------------------------------------
 
+
 class TestArunNotImplemented:
     """Req 13.2: _arun() raises NotImplementedError when not overridden."""
 
@@ -66,17 +69,18 @@ class TestArunNotImplemented:
 # 2. Structural checks
 # ---------------------------------------------------------------------------
 
+
 class TestArunStructural:
     """Req 13.1: arun() exists and is an async coroutine function."""
 
     def test_has_arun(self):
-        assert hasattr(WorkNodeBase, 'arun')
+        assert hasattr(WorkNodeBase, "arun")
 
     def test_arun_is_coroutine_function(self):
         assert asyncio.iscoroutinefunction(WorkNodeBase.arun)
 
     def test_has_private_arun(self):
-        assert hasattr(WorkNodeBase, '_arun')
+        assert hasattr(WorkNodeBase, "_arun")
 
     def test_private_arun_is_coroutine_function(self):
         assert asyncio.iscoroutinefunction(WorkNodeBase._arun)
@@ -85,6 +89,7 @@ class TestArunStructural:
 # ---------------------------------------------------------------------------
 # 3. Stop-flag separation in arun()
 # ---------------------------------------------------------------------------
+
 
 class TestArunStopFlagSeparation:
     """Req 13.3: arun() separates stop flags from results."""
@@ -126,6 +131,7 @@ class TestArunStopFlagSeparation:
 # 4. Singleton unpacking in arun()
 # ---------------------------------------------------------------------------
 
+
 class TestArunSingletonUnpacking:
     """Req 13.3: arun() unpacks singleton lists/tuples."""
 
@@ -163,6 +169,7 @@ class TestArunSingletonUnpacking:
 # 5. _output parameter behavior
 # ---------------------------------------------------------------------------
 
+
 class TestArunOutputParam:
     """Req 13.4: _output parameter appends result and returns stop_flag."""
 
@@ -199,6 +206,7 @@ class TestArunOutputParam:
 # ---------------------------------------------------------------------------
 # 6. _output_idx parameter behavior
 # ---------------------------------------------------------------------------
+
 
 class TestArunOutputIdxParam:
     """Req 13.4: _output_idx inserts result at index for deterministic ordering."""
@@ -251,11 +259,14 @@ class TestArunOutputIdxParam:
         assert append_list == []  # _output not used
         assert stop_flag == WorkGraphStopFlags.Continue
 
+
 # ---------------------------------------------------------------------------
 # Imports for Workflow._arun() tests
 # ---------------------------------------------------------------------------
 from rich_python_utils.common_objects.workflow.common.exceptions import WorkflowAborted
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
+)
 from rich_python_utils.common_objects.workflow.workflow import Workflow
 
 
@@ -263,19 +274,22 @@ from rich_python_utils.common_objects.workflow.workflow import Workflow
 # Helpers for Workflow._arun() tests
 # ---------------------------------------------------------------------------
 
+
 @attrs(slots=False)
 class SimpleAsyncWorkflow(Workflow):
     """Minimal concrete subclass for async testing — no save/resume."""
+
     def _get_result_path(self, result_id, *args, **kwargs):
         raise NotImplementedError("save not used in tests")
 
 
 class _StepWrapper:
     """Wraps a callable so per-step attributes can be attached."""
+
     def __init__(self, fn, **kwargs):
         self._fn = fn
-        self.__name__ = getattr(fn, '__name__', str(fn))
-        self.__module__ = getattr(fn, '__module__', None)
+        self.__name__ = getattr(fn, "__name__", str(fn))
+        self.__module__ = getattr(fn, "__module__", None)
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -286,6 +300,7 @@ class _StepWrapper:
 # ---------------------------------------------------------------------------
 # 7. Workflow._arun() tests
 # ---------------------------------------------------------------------------
+
 
 class TestWorkflowArun:
     """Tests for Workflow._arun() — Req 1.2, 1.3, 1.4, 2.5, 3.2, 4.3, 5.1, 5.2, 5.3"""
@@ -303,6 +318,7 @@ class TestWorkflowArun:
     @pytest.mark.asyncio
     async def test_async_steps(self):
         """Async steps are awaited correctly."""
+
         async def async_add(x):
             return x + 10
 
@@ -319,6 +335,7 @@ class TestWorkflowArun:
     @pytest.mark.asyncio
     async def test_mixed_sync_async_steps(self):
         """Mixed sync and async steps work transparently."""
+
         async def async_step(x):
             return x + 5
 
@@ -337,6 +354,7 @@ class TestWorkflowArun:
     @pytest.mark.asyncio
     async def test_workflow_aborted_handling(self):
         """WorkflowAborted is caught and _handle_abort is called."""
+
         def failing_step(x):
             raise WorkflowAborted("abort")
 
@@ -355,6 +373,7 @@ class TestWorkflowArun:
     @pytest.mark.asyncio
     async def test_per_step_error_handler_sync(self):
         """Sync error handler returns recovery value."""
+
         def bad_step(x):
             raise ValueError("oops")
 
@@ -367,6 +386,7 @@ class TestWorkflowArun:
     @pytest.mark.asyncio
     async def test_per_step_error_handler_async(self):
         """Async error handler returns recovery value."""
+
         def bad_step(x):
             raise ValueError("oops")
 

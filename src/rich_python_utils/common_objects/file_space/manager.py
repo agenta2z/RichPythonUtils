@@ -35,7 +35,14 @@ class FileSpaceManager:
         roots: List[Union[str, Path]],
         reserved_subfolder_canonical: str = "variables",
         reserved_subfolder_prefixes: Sequence[str] = ("_", "."),
-        file_extensions: Sequence[str] = (".jinja2", ".jinja", ".j2", ".hbs", ".txt", ""),
+        file_extensions: Sequence[str] = (
+            ".jinja2",
+            ".jinja",
+            ".j2",
+            ".hbs",
+            ".txt",
+            "",
+        ),
         enable_overrides: bool = False,
         override_suffix: str = ".override",
         backends: Optional[Sequence[FieldBackend]] = None,
@@ -118,7 +125,9 @@ class FileSpaceManager:
         cascade = self.build_cascade(space, type_)
 
         if master_version:
-            mv_chain = master_version if isinstance(master_version, list) else [master_version]
+            mv_chain = (
+                master_version if isinstance(master_version, list) else [master_version]
+            )
             for mv in mv_chain:
                 search_folders = [c / name / mv for c in cascade]
                 if version:
@@ -191,8 +200,10 @@ class FileSpaceManager:
         trace: List[Tuple[str, str, bool]] = []
 
         mv_chain = (
-            master_version if isinstance(master_version, list)
-            else [master_version] if master_version
+            master_version
+            if isinstance(master_version, list)
+            else [master_version]
+            if master_version
             else [None]
         )
         search_folders = []

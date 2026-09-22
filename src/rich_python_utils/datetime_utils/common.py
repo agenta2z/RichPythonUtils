@@ -1,7 +1,7 @@
 import random
 from datetime import datetime, timedelta
 from time import sleep, time
-from typing import Union, Mapping, List, Tuple
+from typing import List, Mapping, Tuple, Union
 
 
 def random_sleep(min_sleep, max_sleep):
@@ -52,17 +52,14 @@ def random_sleep(min_sleep, max_sleep):
             sleep(min_sleep)
 
 
-
-
-
 def timestamp(scale=100) -> str:
     return str(int(time() * scale))
 
 
 def solve_datetime(
-        _dt_obj: Union[datetime, str, Mapping, List, Tuple],
-        datetime_str_format: str = '%m/%d/%Y',
-        delta: Union[int, Mapping, List, Tuple, timedelta] = None,
+    _dt_obj: Union[datetime, str, Mapping, List, Tuple],
+    datetime_str_format: str = "%m/%d/%Y",
+    delta: Union[int, Mapping, List, Tuple, timedelta] = None,
 ) -> datetime:
     """
     Solves the input object as a `datetime` object.
@@ -83,8 +80,12 @@ def solve_datetime(
 
     """
     from rich_python_utils.common_utils import solve_obj
+
     _dt_obj = solve_obj(
-        _dt_obj, obj_type=datetime, str2obj=datetime.strptime, str_format=datetime_str_format
+        _dt_obj,
+        obj_type=datetime,
+        str2obj=datetime.strptime,
+        str_format=datetime_str_format,
     )
     if delta is None:
         return _dt_obj
@@ -93,9 +94,7 @@ def solve_datetime(
 
 
 def solve_date_time_format_by_granularity(
-        granularity: str,
-        date_format: str = '%Y%m%d',
-        time_format: str = '%H%M%S'
+    granularity: str, date_format: str = "%Y%m%d", time_format: str = "%H%M%S"
 ) -> Tuple[str, str]:
     """
     This function solves the date and time format based on the given granularity.
@@ -129,22 +128,22 @@ def solve_date_time_format_by_granularity(
     """
 
     # Define the formats for date and time elements
-    formats = ['year', 'month', 'day', 'hour', 'minute', 'second']
+    formats = ["year", "month", "day", "hour", "minute", "second"]
     format_codes = {
-        'year': '%Y',
-        'month': '%m',
-        'day': '%d',
-        'hour': '%H',
-        'minute': '%M',
-        'second': '%S'
+        "year": "%Y",
+        "month": "%m",
+        "day": "%d",
+        "hour": "%H",
+        "minute": "%M",
+        "second": "%S",
     }
 
     # Identify the separators by replacing format elements with empty string
     date_separator = date_format
     time_separator = time_format
     for code in format_codes.values():
-        date_separator = date_separator.replace(code, '')
-        time_separator = time_separator.replace(code, '')
+        date_separator = date_separator.replace(code, "")
+        time_separator = time_separator.replace(code, "")
 
     # Initialize the new format strings
     new_date_format = date_format
@@ -152,14 +151,22 @@ def solve_date_time_format_by_granularity(
 
     # Iterate over the formats in order
     for format in formats:
-        if format_codes[format] in date_format and formats.index(format) > formats.index(granularity):
-            new_date_format = new_date_format.replace(format_codes[format], '')
-        if format_codes[format] in time_format and formats.index(format) > formats.index(granularity):
-            new_time_format = new_time_format.replace(format_codes[format], '')
+        if format_codes[format] in date_format and formats.index(
+            format
+        ) > formats.index(granularity):
+            new_date_format = new_date_format.replace(format_codes[format], "")
+        if format_codes[format] in time_format and formats.index(
+            format
+        ) > formats.index(granularity):
+            new_time_format = new_time_format.replace(format_codes[format], "")
 
     # Remove extra separators
-    new_date_format = new_date_format.strip(date_separator).replace(date_separator * 2, date_separator)
-    new_time_format = new_time_format.strip(time_separator).replace(time_separator * 2, time_separator)
+    new_date_format = new_date_format.strip(date_separator).replace(
+        date_separator * 2, date_separator
+    )
+    new_time_format = new_time_format.strip(time_separator).replace(
+        time_separator * 2, time_separator
+    )
 
     return new_date_format, new_time_format
 
@@ -183,14 +190,14 @@ def current_date_time_string(format_str=None):
     now = datetime.now()
 
     # Handle special format strings
-    if format_str == 'iso':
+    if format_str == "iso":
         return now.isoformat()
-    elif format_str == 'date':
-        return now.strftime('%Y-%m-%d')
-    elif format_str == 'time':
-        return now.strftime('%H:%M:%S')
-    elif format_str == 'full':
-        return now.strftime('%A, %B %d, %Y at %H:%M:%S')
+    elif format_str == "date":
+        return now.strftime("%Y-%m-%d")
+    elif format_str == "time":
+        return now.strftime("%H:%M:%S")
+    elif format_str == "full":
+        return now.strftime("%A, %B %d, %Y at %H:%M:%S")
     elif format_str:
         # Use custom format string
         try:
@@ -209,11 +216,11 @@ def current_date_string(format_str=None):
     Defaults to '%Y-%m-%d' if no format_str is provided.
     """
     now = datetime.now()
-    fmt = format_str or '%Y-%m-%d'
+    fmt = format_str or "%Y-%m-%d"
     try:
         return now.strftime(fmt)
     except ValueError:
-        return now.strftime('%Y-%m-%d')  # fallback
+        return now.strftime("%Y-%m-%d")  # fallback
 
 
 def current_time_string(format_str=None):
@@ -222,8 +229,8 @@ def current_time_string(format_str=None):
     Defaults to '%H:%M:%S' if no format_str is provided.
     """
     now = datetime.now()
-    fmt = format_str or '%H:%M:%S'
+    fmt = format_str or "%H:%M:%S"
     try:
         return now.strftime(fmt)
     except ValueError:
-        return now.strftime('%H:%M:%S')  # fallback
+        return now.strftime("%H:%M:%S")  # fallback

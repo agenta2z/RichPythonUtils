@@ -17,7 +17,6 @@ import string
 
 import pytest
 from hypothesis import strategies as st
-
 from rich_python_utils.service_utils.retrieval_service.document import Document
 from rich_python_utils.service_utils.retrieval_service.file_retrieval_service import (
     FileRetrievalService,

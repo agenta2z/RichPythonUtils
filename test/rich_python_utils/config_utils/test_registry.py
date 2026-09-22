@@ -1,7 +1,6 @@
 """Tests for the target alias registry."""
 
 import pytest
-
 from rich_python_utils.config_utils._registry import (
     _make_import_path,
     _reset_registry,
@@ -11,7 +10,6 @@ from rich_python_utils.config_utils._registry import (
     register_class,
     resolve_target,
 )
-
 from test_helpers import SimpleAttrs, SimpleDataclass
 
 
@@ -24,12 +22,14 @@ class TestRegisterDecorator:
 
     def test_no_parens_raises_type_error(self):
         with pytest.raises(TypeError, match="string alias"):
+
             @register
             class Foo:
                 pass
 
     def test_non_string_alias_raises_type_error(self):
         with pytest.raises(TypeError, match="string alias"):
+
             @register(42)
             class Foo:
                 pass

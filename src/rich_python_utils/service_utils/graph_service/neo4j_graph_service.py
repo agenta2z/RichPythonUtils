@@ -24,11 +24,11 @@ import json
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
-from attr import attrs, attrib
+from attr import attrib, attrs
+from rich_python_utils.service_utils.data_operation_record import DataOperationRecord
 
 from .graph_node import GraphEdge, GraphNode
 from .graph_service_base import GraphServiceBase
-from rich_python_utils.service_utils.data_operation_record import DataOperationRecord
 
 logger = logging.getLogger(__name__)
 
@@ -66,10 +66,7 @@ class Neo4jGraphService(GraphServiceBase):
                 "CREATE CONSTRAINT IF NOT EXISTS "
                 "FOR (n:Entity) REQUIRE (n.namespace, n.node_id) IS UNIQUE"
             )
-            session.run(
-                "CREATE INDEX IF NOT EXISTS "
-                "FOR (n:Entity) ON (n.node_type)"
-            )
+            session.run("CREATE INDEX IF NOT EXISTS FOR (n:Entity) ON (n.node_type)")
 
     def _migrate_namespace(self):
         """Set namespace='_default' on any existing nodes missing it."""
@@ -92,10 +89,14 @@ class Neo4jGraphService(GraphServiceBase):
             properties = {}
         history_json = record.get("history", "[]")
         try:
-            history_raw = json.loads(history_json) if isinstance(history_json, str) else []
+            history_raw = (
+                json.loads(history_json) if isinstance(history_json, str) else []
+            )
         except (json.JSONDecodeError, TypeError):
             history_raw = []
-        history = [DataOperationRecord.from_dict(r) for r in history_raw if isinstance(r, dict)]
+        history = [
+            DataOperationRecord.from_dict(r) for r in history_raw if isinstance(r, dict)
+        ]
         return GraphNode(
             node_id=record["node_id"],
             node_type=record["node_type"],
@@ -114,10 +115,14 @@ class Neo4jGraphService(GraphServiceBase):
             properties = {}
         history_json = rel.get("history", "[]")
         try:
-            history_raw = json.loads(history_json) if isinstance(history_json, str) else []
+            history_raw = (
+                json.loads(history_json) if isinstance(history_json, str) else []
+            )
         except (json.JSONDecodeError, TypeError):
             history_raw = []
-        history = [DataOperationRecord.from_dict(r) for r in history_raw if isinstance(r, dict)]
+        history = [
+            DataOperationRecord.from_dict(r) for r in history_raw if isinstance(r, dict)
+        ]
         return GraphEdge(
             source_id=source_id,
             target_id=target_id,
@@ -132,7 +137,9 @@ class Neo4jGraphService(GraphServiceBase):
     def add_node(self, node: GraphNode, namespace: Optional[str] = None) -> None:
         ns = self._resolve_namespace(namespace)
         props_json = json.dumps(node.properties, ensure_ascii=False)
-        history_json = json.dumps([r.to_dict() for r in node.history], ensure_ascii=False)
+        history_json = json.dumps(
+            [r.to_dict() for r in node.history], ensure_ascii=False
+        )
         with self._driver.session(database=self.database) as session:
             session.run(
                 "MERGE (n:Entity {namespace: $ns, node_id: $node_id}) "
@@ -150,12 +157,15 @@ class Neo4jGraphService(GraphServiceBase):
                 is_active=node.is_active,
             )
 
-    def get_node(self, node_id: str, namespace: Optional[str] = None) -> Optional[GraphNode]:
+    def get_node(
+        self, node_id: str, namespace: Optional[str] = None
+    ) -> Optional[GraphNode]:
         ns = self._resolve_namespace(namespace)
         with self._driver.session(database=self.database) as session:
             result = session.run(
                 "MATCH (n:Entity {namespace: $ns, node_id: $node_id}) RETURN n",
-                ns=ns, node_id=node_id,
+                ns=ns,
+                node_id=node_id,
             )
             record = result.single()
             if record is None:
@@ -169,7 +179,8 @@ class Neo4jGraphService(GraphServiceBase):
                 "MATCH (n:Entity {namespace: $ns, node_id: $node_id}) "
                 "DETACH DELETE n "
                 "RETURN count(n) AS cnt",
-                ns=ns, node_id=node_id,
+                ns=ns,
+                node_id=node_id,
             )
             record = result.single()
             return record is not None and record["cnt"] > 0
@@ -182,14 +193,18 @@ class Neo4jGraphService(GraphServiceBase):
                 "OPTIONAL MATCH (a:Entity {namespace: $ns, node_id: $src}) "
                 "OPTIONAL MATCH (b:Entity {namespace: $ns, node_id: $tgt}) "
                 "RETURN a IS NOT NULL AS src_exists, b IS NOT NULL AS tgt_exists",
-                ns=ns, src=edge.source_id, tgt=edge.target_id,
+                ns=ns,
+                src=edge.source_id,
+                tgt=edge.target_id,
             )
             record = result.single()
             if not record["src_exists"]:
                 raise ValueError(f"Source node '{edge.source_id}' does not exist")
             if not record["tgt_exists"]:
                 raise ValueError(f"Target node '{edge.target_id}' does not exist")
-            history_json = json.dumps([r.to_dict() for r in edge.history], ensure_ascii=False)
+            history_json = json.dumps(
+                [r.to_dict() for r in edge.history], ensure_ascii=False
+            )
             session.run(
                 "MATCH (a:Entity {namespace: $ns, node_id: $src}) "
                 "MATCH (b:Entity {namespace: $ns, node_id: $tgt}) "
@@ -199,9 +214,13 @@ class Neo4jGraphService(GraphServiceBase):
                 "  history: $history, "
                 "  is_active: $is_active"
                 "}]->(b)",
-                ns=ns, src=edge.source_id, tgt=edge.target_id,
-                rel_type=edge.edge_type, props=props_json,
-                history=history_json, is_active=edge.is_active,
+                ns=ns,
+                src=edge.source_id,
+                tgt=edge.target_id,
+                rel_type=edge.edge_type,
+                props=props_json,
+                history=history_json,
+                is_active=edge.is_active,
             )
 
     def get_edges(
@@ -223,10 +242,18 @@ class Neo4jGraphService(GraphServiceBase):
                 if edge_type is not None:
                     params["et"] = edge_type
                 for rec in session.run(q, **params):
-                    results.append(self._edge_from_rel(rec["src"], rec["tgt"], {
-                        "relation_type": rec["rt"], "properties": rec["props"] or "{}",
-                        "history": rec["hist"] or "[]", "is_active": rec.get("active", True),
-                    }))
+                    results.append(
+                        self._edge_from_rel(
+                            rec["src"],
+                            rec["tgt"],
+                            {
+                                "relation_type": rec["rt"],
+                                "properties": rec["props"] or "{}",
+                                "history": rec["hist"] or "[]",
+                                "is_active": rec.get("active", True),
+                            },
+                        )
+                    )
 
             if direction in ("incoming", "both"):
                 q = "MATCH (n:Entity {namespace: $ns, node_id: $nid})<-[r:RELATES_TO]-(m:Entity {namespace: $ns}) "
@@ -237,10 +264,18 @@ class Neo4jGraphService(GraphServiceBase):
                 if edge_type is not None:
                     params["et"] = edge_type
                 for rec in session.run(q, **params):
-                    results.append(self._edge_from_rel(rec["src"], rec["tgt"], {
-                        "relation_type": rec["rt"], "properties": rec["props"] or "{}",
-                        "history": rec["hist"] or "[]", "is_active": rec.get("active", True),
-                    }))
+                    results.append(
+                        self._edge_from_rel(
+                            rec["src"],
+                            rec["tgt"],
+                            {
+                                "relation_type": rec["rt"],
+                                "properties": rec["props"] or "{}",
+                                "history": rec["hist"] or "[]",
+                                "is_active": rec.get("active", True),
+                            },
+                        )
+                    )
         return results
 
     def remove_edge(
@@ -257,7 +292,10 @@ class Neo4jGraphService(GraphServiceBase):
                 "-[r:RELATES_TO {relation_type: $rt}]->"
                 "(b:Entity {namespace: $ns, node_id: $tgt}) "
                 "DELETE r RETURN count(r) AS cnt",
-                ns=ns, src=source_id, tgt=target_id, rt=edge_type,
+                ns=ns,
+                src=source_id,
+                tgt=target_id,
+                rt=edge_type,
             )
             record = result.single()
             return record is not None and record["cnt"] > 0
@@ -273,7 +311,8 @@ class Neo4jGraphService(GraphServiceBase):
         with self._driver.session(database=self.database) as session:
             exists = session.run(
                 "MATCH (n:Entity {namespace: $ns, node_id: $nid}) RETURN n",
-                ns=ns, nid=node_id,
+                ns=ns,
+                nid=node_id,
             )
             if exists.single() is None:
                 return []
@@ -319,7 +358,8 @@ class Neo4jGraphService(GraphServiceBase):
             if node_type is not None:
                 records = session.run(
                     "MATCH (n:Entity {namespace: $ns, node_type: $nt}) RETURN n",
-                    ns=ns, nt=node_type,
+                    ns=ns,
+                    nt=node_type,
                 )
             else:
                 records = session.run(
@@ -351,9 +391,7 @@ class Neo4jGraphService(GraphServiceBase):
 
     def namespaces(self) -> List[str]:
         with self._driver.session(database=self.database) as session:
-            result = session.run(
-                "MATCH (n:Entity) RETURN DISTINCT n.namespace AS ns"
-            )
+            result = session.run("MATCH (n:Entity) RETURN DISTINCT n.namespace AS ns")
             return [r["ns"] for r in result if r["ns"] is not None]
 
     def _edge_count(self, namespace: str) -> int:

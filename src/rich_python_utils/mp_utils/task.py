@@ -21,29 +21,29 @@ Example:
     10
 """
 
+import uuid
 from enum import Enum
 from typing import Any, Callable, Optional, Tuple
-import uuid
 
-from attr import attrs, attrib
+from attr import attrib, attrs
 
 
 class TaskStatus(Enum):
     """Status codes for task execution."""
 
-    PENDING = 'pending'
+    PENDING = "pending"
     """Task is waiting to be executed (not yet ready for execution)."""
 
-    READY = 'ready'
+    READY = "ready"
     """Task is ready to be executed (all dependencies satisfied)."""
 
-    RUNNING = 'running'
+    RUNNING = "running"
     """Task is currently being executed."""
 
-    COMPLETED = 'completed'
+    COMPLETED = "completed"
     """Task completed successfully."""
 
-    FAILED = 'failed'
+    FAILED = "failed"
     """Task execution raised an exception."""
 
 
@@ -90,9 +90,9 @@ class Task:
         """Validate parameters and set defaults after initialization."""
         self._validate_parameters()
         if self.task_id is None:
-            object.__setattr__(self, 'task_id', str(uuid.uuid4()))
+            object.__setattr__(self, "task_id", str(uuid.uuid4()))
         if self.name is None:
-            object.__setattr__(self, 'name', self._get_callable_name())
+            object.__setattr__(self, "name", self._get_callable_name())
 
     def _validate_parameters(self):
         """Validate that the callable is actually callable."""
@@ -104,7 +104,7 @@ class Task:
 
     def _get_callable_name(self) -> str:
         """Extract a name from the callable."""
-        if hasattr(self._callable, '__name__'):
+        if hasattr(self._callable, "__name__"):
             return self._callable.__name__
         return str(self._callable)
 
@@ -183,8 +183,12 @@ class TaskState:
     status = attrib(type=TaskStatus, default=TaskStatus.PENDING)
     exception = attrib(type=Optional[Exception], default=None)
     next_tasks = attrib(factory=list)  # List['Task'] - for recording/debugging
-    input_args = attrib(type=Tuple, default=())  # Original input args (for NoPassDown self-edges)
-    input_kwargs = attrib(type=dict, factory=dict)  # Original input kwargs (for NoPassDown self-edges)
+    input_args = attrib(
+        type=Tuple, default=()
+    )  # Original input args (for NoPassDown self-edges)
+    input_kwargs = attrib(
+        type=dict, factory=dict
+    )  # Original input kwargs (for NoPassDown self-edges)
     worker_id = attrib(type=int, default=0)
     start_time = attrib(type=float, default=0.0)
     end_time = attrib(type=float, default=0.0)
@@ -208,7 +212,7 @@ class TaskState:
 
 
 __all__ = [
-    'TaskStatus',
-    'Task',
-    'TaskState',
+    "TaskStatus",
+    "Task",
+    "TaskState",
 ]

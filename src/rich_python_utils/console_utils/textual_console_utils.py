@@ -8,29 +8,30 @@ Author: Science Python Utils
 Date: 2025-01-15
 """
 
-from typing import List, Optional, Callable, Any, Dict, Union
-from textual.app import App, ComposeResult
-from textual.widgets import (
-    Header,
-    Footer,
-    DataTable,
-    Static,
-    Button,
-    Input,
-    Label,
-    ProgressBar,
-    Log,
-    Placeholder,
-    Select,
-)
-from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
-from textual.screen import Screen
-from textual import events
-from textual.binding import Binding
-from rich.text import Text
-from rich.panel import Panel
 import asyncio
 from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional, Union
+
+from rich.panel import Panel
+from rich.text import Text
+from textual import events
+from textual.app import App, ComposeResult
+from textual.binding import Binding
+from textual.containers import Container, Horizontal, ScrollableContainer, Vertical
+from textual.screen import Screen
+from textual.widgets import (
+    Button,
+    DataTable,
+    Footer,
+    Header,
+    Input,
+    Label,
+    Log,
+    Placeholder,
+    ProgressBar,
+    Select,
+    Static,
+)
 
 # Color constants for consistency with basics.py
 # These match the colorama-based colors used in basics.py
@@ -47,6 +48,7 @@ WPRINT_HEADER_OR_HIGHLIGHT_COLOR = "bright_magenta"
 WPRINT_MESSAGE_BODY_COLOR = "yellow"
 
 # region Prompt Utilities
+
 
 class ConfirmScreen(Screen):
     """Screen for yes/no confirmation prompts."""
@@ -180,9 +182,7 @@ class ChoiceApp(App):
 
 
 def prompt_choice(
-    message: str,
-    choices: List[str],
-    default_index: int = 0
+    message: str, choices: List[str], default_index: int = 0
 ) -> Optional[int]:
     """
     Interactive multiple choice prompt.
@@ -318,9 +318,11 @@ def prompt_input(
     app = InputApp(message, default, validator, placeholder)
     return app.run()
 
+
 # endregion
 
 # region Progress Display
+
 
 class ProgressDashboard(App):
     """
@@ -378,16 +380,20 @@ class ProgressDashboard(App):
         container.remove_children()
 
         for task_id, task in self.tasks.items():
-            progress = (task["completed"] / task["total"]) * 100 if task["total"] > 0 else 0
+            progress = (
+                (task["completed"] / task["total"]) * 100 if task["total"] > 0 else 0
+            )
             widget = Static(
                 f"{task['description']}: {task['completed']}/{task['total']} ({progress:.1f}%)",
                 classes="progress-item",
             )
             container.mount(widget)
 
+
 # endregion
 
 # region Data Display
+
 
 class InteractiveTable(App):
     """
@@ -452,9 +458,11 @@ def display_table(
     app = InteractiveTable(data, columns, title)
     app.run()
 
+
 # endregion
 
 # region Log Viewer
+
 
 class LogViewer(App):
     """
@@ -494,9 +502,11 @@ class LogViewer(App):
         log = self.query_one(Log)
         log.clear()
 
+
 # endregion
 
 # region Notifications
+
 
 def show_notification(
     message: str,
@@ -539,9 +549,11 @@ def show_notification(
     )
     console.print(panel)
 
+
 # endregion
 
 # region Help Display
+
 
 class HelpScreen(Screen):
     """Interactive help display screen."""
@@ -599,9 +611,11 @@ def display_help(help_text: str, title: str = "Help") -> None:
     app = HelpApp(help_text, title)
     app.run()
 
+
 # endregion
 
 # region Metrics Display
+
 
 class LiveMetrics(App):
     """
@@ -651,9 +665,11 @@ class LiveMetrics(App):
             )
             container.mount(widget)
 
+
 # endregion
 
 # region Utility Functions
+
 
 def run_tui_app(app_class: type, *args, **kwargs) -> Any:
     """
@@ -664,5 +680,6 @@ def run_tui_app(app_class: type, *args, **kwargs) -> Any:
     """
     app = app_class(*args, **kwargs)
     return app.run()
+
 
 # endregion

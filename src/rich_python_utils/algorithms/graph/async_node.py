@@ -1,8 +1,7 @@
 import asyncio
 from typing import Any, List, Optional, Union
 
-from attr import attrs, attrib
-
+from attr import attrib, attrs
 from rich_python_utils.algorithms.graph.node import Node
 
 
@@ -71,7 +70,9 @@ class AsyncNode(Node):
         if self._use_queue:
             self._queue = asyncio.Queue()
 
-    async def send(self, message: Any, target: Union['AsyncNode', List['AsyncNode']] = None):
+    async def send(
+        self, message: Any, target: Union["AsyncNode", List["AsyncNode"]] = None
+    ):
         """Send a message to connected next node(s).
 
         Args:

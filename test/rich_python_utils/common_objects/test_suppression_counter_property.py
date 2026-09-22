@@ -8,23 +8,26 @@ the next non-suppressed call SHALL report suppressed_count = K. After reporting,
 counter SHALL reset to zero. Console and backend suppression counters SHALL be tracked
 independently.
 """
+
 import time
 from unittest.mock import MagicMock
 
 import pytest
-from hypothesis import given, strategies as st, settings, assume
-
+from hypothesis import assume, given, settings, strategies as st
 from rich_python_utils.common_objects.debuggable import Debuggable
 
 
 class ConcreteDebuggable(Debuggable):
     """Concrete subclass for testing since Debuggable is abstract via Identifiable."""
+
     pass
 
 
 # Strategies
 suppression_count_st = st.integers(min_value=1, max_value=20)
-rate_limit_st = st.floats(min_value=0.5, max_value=5.0, allow_nan=False, allow_infinity=False)
+rate_limit_st = st.floats(
+    min_value=0.5, max_value=5.0, allow_nan=False, allow_infinity=False
+)
 
 
 def _make_backend_debuggable(rate_limit: float):
@@ -45,7 +48,7 @@ def _make_backend_debuggable(rate_limit: float):
 
 def _make_console_debuggable(rate_limit: float):
     """Create a Debuggable with a callable console logger and a console rate limit.
-    
+
     The callable is registered as a console logger via console_loggers_or_logger_types,
     so it uses _console_suppression_counts. The callable logger path adds
     suppressed_count to the log_data dict.
@@ -84,7 +87,7 @@ def test_backend_suppression_count_accuracy(num_suppressed: int):
     # First call goes through (sets the baseline time)
     obj.log("first", log_type="Test", message_id=msg_id)
     assert len(captured) == 1
-    assert 'suppressed_count' not in captured[0]
+    assert "suppressed_count" not in captured[0]
 
     # Make num_suppressed calls that will be suppressed (rate limit blocks them)
     for _ in range(num_suppressed):
@@ -99,13 +102,13 @@ def test_backend_suppression_count_accuracy(num_suppressed: int):
     # This call should go through and report the suppression count
     obj.log("after_suppression", log_type="Test", message_id=msg_id)
     assert len(captured) == 2
-    assert captured[1]['suppressed_count'] == num_suppressed
+    assert captured[1]["suppressed_count"] == num_suppressed
 
     # Counter should be reset: next allowed call should have no suppressed_count
     obj._last_logging_time[msg_id] = 0
     obj.log("clean", log_type="Test", message_id=msg_id)
     assert len(captured) == 3
-    assert 'suppressed_count' not in captured[2]
+    assert "suppressed_count" not in captured[2]
 
 
 # **Feature: session-logging-improvements, Property 5: Suppression Counter Accuracy**
@@ -115,7 +118,7 @@ def test_backend_suppression_count_accuracy(num_suppressed: int):
 def test_console_suppression_count_accuracy(num_suppressed: int):
     """Property: For any sequence of K suppressed console log calls, the next
     non-suppressed call SHALL include suppressed_count = K, then reset.
-    
+
     Uses a callable console logger which receives suppressed_count in the log_data dict.
     """
     rate_limit = 1000.0
@@ -126,7 +129,7 @@ def test_console_suppression_count_accuracy(num_suppressed: int):
     # First call goes through
     obj.log("first", log_type="Test", message_id=msg_id)
     assert len(captured) == 1
-    assert 'suppressed_count' not in captured[0]
+    assert "suppressed_count" not in captured[0]
 
     # Make num_suppressed calls that will be suppressed
     for _ in range(num_suppressed):
@@ -139,13 +142,13 @@ def test_console_suppression_count_accuracy(num_suppressed: int):
 
     obj.log("after_suppression", log_type="Test", message_id=msg_id)
     assert len(captured) == 2
-    assert captured[1]['suppressed_count'] == num_suppressed
+    assert captured[1]["suppressed_count"] == num_suppressed
 
     # Counter should be reset
     obj._last_console_display_time[msg_id] = 0
     obj.log("clean", log_type="Test", message_id=msg_id)
     assert len(captured) == 3
-    assert 'suppressed_count' not in captured[2]
+    assert "suppressed_count" not in captured[2]
 
 
 # **Feature: session-logging-improvements, Property 5: Suppression Counter Accuracy**
@@ -172,7 +175,7 @@ def test_console_and_backend_counters_are_independent(
         console_captured.append(dict(log_data))
 
     obj = ConcreteDebuggable(
-        logger={'backend': backend_logger, 'console': console_logger},
+        logger={"backend": backend_logger, "console": console_logger},
         always_add_logging_based_logger=False,
         logging_rate_limit=1000.0,
         console_display_rate_limit=1000.0,
@@ -209,7 +212,7 @@ def test_console_and_backend_counters_are_independent(
     obj.log("backend_through", log_type="Test", message_id=msg_id)
 
     assert len(backend_captured) == 2
-    assert backend_captured[1]['suppressed_count'] == backend_suppressed
+    assert backend_captured[1]["suppressed_count"] == backend_suppressed
     # Console should still be at 1 (blocked)
     assert len(console_captured) == 1
 
@@ -223,8 +226,8 @@ def test_console_and_backend_counters_are_independent(
     assert len(console_captured) == 2
     # Console was suppressed for: backend_suppressed (from the shared loop) + 1 (from the backend_through call)
     expected_console_suppressed = backend_suppressed + 1
-    assert console_captured[1]['suppressed_count'] == expected_console_suppressed
+    assert console_captured[1]["suppressed_count"] == expected_console_suppressed
 
     # Backend should have no suppression count (was just reset)
     assert len(backend_captured) == 3
-    assert 'suppressed_count' not in backend_captured[2]
+    assert "suppressed_count" not in backend_captured[2]

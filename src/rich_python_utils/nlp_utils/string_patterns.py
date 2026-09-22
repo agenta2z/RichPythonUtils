@@ -35,24 +35,24 @@ from typing import List, Optional, Pattern, Tuple
 
 # Day name patterns (abbreviated and full)
 DAY_NAME_PATTERNS = [
-    r'\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b',                    # Abbreviated
-    r'\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b',  # Full
+    r"\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b",  # Abbreviated
+    r"\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b",  # Full
 ]
 
 # Month name patterns (abbreviated and full)
 MONTH_NAME_PATTERNS = [
-    r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b',  # Abbreviated
-    r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\b',  # Full
+    r"\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b",  # Abbreviated
+    r"\b(January|February|March|April|May|June|July|August|September|October|November|December)\b",  # Full
 ]
 
 # Date format patterns
 DATE_FORMAT_PATTERNS = [
-    r'\b\d{1,2}/\d{1,2}/\d{2,4}\b',      # MM/DD/YYYY or DD/MM/YYYY
-    r'\b\d{1,2}-\d{1,2}-\d{2,4}\b',      # MM-DD-YYYY or DD-MM-YYYY
-    r'\b\d{4}-\d{2}-\d{2}\b',            # ISO: YYYY-MM-DD
-    r'\b\d{1,2}\.\d{1,2}\.\d{2,4}\b',    # DD.MM.YYYY (European)
-    r'\b\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b',  # 6 Jan, 25 Dec
-    r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\b',  # Jan 6, Dec 25
+    r"\b\d{1,2}/\d{1,2}/\d{2,4}\b",  # MM/DD/YYYY or DD/MM/YYYY
+    r"\b\d{1,2}-\d{1,2}-\d{2,4}\b",  # MM-DD-YYYY or DD-MM-YYYY
+    r"\b\d{4}-\d{2}-\d{2}\b",  # ISO: YYYY-MM-DD
+    r"\b\d{1,2}\.\d{1,2}\.\d{2,4}\b",  # DD.MM.YYYY (European)
+    r"\b\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b",  # 6 Jan, 25 Dec
+    r"\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\b",  # Jan 6, Dec 25
 ]
 
 # =============================================================================
@@ -60,10 +60,10 @@ DATE_FORMAT_PATTERNS = [
 # =============================================================================
 
 TIME_PATTERNS = [
-    r'\b\d{1,2}:\d{2}\s*(AM|PM|am|pm)\b',     # 10:30 AM, 2:00 pm
-    r'\b\d{1,2}:\d{2}:\d{2}\b',               # 14:30:00 (with seconds)
-    r'\b\d{1,2}:\d{2}\b',                      # 14:30 (24-hour without AM/PM)
-    r'\b\d{1,2}\s*(AM|PM|am|pm)\b',           # 10 AM, 2 pm (without minutes)
+    r"\b\d{1,2}:\d{2}\s*(AM|PM|am|pm)\b",  # 10:30 AM, 2:00 pm
+    r"\b\d{1,2}:\d{2}:\d{2}\b",  # 14:30:00 (with seconds)
+    r"\b\d{1,2}:\d{2}\b",  # 14:30 (24-hour without AM/PM)
+    r"\b\d{1,2}\s*(AM|PM|am|pm)\b",  # 10 AM, 2 pm (without minutes)
 ]
 
 # =============================================================================
@@ -72,55 +72,55 @@ TIME_PATTERNS = [
 
 # Travel-related counts
 TRAVEL_COUNT_PATTERNS = [
-    r'\b\d+\s+(traveler|travelers)\b',
-    r'\b\d+\s+(guest|guests)\b',
-    r'\b\d+\s+(adult|adults)\b',
-    r'\b\d+\s+(child|children)\b',
-    r'\b\d+\s+(infant|infants)\b',
-    r'\b\d+\s+(passenger|passengers)\b',
-    r'\b\d+\s+(person|persons|people)\b',
-    r'\b\d+\s+(room|rooms)\b',
-    r'\b\d+\s+(night|nights)\b',
-    r'\b\d+\s+(day|days)\b',
-    r'\b\d+\s+(seat|seats)\b',
-    r'\b\d+\s+(bag|bags|baggage)\b',
+    r"\b\d+\s+(traveler|travelers)\b",
+    r"\b\d+\s+(guest|guests)\b",
+    r"\b\d+\s+(adult|adults)\b",
+    r"\b\d+\s+(child|children)\b",
+    r"\b\d+\s+(infant|infants)\b",
+    r"\b\d+\s+(passenger|passengers)\b",
+    r"\b\d+\s+(person|persons|people)\b",
+    r"\b\d+\s+(room|rooms)\b",
+    r"\b\d+\s+(night|nights)\b",
+    r"\b\d+\s+(day|days)\b",
+    r"\b\d+\s+(seat|seats)\b",
+    r"\b\d+\s+(bag|bags|baggage)\b",
 ]
 
 # Shopping/E-commerce counts
 SHOPPING_COUNT_PATTERNS = [
-    r'\b\d+\s+(item|items)\b',
-    r'\b\d+\s+(product|products)\b',
-    r'\b\d+\s+(result|results)\b',
-    r'\b\d+\s+(match|matches)\b',
-    r'\b\d+\s+(review|reviews)\b',
-    r'\b\d+\s+(rating|ratings)\b',
-    r'\b\d+\s+(star|stars)\b',
-    r'\b\d+\s+(order|orders)\b',
-    r'\b\d+\s+(listing|listings)\b',
+    r"\b\d+\s+(item|items)\b",
+    r"\b\d+\s+(product|products)\b",
+    r"\b\d+\s+(result|results)\b",
+    r"\b\d+\s+(match|matches)\b",
+    r"\b\d+\s+(review|reviews)\b",
+    r"\b\d+\s+(rating|ratings)\b",
+    r"\b\d+\s+(star|stars)\b",
+    r"\b\d+\s+(order|orders)\b",
+    r"\b\d+\s+(listing|listings)\b",
 ]
 
 # General quantity patterns
 GENERAL_COUNT_PATTERNS = [
-    r'\b\d+\s+(message|messages)\b',
-    r'\b\d+\s+(notification|notifications)\b',
-    r'\b\d+\s+(comment|comments)\b',
-    r'\b\d+\s+(reply|replies)\b',
-    r'\b\d+\s+(like|likes)\b',
-    r'\b\d+\s+(view|views)\b',
-    r'\b\d+\s+(follower|followers)\b',
-    r'\b\d+\s+(following)\b',
-    r'\b\d+\s+(post|posts)\b',
-    r'\b\d+\s+(photo|photos)\b',
-    r'\b\d+\s+(video|videos)\b',
-    r'\b\d+\s+(file|files)\b',
-    r'\b\d+\s+(download|downloads)\b',
-    r'\b\d+\s+(update|updates)\b',
-    r'\b\d+\s+(hour|hours)\b',
-    r'\b\d+\s+(minute|minutes|min|mins)\b',
-    r'\b\d+\s+(second|seconds|sec|secs)\b',
-    r'\b\d+\s+(week|weeks)\b',
-    r'\b\d+\s+(month|months)\b',
-    r'\b\d+\s+(year|years)\b',
+    r"\b\d+\s+(message|messages)\b",
+    r"\b\d+\s+(notification|notifications)\b",
+    r"\b\d+\s+(comment|comments)\b",
+    r"\b\d+\s+(reply|replies)\b",
+    r"\b\d+\s+(like|likes)\b",
+    r"\b\d+\s+(view|views)\b",
+    r"\b\d+\s+(follower|followers)\b",
+    r"\b\d+\s+(following)\b",
+    r"\b\d+\s+(post|posts)\b",
+    r"\b\d+\s+(photo|photos)\b",
+    r"\b\d+\s+(video|videos)\b",
+    r"\b\d+\s+(file|files)\b",
+    r"\b\d+\s+(download|downloads)\b",
+    r"\b\d+\s+(update|updates)\b",
+    r"\b\d+\s+(hour|hours)\b",
+    r"\b\d+\s+(minute|minutes|min|mins)\b",
+    r"\b\d+\s+(second|seconds|sec|secs)\b",
+    r"\b\d+\s+(week|weeks)\b",
+    r"\b\d+\s+(month|months)\b",
+    r"\b\d+\s+(year|years)\b",
 ]
 
 # =============================================================================
@@ -128,15 +128,15 @@ GENERAL_COUNT_PATTERNS = [
 # =============================================================================
 
 CURRENCY_PATTERNS = [
-    r'\$\d+(?:,\d{3})*(?:\.\d{2})?\b',       # $299, $1,299, $299.99
-    r'€\d+(?:,\d{3})*(?:\.\d{2})?\b',        # EUR150, EUR1,500.00
-    r'£\d+(?:,\d{3})*(?:\.\d{2})?\b',        # GBP99, GBP1,299.99
-    r'¥\d+(?:,\d{3})*\b',                     # JPY/CNY
-    r'₹\d+(?:,\d{3})*(?:\.\d{2})?\b',        # INR
-    r'\b\d+(?:,\d{3})*\.\d{2}\b',             # 299.99 (decimal price without symbol)
-    r'\bUSD\s*\d+(?:,\d{3})*(?:\.\d{2})?\b', # USD 299
-    r'\bEUR\s*\d+(?:,\d{3})*(?:\.\d{2})?\b', # EUR 150
-    r'\bGBP\s*\d+(?:,\d{3})*(?:\.\d{2})?\b', # GBP 99
+    r"\$\d+(?:,\d{3})*(?:\.\d{2})?\b",  # $299, $1,299, $299.99
+    r"€\d+(?:,\d{3})*(?:\.\d{2})?\b",  # EUR150, EUR1,500.00
+    r"£\d+(?:,\d{3})*(?:\.\d{2})?\b",  # GBP99, GBP1,299.99
+    r"¥\d+(?:,\d{3})*\b",  # JPY/CNY
+    r"₹\d+(?:,\d{3})*(?:\.\d{2})?\b",  # INR
+    r"\b\d+(?:,\d{3})*\.\d{2}\b",  # 299.99 (decimal price without symbol)
+    r"\bUSD\s*\d+(?:,\d{3})*(?:\.\d{2})?\b",  # USD 299
+    r"\bEUR\s*\d+(?:,\d{3})*(?:\.\d{2})?\b",  # EUR 150
+    r"\bGBP\s*\d+(?:,\d{3})*(?:\.\d{2})?\b",  # GBP 99
 ]
 
 # =============================================================================
@@ -144,9 +144,9 @@ CURRENCY_PATTERNS = [
 # =============================================================================
 
 RANGE_PATTERNS = [
-    r'\b\d+\s*[-–—]\s*\d+\b',                 # 6-8, 10 - 15, 1–5
-    r'\b\d+\s+to\s+\d+\b',                    # 6 to 8
-    r'\b\d+\s*-\s*\d+\s*(night|nights|day|days|hour|hours)\b',  # 2-3 nights
+    r"\b\d+\s*[-–—]\s*\d+\b",  # 6-8, 10 - 15, 1–5
+    r"\b\d+\s+to\s+\d+\b",  # 6 to 8
+    r"\b\d+\s*-\s*\d+\s*(night|nights|day|days|hour|hours)\b",  # 2-3 nights
 ]
 
 # =============================================================================
@@ -154,9 +154,9 @@ RANGE_PATTERNS = [
 # =============================================================================
 
 PERCENTAGE_PATTERNS = [
-    r'\b\d+(?:\.\d+)?%',                      # 50%, 25.5%
-    r'\b\d+(?:\.\d+)?\s*percent\b',           # 50 percent
-    r'\b\d+%\s*off\b',                        # 25% off
+    r"\b\d+(?:\.\d+)?%",  # 50%, 25.5%
+    r"\b\d+(?:\.\d+)?\s*percent\b",  # 50 percent
+    r"\b\d+%\s*off\b",  # 25% off
 ]
 
 # =============================================================================
@@ -164,13 +164,13 @@ PERCENTAGE_PATTERNS = [
 # =============================================================================
 
 MISC_DYNAMIC_PATTERNS = [
-    r'\b\d+\s*(?:mi|km|miles|kilometers)\s+away\b',  # Distance: "5 mi away"
-    r'\bin\s+\d+\s*(min|minute|minutes|hour|hours)\b',  # "in 5 minutes"
-    r'\b\d+\s*(min|minute|minutes)\s+ago\b',  # "5 minutes ago"
-    r'\b\d+\s*(hour|hours)\s+ago\b',          # "2 hours ago"
-    r'\b\d+\s*(day|days)\s+ago\b',            # "3 days ago"
-    r'\blast\s+\d+\s*(day|days|week|weeks|month|months)\b',  # "last 7 days"
-    r'\bnext\s+\d+\s*(day|days|week|weeks|month|months)\b',  # "next 30 days"
+    r"\b\d+\s*(?:mi|km|miles|kilometers)\s+away\b",  # Distance: "5 mi away"
+    r"\bin\s+\d+\s*(min|minute|minutes|hour|hours)\b",  # "in 5 minutes"
+    r"\b\d+\s*(min|minute|minutes)\s+ago\b",  # "5 minutes ago"
+    r"\b\d+\s*(hour|hours)\s+ago\b",  # "2 hours ago"
+    r"\b\d+\s*(day|days)\s+ago\b",  # "3 days ago"
+    r"\blast\s+\d+\s*(day|days|week|weeks|month|months)\b",  # "last 7 days"
+    r"\bnext\s+\d+\s*(day|days|week|weeks|month|months)\b",  # "next 30 days"
 ]
 
 # =============================================================================
@@ -178,30 +178,30 @@ MISC_DYNAMIC_PATTERNS = [
 # =============================================================================
 
 PATTERN_CATEGORIES = {
-    'date': DAY_NAME_PATTERNS + MONTH_NAME_PATTERNS + DATE_FORMAT_PATTERNS,
-    'time': TIME_PATTERNS,
-    'travel_count': TRAVEL_COUNT_PATTERNS,
-    'shopping_count': SHOPPING_COUNT_PATTERNS,
-    'general_count': GENERAL_COUNT_PATTERNS,
-    'currency': CURRENCY_PATTERNS,
-    'range': RANGE_PATTERNS,
-    'percentage': PERCENTAGE_PATTERNS,
-    'misc': MISC_DYNAMIC_PATTERNS,
+    "date": DAY_NAME_PATTERNS + MONTH_NAME_PATTERNS + DATE_FORMAT_PATTERNS,
+    "time": TIME_PATTERNS,
+    "travel_count": TRAVEL_COUNT_PATTERNS,
+    "shopping_count": SHOPPING_COUNT_PATTERNS,
+    "general_count": GENERAL_COUNT_PATTERNS,
+    "currency": CURRENCY_PATTERNS,
+    "range": RANGE_PATTERNS,
+    "percentage": PERCENTAGE_PATTERNS,
+    "misc": MISC_DYNAMIC_PATTERNS,
 }
 
 # All patterns combined
 ALL_DYNAMIC_PATTERNS = (
-    DAY_NAME_PATTERNS +
-    MONTH_NAME_PATTERNS +
-    DATE_FORMAT_PATTERNS +
-    TIME_PATTERNS +
-    TRAVEL_COUNT_PATTERNS +
-    SHOPPING_COUNT_PATTERNS +
-    GENERAL_COUNT_PATTERNS +
-    CURRENCY_PATTERNS +
-    RANGE_PATTERNS +
-    PERCENTAGE_PATTERNS +
-    MISC_DYNAMIC_PATTERNS
+    DAY_NAME_PATTERNS
+    + MONTH_NAME_PATTERNS
+    + DATE_FORMAT_PATTERNS
+    + TIME_PATTERNS
+    + TRAVEL_COUNT_PATTERNS
+    + SHOPPING_COUNT_PATTERNS
+    + GENERAL_COUNT_PATTERNS
+    + CURRENCY_PATTERNS
+    + RANGE_PATTERNS
+    + PERCENTAGE_PATTERNS
+    + MISC_DYNAMIC_PATTERNS
 )
 
 # =============================================================================
@@ -237,6 +237,7 @@ def _get_compiled_category(category: str) -> List[Pattern]:
 # Detection Functions
 # =============================================================================
 
+
 def contains_date(value: str) -> bool:
     """
     Check if string contains date-related content.
@@ -260,7 +261,7 @@ def contains_date(value: str) -> bool:
         >>> contains_date("Search flights")
         False
     """
-    for pattern in _get_compiled_category('date'):
+    for pattern in _get_compiled_category("date"):
         if pattern.search(value):
             return True
     return False
@@ -287,7 +288,7 @@ def contains_time(value: str) -> bool:
         >>> contains_time("Select time")
         False
     """
-    for pattern in _get_compiled_category('time'):
+    for pattern in _get_compiled_category("time"):
         if pattern.search(value):
             return True
     return False
@@ -316,7 +317,7 @@ def contains_count_with_unit(value: str) -> bool:
         >>> contains_count_with_unit("Add travelers")
         False
     """
-    for category in ['travel_count', 'shopping_count', 'general_count']:
+    for category in ["travel_count", "shopping_count", "general_count"]:
         for pattern in _get_compiled_category(category):
             if pattern.search(value):
                 return True
@@ -345,7 +346,7 @@ def contains_currency(value: str) -> bool:
         >>> contains_currency("View prices")
         False
     """
-    for pattern in _get_compiled_category('currency'):
+    for pattern in _get_compiled_category("currency"):
         if pattern.search(value):
             return True
     return False
@@ -373,7 +374,7 @@ def contains_numeric_range(value: str) -> bool:
         >>> contains_numeric_range("Select dates")
         False
     """
-    for pattern in _get_compiled_category('range'):
+    for pattern in _get_compiled_category("range"):
         if pattern.search(value):
             return True
     return False
@@ -401,15 +402,14 @@ def contains_percentage(value: str) -> bool:
         >>> contains_percentage("Best deals")
         False
     """
-    for pattern in _get_compiled_category('percentage'):
+    for pattern in _get_compiled_category("percentage"):
         if pattern.search(value):
             return True
     return False
 
 
 def contains_dynamic_content(
-    value: str,
-    categories: Optional[List[str]] = None
+    value: str, categories: Optional[List[str]] = None
 ) -> bool:
     """
     Check if string contains any dynamic/personalized content.

@@ -3,6 +3,7 @@
 Provides the SessionInfo dataclass with common session tracking fields
 used by any service that manages sessions.
 """
+
 from dataclasses import dataclass
 
 
@@ -17,6 +18,7 @@ class SessionInfo:
         session_type: Type/variant of session (e.g. agent type, service type).
         initialized: True once the session's primary resource is created and locked.
     """
+
     session_id: str
     created_at: float
     last_active: float

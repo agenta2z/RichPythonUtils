@@ -4,25 +4,28 @@ error handlers, and WorkflowAborted.
 Covers backward compatibility (plain steps with no new features) and
 each enhancement in isolation and in combination.
 """
-import pytest
-from attr import attrs, attrib
 
-from rich_python_utils.common_objects.workflow.workflow import Workflow
+import pytest
+from attr import attrib, attrs
 from rich_python_utils.common_objects.workflow.common.exceptions import WorkflowAborted
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
+)
+from rich_python_utils.common_objects.workflow.workflow import Workflow
 
 
 # ---------------------------------------------------------------------------
 # _StepWrapper — allows attaching arbitrary attributes to a callable
 # ---------------------------------------------------------------------------
 
+
 class _StepWrapper:
     """Wraps a callable so per-step attributes can be attached."""
 
     def __init__(self, fn, **kwargs):
         self._fn = fn
-        self.__name__ = getattr(fn, '__name__', str(fn))
-        self.__module__ = getattr(fn, '__module__', None)
+        self.__name__ = getattr(fn, "__name__", str(fn))
+        self.__module__ = getattr(fn, "__module__", None)
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -33,6 +36,7 @@ class _StepWrapper:
 # ---------------------------------------------------------------------------
 # Concrete Workflow subclass for testing
 # ---------------------------------------------------------------------------
+
 
 @attrs(slots=False)
 class SimpleWorkflow(Workflow):
@@ -46,6 +50,7 @@ class SimpleWorkflow(Workflow):
 # 1. Backward compatibility — no enhancements used
 # ---------------------------------------------------------------------------
 
+
 class TestBackwardCompatibility:
     """Existing Workflow behaviour must be identical when no enhancements
     are configured (no state, no loops, no named steps)."""
@@ -55,11 +60,11 @@ class TestBackwardCompatibility:
         calls = []
 
         def s0(x):
-            calls.append(('s0', x))
+            calls.append(("s0", x))
             return x + 1
 
         def s1(x):
-            calls.append(('s1', x))
+            calls.append(("s1", x))
             return x * 2
 
         w = SimpleWorkflow(
@@ -67,7 +72,7 @@ class TestBackwardCompatibility:
             result_pass_down_mode=ResultPassDownMode.NoPassDown,
         )
         result = w.run(3)
-        assert calls == [('s0', 3), ('s1', 3)]
+        assert calls == [("s0", 3), ("s1", 3)]
         assert result == 6
 
     def test_plain_steps_result_as_first_arg(self):
@@ -116,6 +121,7 @@ class TestBackwardCompatibility:
 # 2. Named Steps
 # ---------------------------------------------------------------------------
 
+
 class TestNamedSteps:
     """Step names surface in hooks and error messages."""
 
@@ -134,14 +140,13 @@ class TestNamedSteps:
 
         @attrs(slots=False)
         class HookWorkflow(SimpleWorkflow):
-            def _on_step_complete(self, result, step_name, step_index,
-                                  state, *args, **kwargs):
+            def _on_step_complete(
+                self, result, step_name, step_index, state, *args, **kwargs
+            ):
                 names.append(step_name)
 
-        s0 = _StepWrapper(lambda x: x, name="alpha",
-                          update_state=lambda st, r: st)
-        s1 = _StepWrapper(lambda x: x, name="beta",
-                          update_state=lambda st, r: st)
+        s0 = _StepWrapper(lambda x: x, name="alpha", update_state=lambda st, r: st)
+        s1 = _StepWrapper(lambda x: x, name="beta", update_state=lambda st, r: st)
 
         w = HookWorkflow(steps=[s0, s1])
         w.run(1)
@@ -152,12 +157,12 @@ class TestNamedSteps:
 # 3. Flow State
 # ---------------------------------------------------------------------------
 
+
 class TestFlowState:
     """State initialization, updating, and accumulation across steps."""
 
     def test_state_initialized_when_update_state_present(self):
-        step = _StepWrapper(lambda x: x,
-                            update_state=lambda st, r: st)
+        step = _StepWrapper(lambda x: x, update_state=lambda st, r: st)
         w = SimpleWorkflow(steps=[step])
         w.run(0)
         assert w._state is not None
@@ -175,19 +180,18 @@ class TestFlowState:
             def _init_state(self):
                 return {"counter": 0}
 
-        step = _StepWrapper(lambda x: x,
-                            update_state=lambda st, r: st)
+        step = _StepWrapper(lambda x: x, update_state=lambda st, r: st)
         w = CustomStateWorkflow(steps=[step])
         w.run(0)
         assert w._state == {"counter": 0}
 
     def test_state_accumulates_across_steps(self):
         def updater0(state, result):
-            state['vals'] = state.get('vals', []) + [result]
+            state["vals"] = state.get("vals", []) + [result]
             return state
 
         def updater1(state, result):
-            state['vals'] = state.get('vals', []) + [result]
+            state["vals"] = state.get("vals", []) + [result]
             return state
 
         s0 = _StepWrapper(lambda x: x + 1, update_state=updater0)
@@ -198,7 +202,7 @@ class TestFlowState:
             result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         w.run(10)
-        assert w._state['vals'] == [11, 13]
+        assert w._state["vals"] == [11, 13]
 
     def test_update_state_delegates_to_per_step(self):
         """Per-step update_state attribute is called by _update_state."""
@@ -206,19 +210,20 @@ class TestFlowState:
 
         def my_updater(state, result):
             called_with.append((dict(state), result))
-            state['seen'] = True
+            state["seen"] = True
             return state
 
         step = _StepWrapper(lambda x: x * 2, update_state=my_updater)
         w = SimpleWorkflow(steps=[step])
         w.run(5)
         assert called_with == [({}, 10)]
-        assert w._state == {'seen': True}
+        assert w._state == {"seen": True}
 
 
 # ---------------------------------------------------------------------------
 # 4. Loop Segments
 # ---------------------------------------------------------------------------
+
 
 class TestLoopSegments:
     """Loop-back mechanism: loop_back_to, loop_condition, max_loop_iterations."""
@@ -232,10 +237,10 @@ class TestLoopSegments:
             return x
 
         def should_loop(state, result):
-            return state.get('count', 0) < 3
+            return state.get("count", 0) < 3
 
         def updater(state, result):
-            state['count'] = state.get('count', 0) + 1
+            state["count"] = state.get("count", 0) + 1
             return state
 
         s0 = _StepWrapper(step0, update_state=updater)
@@ -263,16 +268,15 @@ class TestLoopSegments:
         iterations = [0]
 
         def updater(state, result):
-            state['n'] = state.get('n', 0) + 1
+            state["n"] = state.get("n", 0) + 1
             return state
 
-        s0 = _StepWrapper(lambda x: x, name="start",
-                          update_state=updater)
+        s0 = _StepWrapper(lambda x: x, name="start", update_state=updater)
         s1 = _StepWrapper(
             lambda x: x,
             update_state=lambda st, r: st,
             loop_back_to="start",
-            loop_condition=lambda st, r: st.get('n', 0) < 2,
+            loop_condition=lambda st, r: st.get("n", 0) < 2,
             max_loop_iterations=5,
         )
 
@@ -280,12 +284,11 @@ class TestLoopSegments:
         w.run(0)
         # s0 updater increments n: initial → n=1, loop → n=2
         # s1 checks n<2: True at n=1 (loop back), False at n=2 (exit)
-        assert w._state['n'] == 2
+        assert w._state["n"] == 2
 
     def test_loop_max_iterations_respected(self):
         """Loop stops after max_loop_iterations even if condition is True."""
-        s0 = _StepWrapper(lambda x: x,
-                          update_state=lambda st, r: st)
+        s0 = _StepWrapper(lambda x: x, update_state=lambda st, r: st)
         s1 = _StepWrapper(
             lambda x: x,
             update_state=lambda st, r: st,
@@ -305,8 +308,7 @@ class TestLoopSegments:
         def on_exhausted(state, result):
             exhausted_calls.append(True)
 
-        s0 = _StepWrapper(lambda x: x,
-                          update_state=lambda st, r: st)
+        s0 = _StepWrapper(lambda x: x, update_state=lambda st, r: st)
         s1 = _StepWrapper(
             lambda x: x,
             update_state=lambda st, r: st,
@@ -346,17 +348,18 @@ class TestLoopSegments:
 
         @attrs(slots=False)
         class TrackingWorkflow(SimpleWorkflow):
-            def _on_step_complete(self, result, step_name, step_index,
-                                  state, *args, **kwargs):
+            def _on_step_complete(
+                self, result, step_name, step_index, state, *args, **kwargs
+            ):
                 complete_names.append(step_name)
 
-        s0 = _StepWrapper(lambda: None, name="A",
-                          update_state=lambda st, r: st)
+        s0 = _StepWrapper(lambda: None, name="A", update_state=lambda st, r: st)
         s1 = _StepWrapper(
-            lambda: None, name="B",
-            update_state=lambda st, r: {**st, 'n': st.get('n', 0) + 1},
+            lambda: None,
+            name="B",
+            update_state=lambda st, r: {**st, "n": st.get("n", 0) + 1},
             loop_back_to="A",
-            loop_condition=lambda st, r: st.get('n', 0) < 2,
+            loop_condition=lambda st, r: st.get("n", 0) < 2,
             max_loop_iterations=5,
         )
 
@@ -389,11 +392,13 @@ class TestLoopSegments:
 # 5. WorkflowAborted & _handle_abort
 # ---------------------------------------------------------------------------
 
+
 class TestWorkflowAborted:
     """WorkflowAborted exception and _handle_abort hook."""
 
     def test_abort_from_error_handler(self):
         """Error handler raises WorkflowAborted → _handle_abort is called."""
+
         def failing_step():
             raise RuntimeError("boom")
 
@@ -423,10 +428,12 @@ class TestWorkflowAborted:
 
     def test_abort_from_on_step_complete(self):
         """WorkflowAborted raised in _on_step_complete is caught."""
+
         @attrs(slots=False)
         class AbortOnComplete(SimpleWorkflow):
-            def _on_step_complete(self, result, step_name, step_index,
-                                  state, *args, **kwargs):
+            def _on_step_complete(
+                self, result, step_name, step_index, state, *args, **kwargs
+            ):
                 raise WorkflowAborted(
                     step_name=step_name, partial_result="aborted_result"
                 )
@@ -451,7 +458,7 @@ class TestWorkflowAborted:
         s0 = _StepWrapper(lambda: None, update_state=lambda st, r: st)
         s1 = _StepWrapper(
             lambda: None,
-            update_state=lambda st, r: {**st, 'x': True},
+            update_state=lambda st, r: {**st, "x": True},
             loop_back_to=0,
             loop_condition=lambda st, r: True,
             max_loop_iterations=1,
@@ -465,7 +472,7 @@ class TestWorkflowAborted:
 
         w = AbortWorkflow(steps=[s0, s1])
         result = w.run()
-        assert result['x'] is True
+        assert result["x"] is True
 
     def test_default_handle_abort_returns_step_result(self):
         """Default _handle_abort returns step_result."""
@@ -476,8 +483,7 @@ class TestWorkflowAborted:
         def abort_handler(error, step_result, state, step_name, step_index):
             raise WorkflowAborted(partial_result="ignored")
 
-        s0 = _StepWrapper(lambda: "first_result",
-                          update_state=lambda st, r: st)
+        s0 = _StepWrapper(lambda: "first_result", update_state=lambda st, r: st)
         s1 = _StepWrapper(
             failing_step,
             error_handler=abort_handler,
@@ -494,8 +500,7 @@ class TestWorkflowAborted:
 
     def test_workflow_aborted_attributes(self):
         exc = WorkflowAborted(
-            message="test", step_name="step_x", step_index=3,
-            partial_result={"data": 1}
+            message="test", step_name="step_x", step_index=3, partial_result={"data": 1}
         )
         assert str(exc) == "test"
         assert exc.step_name == "step_x"
@@ -507,12 +512,14 @@ class TestWorkflowAborted:
 # 6. Per-step Error Handler
 # ---------------------------------------------------------------------------
 
+
 class TestPerStepErrorHandler:
     """Per-step error_handler attribute allows recovering from step errors."""
 
     def test_error_handler_return_continues_execution(self):
         """Error handler returns a value → becomes step_result, next step
         executes."""
+
         def failing():
             raise ValueError("oops")
 
@@ -532,14 +539,16 @@ class TestPerStepErrorHandler:
     def test_error_handler_reraise_propagates(self):
         """Error handler re-raises → exception propagates to caller
         (not WorkflowAborted, so not caught by outer try)."""
+
         def failing():
             raise ValueError("oops")
 
         def reraise_handler(error, step_result, state, step_name, step_index):
             raise error
 
-        s0 = _StepWrapper(failing, error_handler=reraise_handler,
-                          update_state=lambda st, r: st)
+        s0 = _StepWrapper(
+            failing, error_handler=reraise_handler, update_state=lambda st, r: st
+        )
 
         w = SimpleWorkflow(steps=[s0])
         with pytest.raises(ValueError, match="oops"):
@@ -547,6 +556,7 @@ class TestPerStepErrorHandler:
 
     def test_no_error_handler_preserves_default_reraise(self):
         """Steps without error_handler raise normally (backward compat)."""
+
         def failing(x):
             raise RuntimeError("step failed")
 
@@ -563,17 +573,17 @@ class TestPerStepErrorHandler:
             raise ValueError("test_error")
 
         def capture_handler(error, step_result, state, step_name, step_index):
-            captured['error'] = error
-            captured['step_result'] = step_result
-            captured['state'] = state
-            captured['step_name'] = step_name
-            captured['step_index'] = step_index
+            captured["error"] = error
+            captured["step_result"] = step_result
+            captured["state"] = state
+            captured["step_name"] = step_name
+            captured["step_index"] = step_index
             return "handled"
 
         s0 = _StepWrapper(
             lambda: "first",
             name="s0",
-            update_state=lambda st, r: {**st, 'val': r},
+            update_state=lambda st, r: {**st, "val": r},
         )
         s1 = _StepWrapper(
             failing,
@@ -588,17 +598,18 @@ class TestPerStepErrorHandler:
         )
         w.run()
 
-        assert isinstance(captured['error'], ValueError)
-        assert str(captured['error']) == "test_error"
-        assert captured['step_result'] == "first"  # result from s0
-        assert captured['state'] == {'val': 'first'}
-        assert captured['step_name'] == "s1"
-        assert captured['step_index'] == 1
+        assert isinstance(captured["error"], ValueError)
+        assert str(captured["error"]) == "test_error"
+        assert captured["step_result"] == "first"  # result from s0
+        assert captured["state"] == {"val": "first"}
+        assert captured["step_name"] == "s1"
+        assert captured["step_index"] == 1
 
 
 # ---------------------------------------------------------------------------
 # 7. Integration — combined features
 # ---------------------------------------------------------------------------
+
 
 class TestIntegration:
     """Multiple enhancements working together."""
@@ -618,15 +629,15 @@ class TestIntegration:
             return eval_results[-1]
 
         def collect_updater(state, result):
-            state['items'] = list(items_collected)
+            state["items"] = list(items_collected)
             return state
 
         def eval_updater(state, result):
-            state['eval_count'] = len(eval_results)
+            state["eval_count"] = len(eval_results)
             return state
 
         def insufficient(state, result):
-            return len(state.get('items', [])) < 3
+            return len(state.get("items", [])) < 3
 
         exhausted_called = [False]
 
@@ -634,15 +645,17 @@ class TestIntegration:
             exhausted_called[0] = True
             raise WorkflowAborted(
                 message="not enough",
-                partial_result={'items': state['items']},
+                partial_result={"items": state["items"]},
             )
 
         s_collect = _StepWrapper(
-            collect, name="collection",
+            collect,
+            name="collection",
             update_state=collect_updater,
         )
         s_evaluate = _StepWrapper(
-            evaluate, name="evaluation",
+            evaluate,
+            name="evaluation",
             update_state=eval_updater,
             loop_back_to="collection",
             loop_condition=insufficient,
@@ -650,7 +663,8 @@ class TestIntegration:
             on_loop_exhausted=on_exhausted,
         )
         s_process = _StepWrapper(
-            lambda: "done", name="process",
+            lambda: "done",
+            name="process",
             update_state=lambda st, r: st,
         )
 
@@ -684,9 +698,9 @@ class TestIntegration:
         s0 = _StepWrapper(lambda: "a", update_state=lambda st, r: st)
         s1 = _StepWrapper(
             lambda: "b",
-            update_state=lambda st, r: {**st, 'n': st.get('n', 0) + 1},
+            update_state=lambda st, r: {**st, "n": st.get("n", 0) + 1},
             loop_back_to=0,
-            loop_condition=lambda st, r: st.get('n', 0) < 2,
+            loop_condition=lambda st, r: st.get("n", 0) < 2,
             max_loop_iterations=5,
         )
 
@@ -699,6 +713,7 @@ class TestIntegration:
 
     def test_error_in_middle_step_with_handler(self):
         """Error in step 1 (of 3) with handler → step 2 still runs."""
+
         def step0():
             return "ok0"
 
@@ -725,16 +740,18 @@ class TestIntegration:
     def test_workflow_aborted_import_from_package(self):
         """WorkflowAborted can be imported from the workflow package."""
         from rich_python_utils.common_objects.workflow import WorkflowAborted as WA
+
         assert WA is WorkflowAborted
 
     def test_state_survives_error_recovery(self):
         """State is preserved when error handler recovers."""
+
         def updater0(state, result):
-            state['step0'] = result
+            state["step0"] = result
             return state
 
         def updater1(state, result):
-            state['step1'] = result
+            state["step1"] = result
             return state
 
         def failing():
@@ -744,13 +761,12 @@ class TestIntegration:
             return "recovered"
 
         s0 = _StepWrapper(lambda: "val0", update_state=updater0)
-        s1 = _StepWrapper(failing, error_handler=recover,
-                          update_state=updater1)
+        s1 = _StepWrapper(failing, error_handler=recover, update_state=updater1)
 
         w = SimpleWorkflow(
             steps=[s0, s1],
             result_pass_down_mode=ResultPassDownMode.NoPassDown,
         )
         w.run()
-        assert w._state['step0'] == 'val0'
-        assert w._state['step1'] == 'recovered'
+        assert w._state["step0"] == "val0"
+        assert w._state["step1"] == "recovered"

@@ -8,12 +8,14 @@ context manager protocol, and edge cases.
 Follows the same test patterns as test_memory_graph.py.
 """
 
-from rich_python_utils.service_utils.graph_service.graph_node import GraphEdge, GraphNode
+import pytest
 from rich_python_utils.service_utils.graph_service.file_graph_service import (
     FileGraphService,
 )
-
-import pytest
+from rich_python_utils.service_utils.graph_service.graph_node import (
+    GraphEdge,
+    GraphNode,
+)
 
 
 class TestFileGraphServiceNodeOperations:
@@ -49,8 +51,10 @@ class TestFileGraphServiceNodeOperations:
     def test_add_node_with_properties(self, tmp_path):
         svc = FileGraphService(base_dir=str(tmp_path))
         node = GraphNode(
-            node_id="n1", node_type="person",
-            label="Alice", properties={"age": 30, "city": "NYC"}
+            node_id="n1",
+            node_type="person",
+            label="Alice",
+            properties={"age": 30, "city": "NYC"},
         )
         svc.add_node(node)
         result = svc.get_node("n1")
@@ -112,8 +116,10 @@ class TestFileGraphServiceEdgeOperations:
         svc.add_node(GraphNode(node_id="n1", node_type="person"))
         svc.add_node(GraphNode(node_id="n2", node_type="person"))
         edge = GraphEdge(
-            source_id="n1", target_id="n2", edge_type="knows",
-            properties={"since": 2020, "strength": 0.9}
+            source_id="n1",
+            target_id="n2",
+            edge_type="knows",
+            properties={"since": 2020, "strength": 0.9},
         )
         svc.add_edge(edge)
         edges = svc.get_edges("n1")
@@ -364,14 +370,20 @@ class TestFileGraphServiceNamespaces:
     def test_default_namespace_when_none(self, tmp_path):
         svc = FileGraphService(base_dir=str(tmp_path))
         svc.add_node(GraphNode(node_id="n1", node_type="person"))
-        svc.add_node(GraphNode(node_id="n1", node_type="person", label="updated"), namespace=None)
+        svc.add_node(
+            GraphNode(node_id="n1", node_type="person", label="updated"), namespace=None
+        )
         # Both target _default namespace, so second overwrites
         assert svc.get_node("n1").label == "updated"
 
     def test_separate_namespaces(self, tmp_path):
         svc = FileGraphService(base_dir=str(tmp_path))
-        svc.add_node(GraphNode(node_id="n1", node_type="person", label="Alice"), namespace="ns1")
-        svc.add_node(GraphNode(node_id="n1", node_type="person", label="Bob"), namespace="ns2")
+        svc.add_node(
+            GraphNode(node_id="n1", node_type="person", label="Alice"), namespace="ns1"
+        )
+        svc.add_node(
+            GraphNode(node_id="n1", node_type="person", label="Bob"), namespace="ns2"
+        )
         assert svc.get_node("n1", namespace="ns1").label == "Alice"
         assert svc.get_node("n1", namespace="ns2").label == "Bob"
 
@@ -379,7 +391,10 @@ class TestFileGraphServiceNamespaces:
         svc = FileGraphService(base_dir=str(tmp_path))
         svc.add_node(GraphNode(node_id="n1", node_type="person"), namespace="ns1")
         svc.add_node(GraphNode(node_id="n2", node_type="person"), namespace="ns1")
-        svc.add_edge(GraphEdge(source_id="n1", target_id="n2", edge_type="knows"), namespace="ns1")
+        svc.add_edge(
+            GraphEdge(source_id="n1", target_id="n2", edge_type="knows"),
+            namespace="ns1",
+        )
         # Should not find edges in default namespace
         assert svc.get_edges("n1") == []
         assert len(svc.get_edges("n1", namespace="ns1")) == 1
@@ -392,7 +407,7 @@ class TestFileGraphServiceNamespaces:
         with pytest.raises(ValueError):
             svc.add_edge(
                 GraphEdge(source_id="n1", target_id="n2", edge_type="knows"),
-                namespace="ns1"  # n2 doesn't exist in ns1
+                namespace="ns1",  # n2 doesn't exist in ns1
             )
 
     def test_size_per_namespace(self, tmp_path):
@@ -414,7 +429,7 @@ class TestFileGraphServiceNamespaces:
         svc.add_node(GraphNode(node_id="n3", node_type="person"), namespace="ns2")
         svc.add_edge(
             GraphEdge(source_id="n1", target_id="n2", edge_type="knows"),
-            namespace="ns1"
+            namespace="ns1",
         )
         count = svc.clear(namespace="ns1")
         assert count == 2
@@ -448,7 +463,7 @@ class TestFileGraphServiceNamespaces:
         svc.add_node(GraphNode(node_id="n2", node_type="person"), namespace="ns1")
         svc.add_edge(
             GraphEdge(source_id="n1", target_id="n2", edge_type="knows"),
-            namespace="ns1"
+            namespace="ns1",
         )
         # Should not find neighbors in default namespace
         assert svc.get_neighbors("n1") == []
@@ -507,7 +522,7 @@ class TestFileGraphServiceLifecycle:
         svc.add_node(GraphNode(node_id="n2", node_type="person"), namespace="ns1")
         svc.add_edge(
             GraphEdge(source_id="n1", target_id="n2", edge_type="knows"),
-            namespace="ns1"
+            namespace="ns1",
         )
         stats = svc.get_stats(namespace="ns1")
         assert stats["backend"] == "file"

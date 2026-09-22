@@ -14,10 +14,7 @@ Covers:
 from pathlib import Path
 
 import pytest
-
-from rich_python_utils.string_utils.formatting.template_manager import (
-    TemplateManager,
-)
+from rich_python_utils.string_utils.formatting.template_manager import TemplateManager
 
 
 @pytest.fixture
@@ -46,18 +43,14 @@ def _make_manager(templates_dir, root_space="plan"):
 
 class TestPerFolderVersionConvention:
     def test_version_specific_file(self, templates_dir):
-        var_folder = (
-            templates_dir / "plan" / "main" / "_variables" / "task_preamble"
-        )
+        var_folder = templates_dir / "plan" / "main" / "_variables" / "task_preamble"
         var_folder.mkdir(parents=True)
         (var_folder / "aggregation.jinja2").write_text(
             "aggregation preamble", encoding="utf-8"
         )
 
         tm = _make_manager(templates_dir)
-        result = tm.load_variables(
-            {"task_preamble": "aggregation"}, root_space="plan"
-        )
+        result = tm.load_variables({"task_preamble": "aggregation"}, root_space="plan")
         assert result["task_preamble"] == "aggregation preamble"
 
     def test_default_fallback(self, templates_dir):
@@ -76,53 +69,35 @@ class TestPerFolderVersionConvention:
         assert result["task_instructions"] == "default instructions"
 
     def test_config_yaml_alias(self, templates_dir):
-        var_folder = (
-            templates_dir / "plan" / "main" / "_variables" / "task_preamble"
-        )
+        var_folder = templates_dir / "plan" / "main" / "_variables" / "task_preamble"
         var_folder.mkdir(parents=True)
-        (var_folder / "agg_v2.jinja2").write_text(
-            "aliased content", encoding="utf-8"
-        )
+        (var_folder / "agg_v2.jinja2").write_text("aliased content", encoding="utf-8")
         (var_folder / ".config.yaml").write_text(
             "aggregation: agg_v2\n", encoding="utf-8"
         )
 
         tm = _make_manager(templates_dir)
-        result = tm.load_variables(
-            {"task_preamble": "aggregation"}, root_space="plan"
-        )
+        result = tm.load_variables({"task_preamble": "aggregation"}, root_space="plan")
         assert result["task_preamble"] == "aliased content"
 
     def test_default_alias(self, templates_dir):
-        var_folder = (
-            templates_dir / "plan" / "main" / "_variables" / "task_preamble"
-        )
+        var_folder = templates_dir / "plan" / "main" / "_variables" / "task_preamble"
         var_folder.mkdir(parents=True)
-        (var_folder / "generic.jinja2").write_text(
-            "generic default", encoding="utf-8"
-        )
-        (var_folder / ".config.yaml").write_text(
-            "default: generic\n", encoding="utf-8"
-        )
+        (var_folder / "generic.jinja2").write_text("generic default", encoding="utf-8")
+        (var_folder / ".config.yaml").write_text("default: generic\n", encoding="utf-8")
 
         tm = _make_manager(templates_dir)
-        result = tm.load_variables(
-            {"task_preamble": "aggregation"}, root_space="plan"
-        )
+        result = tm.load_variables({"task_preamble": "aggregation"}, root_space="plan")
         assert result["task_preamble"] == "generic default"
 
 
 class TestFallbackToLiteral:
     def test_fallback_when_nothing_found(self, templates_dir):
-        var_folder = (
-            templates_dir / "plan" / "main" / "_variables" / "task_preamble"
-        )
+        var_folder = templates_dir / "plan" / "main" / "_variables" / "task_preamble"
         var_folder.mkdir(parents=True)
 
         tm = _make_manager(templates_dir)
-        result = tm.load_variables(
-            {"task_preamble": "aggregation"}, root_space="plan"
-        )
+        result = tm.load_variables({"task_preamble": "aggregation"}, root_space="plan")
         assert result["task_preamble"] == "aggregation", (
             "load_variables must fall back to the literal version string "
             "when no file matches"
@@ -130,19 +105,13 @@ class TestFallbackToLiteral:
 
     def test_fallback_when_folder_missing(self, templates_dir):
         tm = _make_manager(templates_dir)
-        result = tm.load_variables(
-            {"task_preamble": "aggregation"}, root_space="plan"
-        )
+        result = tm.load_variables({"task_preamble": "aggregation"}, root_space="plan")
         assert result["task_preamble"] == "aggregation"
 
     def test_empty_version_returns_empty_string(self, templates_dir):
-        var_folder = (
-            templates_dir / "plan" / "main" / "_variables" / "task_preamble"
-        )
+        var_folder = templates_dir / "plan" / "main" / "_variables" / "task_preamble"
         var_folder.mkdir(parents=True)
-        (var_folder / "default.jinja2").write_text(
-            "default content", encoding="utf-8"
-        )
+        (var_folder / "default.jinja2").write_text("default content", encoding="utf-8")
 
         tm = _make_manager(templates_dir)
         result = tm.load_variables({"task_preamble": ""}, root_space="plan")
@@ -153,23 +122,17 @@ class TestStrictMode:
     def test_at_prefix_raises_when_missing(self, templates_dir):
         tm = _make_manager(templates_dir)
         with pytest.raises(FileNotFoundError, match="@aggregation"):
-            tm.load_variables(
-                {"task_preamble": "@aggregation"}, root_space="plan"
-            )
+            tm.load_variables({"task_preamble": "@aggregation"}, root_space="plan")
 
     def test_at_prefix_resolves_when_present(self, templates_dir):
-        var_folder = (
-            templates_dir / "plan" / "main" / "_variables" / "task_preamble"
-        )
+        var_folder = templates_dir / "plan" / "main" / "_variables" / "task_preamble"
         var_folder.mkdir(parents=True)
         (var_folder / "aggregation.jinja2").write_text(
             "strict content", encoding="utf-8"
         )
 
         tm = _make_manager(templates_dir)
-        result = tm.load_variables(
-            {"task_preamble": "@aggregation"}, root_space="plan"
-        )
+        result = tm.load_variables({"task_preamble": "@aggregation"}, root_space="plan")
         assert result["task_preamble"] == "strict content"
 
 
@@ -186,19 +149,13 @@ class TestNonStringPassThrough:
     def test_dict_value_passes_through(self, templates_dir):
         tm = _make_manager(templates_dir)
         data = {"key": "value"}
-        result = tm.load_variables(
-            {"structured": data}, root_space="plan"
-        )
+        result = tm.load_variables({"structured": data}, root_space="plan")
         assert result["structured"] is data
 
     def test_none_value_with_default_version(self, templates_dir):
-        var_folder = (
-            templates_dir / "plan" / "main" / "_variables" / "task_preamble"
-        )
+        var_folder = templates_dir / "plan" / "main" / "_variables" / "task_preamble"
         var_folder.mkdir(parents=True)
-        (var_folder / "aggregation.jinja2").write_text(
-            "agg content", encoding="utf-8"
-        )
+        (var_folder / "aggregation.jinja2").write_text("agg content", encoding="utf-8")
 
         tm = _make_manager(templates_dir)
         result = tm.load_variables(
@@ -240,9 +197,7 @@ class TestBatchResolution:
 
 class TestRootSpaceCascade:
     def test_root_space_argument_overrides_active(self, templates_dir):
-        plan_folder = (
-            templates_dir / "plan" / "main" / "_variables" / "task_preamble"
-        )
+        plan_folder = templates_dir / "plan" / "main" / "_variables" / "task_preamble"
         plan_folder.mkdir(parents=True)
         (plan_folder / "aggregation.jinja2").write_text(
             "plan content", encoding="utf-8"
@@ -283,9 +238,7 @@ class TestCrossSpaceCascade:
         (global_folder / "local_search_efficiency.jinja2").write_text(
             "global version", encoding="utf-8"
         )
-        specific_folder = (
-            templates_dir / "plan" / "main" / "_variables" / "notes"
-        )
+        specific_folder = templates_dir / "plan" / "main" / "_variables" / "notes"
         specific_folder.mkdir(parents=True)
         (specific_folder / "local_search_efficiency.jinja2").write_text(
             "plan-specific version", encoding="utf-8"
@@ -319,9 +272,7 @@ class TestDotKeyNotation:
     """
 
     def test_dot_key_returns_nested_dict(self, templates_dir):
-        var_folder = (
-            templates_dir / "plan" / "main" / "_variables" / "notes"
-        )
+        var_folder = templates_dir / "plan" / "main" / "_variables" / "notes"
         var_folder.mkdir(parents=True)
         (var_folder / "local_search_efficiency.jinja2").write_text(
             "search notes content", encoding="utf-8"
@@ -353,9 +304,7 @@ class TestDotKeyNotation:
             format_template,
         )
 
-        var_folder = (
-            templates_dir / "plan" / "main" / "_variables" / "notes"
-        )
+        var_folder = templates_dir / "plan" / "main" / "_variables" / "notes"
         var_folder.mkdir(parents=True)
         (var_folder / "local_search_efficiency.jinja2").write_text(
             "## NOTES\n- Scope searches narrowly", encoding="utf-8"
@@ -410,9 +359,7 @@ class TestDotKeyNotation:
         (preamble_folder / "default.jinja2").write_text(
             "preamble content", encoding="utf-8"
         )
-        notes_folder = (
-            templates_dir / "plan" / "main" / "_variables" / "notes"
-        )
+        notes_folder = templates_dir / "plan" / "main" / "_variables" / "notes"
         notes_folder.mkdir(parents=True)
         (notes_folder / "local_search_efficiency.jinja2").write_text(
             "search notes", encoding="utf-8"
@@ -432,24 +379,18 @@ class TestDotKeyNotation:
     def test_dot_key_fallback_to_literal(self, templates_dir):
         """When file not found, dot key falls back to version string in nested dict."""
         tm = _make_manager(templates_dir)
-        result = tm.load_variables(
-            {"notes.nonexistent": None}, root_space="plan"
-        )
+        result = tm.load_variables({"notes.nonexistent": None}, root_space="plan")
         assert result["notes"]["nonexistent"] == "nonexistent"
 
 
 class TestEmptyFileSemantics:
     def test_empty_file_returns_empty_string_not_fallback(self, templates_dir):
-        var_folder = (
-            templates_dir / "plan" / "main" / "_variables" / "task_preamble"
-        )
+        var_folder = templates_dir / "plan" / "main" / "_variables" / "task_preamble"
         var_folder.mkdir(parents=True)
         (var_folder / "aggregation.jinja2").write_text("", encoding="utf-8")
 
         tm = _make_manager(templates_dir)
-        result = tm.load_variables(
-            {"task_preamble": "aggregation"}, root_space="plan"
-        )
+        result = tm.load_variables({"task_preamble": "aggregation"}, root_space="plan")
         assert result["task_preamble"] == "", (
             "Empty file should return '' (file was found), not fall back to "
             "the literal version string"

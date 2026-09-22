@@ -11,13 +11,18 @@ from __future__ import annotations
 from typing import Dict, Optional, Sequence, Tuple
 
 _registry: Dict[str, str] = {}  # alias -> "module.ClassName"
-_registry_by_category: Dict[str, Dict[str, str]] = {}  # category -> {alias -> "module.ClassName"}
-_alias_alternatives: Dict[str, Tuple[str, ...]] = {}  # alias -> tuple of alternative FQNs
+_registry_by_category: Dict[
+    str, Dict[str, str]
+] = {}  # category -> {alias -> "module.ClassName"}
+_alias_alternatives: Dict[
+    str, Tuple[str, ...]
+] = {}  # alias -> tuple of alternative FQNs
 
 
 # ---------------------------------------------------------------------------
 # Exception hierarchy
 # ---------------------------------------------------------------------------
+
 
 class RegistryError(Exception):
     """Base exception for registry-related errors."""

@@ -4,9 +4,9 @@ YAML preset loader for get_parsed_args.
 Loads preset configurations from YAML files (.yaml, .yml).
 """
 
-from typing import Dict, Any, List, Optional, Tuple
-from pathlib import Path
 import os
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 from .base import PresetLoader
 
@@ -32,7 +32,7 @@ class YamlPresetLoader(PresetLoader):
     @property
     def supported_extensions(self) -> Tuple[str, ...]:
         """Returns supported file extensions."""
-        return ('.yaml', '.yml')
+        return (".yaml", ".yml")
 
     def can_handle(self, file_path: str) -> bool:
         """
@@ -98,7 +98,7 @@ class YamlPresetLoader(PresetLoader):
             raise FileNotFoundError(f"YAML preset file not found: {file_path}")
 
         # Load YAML file
-        with open(resolved, 'r') as f:
+        with open(resolved, "r") as f:
             try:
                 data = yaml.safe_load(f)
             except yaml.YAMLError as e:
@@ -108,7 +108,9 @@ class YamlPresetLoader(PresetLoader):
             return {}
 
         if not isinstance(data, dict):
-            raise ValueError(f"YAML file must contain a dictionary, got {type(data).__name__}")
+            raise ValueError(
+                f"YAML file must contain a dictionary, got {type(data).__name__}"
+            )
 
         # Extract nested keys if specified
         if keys:

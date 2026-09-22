@@ -51,11 +51,11 @@ from collections import deque
 from typing import Any, Dict, List, Optional, Tuple
 
 import networkx as nx
-from attr import attrs, attrib
+from attr import attrib, attrs
+from rich_python_utils.service_utils.data_operation_record import DataOperationRecord
 
 from .graph_node import GraphEdge, GraphNode
 from .graph_service_base import GraphServiceBase
-from rich_python_utils.service_utils.data_operation_record import DataOperationRecord
 
 _DEFAULT_NAMESPACE = "_default"
 
@@ -122,7 +122,9 @@ class NetworkxGraphService(GraphServiceBase):
                 is_active=node.is_active,
             )
 
-    def get_node(self, node_id: str, namespace: Optional[str] = None) -> Optional[GraphNode]:
+    def get_node(
+        self, node_id: str, namespace: Optional[str] = None
+    ) -> Optional[GraphNode]:
         """
         Retrieve a node by its ID.
 
@@ -205,13 +207,11 @@ class NetworkxGraphService(GraphServiceBase):
             graph = self._graphs.get(ns)
             if graph is None or edge.source_id not in graph:
                 raise ValueError(
-                    f"Source node '{edge.source_id}' does not exist "
-                    f"in namespace '{ns}'"
+                    f"Source node '{edge.source_id}' does not exist in namespace '{ns}'"
                 )
             if edge.target_id not in graph:
                 raise ValueError(
-                    f"Target node '{edge.target_id}' does not exist "
-                    f"in namespace '{ns}'"
+                    f"Target node '{edge.target_id}' does not exist in namespace '{ns}'"
                 )
             graph.add_edge(
                 edge.source_id,
@@ -262,7 +262,9 @@ class NetworkxGraphService(GraphServiceBase):
                     for r in history_raw
                 ]
                 return GraphEdge(
-                    source_id=src, target_id=tgt, edge_type=et,
+                    source_id=src,
+                    target_id=tgt,
+                    edge_type=et,
                     properties=data.get("properties", {}),
                     history=history,
                     is_active=data.get("is_active", True),

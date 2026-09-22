@@ -1,12 +1,13 @@
 """
 Identifiable base class for objects that need a unique identifier.
 """
+
 import copy
 import uuid
 from abc import ABC
-from typing import Optional, Union, Any, Callable
+from typing import Any, Callable, Optional, Union
 
-from attr import attrs, attrib
+from attr import attrib, attrs
 
 
 @attrs(slots=False)
@@ -51,9 +52,14 @@ class Identifiable(ABC):
         >>> obj4.id
         'CustomID-v2'
     """
+
     id: Optional[Union[int, str]] = attrib(default=None, kw_only=True)
-    _auto_id_suffix: Union[bool, Callable] = attrib(default=None, kw_only=True, alias='auto_id_suffix')
-    _enable_suffix_for_initial_id : bool = attrib(default=False, kw_only=True, alias='enable_suffix_for_initial_id')
+    _auto_id_suffix: Union[bool, Callable] = attrib(
+        default=None, kw_only=True, alias="auto_id_suffix"
+    )
+    _enable_suffix_for_initial_id: bool = attrib(
+        default=False, kw_only=True, alias="enable_suffix_for_initial_id"
+    )
     _raw_id: Any = attrib(default=None, kw_only=True)
 
     def new_id(self):
@@ -85,7 +91,6 @@ class Identifiable(ABC):
         else:
             # No custom ID - generate default with UUID
             self.id = f"{self.__class__.__name__}-{uuid.uuid4().hex[:8]}"
-
 
     def __attrs_post_init__(self):
         """Initialize the ID after object creation (delegates to :meth:`_resolve_id_value`)."""
@@ -175,6 +180,7 @@ class Identifiable(ABC):
         ``self`` and ``_FRESH_ID_SKIP_TRAVERSE`` back-refs), de-duped by object identity,
         traversing dict/list/tuple/set containers. Cycle-safe."""
         import builtins
+
         seen = {builtins.id(self)}
         out = []
         stack = list(self._fresh_id_traverse_values())
@@ -199,6 +205,3 @@ class Identifiable(ABC):
         skip = type(self)._FRESH_ID_SKIP_TRAVERSE
         d = getattr(self, "__dict__", None) or {}
         return [v for k, v in d.items() if k not in skip]
-
-
-

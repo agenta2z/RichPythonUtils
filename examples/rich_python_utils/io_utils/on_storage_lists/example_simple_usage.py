@@ -15,11 +15,12 @@ Usage:
     python example_simple_usage.py
 """
 
-from pathlib import Path
-import tempfile
 import shutil
+import tempfile
+from pathlib import Path
 
 from resolve_path import resolve_path
+
 resolve_path()  # Add project src to sys.path
 
 from rich_python_utils.io_utils.on_storage_lists import OnStorageLists
@@ -39,10 +40,7 @@ def main():
     try:
         # 1. Basic Setup - Create OnStorageLists instance
         print("\n1. Creating OnStorageLists instance...")
-        storage = OnStorageLists(
-            root_path=tmpdir,
-            default_list_key='demo_list'
-        )
+        storage = OnStorageLists(root_path=tmpdir, default_list_key="demo_list")
         print(f"   [OK] Storage initialized with root: {tmpdir}")
 
         # 2. Append items to the list
@@ -51,8 +49,8 @@ def main():
             "First item",
             42,
             3.14159,
-            {'name': 'Alice', 'age': 30},
-            ['nested', 'list', 'data'],
+            {"name": "Alice", "age": 30},
+            ["nested", "list", "data"],
         ]
 
         for i, item in enumerate(items_to_add, 1):
@@ -135,14 +133,14 @@ def main():
 
         # 11. Set entire list at once
         print("\n11. Setting entire list at once...")
-        storage.set(['a', 'b', 'c', 'd', 'e'], list_key='alphabet', overwrite=True)
-        alphabet = storage.get(list_key='alphabet')
+        storage.set(["a", "b", "c", "d", "e"], list_key="alphabet", overwrite=True)
+        alphabet = storage.get(list_key="alphabet")
         print(f"   [OK] Alphabet list: {alphabet}")
 
         # 12. Update specific item
         print("\n12. Updating specific item...")
-        storage.set('Z', list_key='alphabet', index=2, overwrite=True)
-        alphabet = storage.get(list_key='alphabet')
+        storage.set("Z", list_key="alphabet", index=2, overwrite=True)
+        alphabet = storage.get(list_key="alphabet")
         print(f"   [OK] After update: {alphabet}")
 
         # 13. Custom serialization - Plain text example
@@ -156,10 +154,10 @@ def main():
 
         text_storage = OnStorageLists(
             root_path=tmpdir,
-            default_list_key='text_data',
+            default_list_key="text_data",
             read_method=read_text,
             write_method=write_text,
-            file_extension='.txt'
+            file_extension=".txt",
         )
 
         text_storage.append("Line 1")
@@ -175,9 +173,9 @@ def main():
         storage.clear()
         print(f"   [OK] After clear: {len(storage.get())} items in default list")
 
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("[OK] Example completed successfully!")
-        print("="*80 + "\n")
+        print("=" * 80 + "\n")
 
     finally:
         # Clean up temporary directory
@@ -186,11 +184,12 @@ def main():
         print("[OK] Cleanup complete")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         main()
     except Exception as e:
         print(f"\n[X] Error: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

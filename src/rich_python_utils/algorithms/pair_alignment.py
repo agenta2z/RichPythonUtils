@@ -1,15 +1,16 @@
 from collections import Counter
 from functools import partial
-from itertools import chain
-from itertools import product
-from typing import Any, Iterator
-from typing import Callable, Iterable, Union, Tuple, Mapping
+from itertools import chain, product
+from typing import Any, Callable, Iterable, Iterator, Mapping, Tuple, Union
 
 from rich_python_utils.nlp_utils.metrics.edit_distance import (
-    EditDistanceOptions, edit_distance, regular_edit_distance_based_similarity
+    edit_distance,
+    EditDistanceOptions,
+    regular_edit_distance_based_similarity,
 )
 from rich_python_utils.nlp_utils.string_sanitization import (
-    StringSanitizationOptions, StringSanitizationConfig
+    StringSanitizationConfig,
+    StringSanitizationOptions,
 )
 
 """
@@ -19,20 +20,20 @@ The `score` is not necessarily a numeric value.
 SCORED_PAIR = Tuple[
     Any,  # score
     Any,  # source
-    Any  # target
+    Any,  # target
 ]
 
 SCORED_PAIR_POST_PROCESS_FUNC = Callable[[Iterable[SCORED_PAIR]], Iterable[SCORED_PAIR]]
 
 
 def iter_best_scored_pairs_of_distinct_source(
-        scored_pairs: Iterable[SCORED_PAIR],
-        enabled_target_items: Union[Iterable, Mapping[Any, int]] = None,
-        enabled_source_items: Iterable = None,
-        include_all_tie_target_items: bool = True,
-        reversed_sort_by_scores: bool = False,
-        distinct_output_targets: bool = False,
-        identity_score: Any = None
+    scored_pairs: Iterable[SCORED_PAIR],
+    enabled_target_items: Union[Iterable, Mapping[Any, int]] = None,
+    enabled_source_items: Iterable = None,
+    include_all_tie_target_items: bool = True,
+    reversed_sort_by_scores: bool = False,
+    distinct_output_targets: bool = False,
+    identity_score: Any = None,
 ) -> Iterator[SCORED_PAIR]:
     """
     Iterates through the best scored pairs of distinct source items from a sequence of scored pairs.
@@ -156,9 +157,7 @@ def iter_best_scored_pairs_of_distinct_source(
 
     # Sort `scored_pairs` based on the sort key and reverse flag
     scored_pairs = sorted(
-        scored_pairs,
-        key=scored_pairs_sort_key,
-        reverse=reversed_sort_by_scores
+        scored_pairs, key=scored_pairs_sort_key, reverse=reversed_sort_by_scores
     )
 
     # If `identity_score` is provided, initialize visited2 set
@@ -177,19 +176,9 @@ def iter_best_scored_pairs_of_distinct_source(
         # Iterate over the `scored_pairs` and yield the best scored pairs
         for score, item1, item2 in _scored_pairs:
             if (
-                    (
-                            enabled_source_items is None or
-                            item1 in enabled_source_items
-                    ) and
-                    (
-                            item1 not in visited1
-                    ) and
-                    (
-                            not (
-                                    use_visited2 and
-                                    item2 in visited2
-                            )
-                    )
+                (enabled_source_items is None or item1 in enabled_source_items)
+                and (item1 not in visited1)
+                and (not (use_visited2 and item2 in visited2))
             ):
                 if enabled_target_items is None:
                     _mark_visit()
@@ -203,10 +192,10 @@ def iter_best_scored_pairs_of_distinct_source(
                             del enabled_target_items[item2]
                         yield returned_pair
                     elif (
-                            include_all_tie_target_items and
-                            returned_pair is not None and
-                            returned_pair[0] == score and
-                            returned_pair[2] == item2
+                        include_all_tie_target_items
+                        and returned_pair is not None
+                        and returned_pair[0] == score
+                        and returned_pair[2] == item2
                     ):
                         returned_pair = (score, item1, item2)
                         _mark_visit()
@@ -220,23 +209,26 @@ def iter_best_scored_pairs_of_distinct_source(
         return chain(
             _iter(
                 filter(lambda x: x[0] == identity_score, scored_pairs),
-                use_visited2=True
+                use_visited2=True,
             ),
             _iter(
-                filter(lambda x: x[0] != identity_score and x[2] not in visited2, scored_pairs),
-                use_visited2=distinct_output_targets
-            )
+                filter(
+                    lambda x: x[0] != identity_score and x[2] not in visited2,
+                    scored_pairs,
+                ),
+                use_visited2=distinct_output_targets,
+            ),
         )
 
 
 def iter_best_pairs_of_distinct_source(
-        pairs: Iterable[Tuple[Any, Any]],
-        score_func: Callable[[Any, Any], float],
-        enabled_target_items: Union[Iterable, Mapping[Any, int]] = None,
-        enabled_source_items: Iterable = None,
-        include_all_tie_target_items: bool = True,
-        reversed_sort_by_scores: bool = False,
-        identity_score=None
+    pairs: Iterable[Tuple[Any, Any]],
+    score_func: Callable[[Any, Any], float],
+    enabled_target_items: Union[Iterable, Mapping[Any, int]] = None,
+    enabled_source_items: Iterable = None,
+    include_all_tie_target_items: bool = True,
+    reversed_sort_by_scores: bool = False,
+    identity_score=None,
 ) -> Iterator[Tuple[Any, Any, Any]]:
     return iter_best_scored_pairs_of_distinct_source(
         scored_pairs=map(lambda x: tuple((score_func(x[0], x[1]), x[0], x[1])), pairs),
@@ -244,7 +236,7 @@ def iter_best_pairs_of_distinct_source(
         enabled_source_items=enabled_source_items,
         include_all_tie_target_items=include_all_tie_target_items,
         reversed_sort_by_scores=reversed_sort_by_scores,
-        identity_score=identity_score
+        identity_score=identity_score,
     )
 
 
@@ -370,4 +362,3 @@ def iter_aligned_pairs_by_edit_distance_with_distinct_source(
     )
 
     return best_scored_pairs_of_distinct_source
-

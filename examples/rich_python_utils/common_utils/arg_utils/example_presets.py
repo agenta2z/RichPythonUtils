@@ -18,6 +18,7 @@ import sys
 import tempfile
 
 from resolve_path import resolve_path
+
 resolve_path()  # Add project src to sys.path
 
 from rich_python_utils.common_utils.arg_utils.arg_parse import get_parsed_args
@@ -126,9 +127,7 @@ WHAT THIS DOES:
         "model_name": "resnet50",
     }
 
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".json", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump(preset_data, f, indent=2)
         preset_path = f.name
 
@@ -302,9 +301,7 @@ WHAT THIS DOES:
         },
     }
 
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".json", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump(preset_data, f, indent=2)
         preset_path = f.name
 
@@ -374,7 +371,7 @@ WHAT THIS DOES:
 """)
 
     # Create a temporary Python preset
-    preset_code = '''
+    preset_code = """
 # This is a Python preset file
 # It must define a 'config' dictionary
 
@@ -390,11 +387,9 @@ config = {
     # You can compute values!
     "warmup_steps": 1000,
 }
-'''
+"""
 
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".py", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
         f.write(preset_code)
         preset_path = f.name
 

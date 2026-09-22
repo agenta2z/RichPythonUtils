@@ -8,30 +8,34 @@ Covers:
 - 9.5: Async support (_arun handles ExpansionResult, async expanded steps awaited)
 - 9.6: State management (state flows through expanded steps, update_state on StepWrapper, __expansion_count)
 """
+
 import asyncio
 import os
 import shutil
 import tempfile
 
 import pytest
-from attr import attrs, attrib
-
-from rich_python_utils.common_objects.workflow.workflow import Workflow
-from rich_python_utils.common_objects.workflow.common.expansion import ExpansionResult
+from attr import attrib, attrs
 from rich_python_utils.common_objects.workflow.common.exceptions import (
     ExpansionLimitExceeded,
 )
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
+from rich_python_utils.common_objects.workflow.common.expansion import ExpansionResult
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
+)
 from rich_python_utils.common_objects.workflow.common.step_wrapper import StepWrapper
+from rich_python_utils.common_objects.workflow.workflow import Workflow
 
 
 # ---------------------------------------------------------------------------
 # Concrete Workflow subclass for testing
 # ---------------------------------------------------------------------------
 
+
 @attrs(slots=False)
 class _TestWorkflow(Workflow):
     """Minimal Workflow subclass that saves results to a temp directory."""
+
     _save_dir: str = attrib(default=None)
 
     def __attrs_post_init__(self):
@@ -52,6 +56,7 @@ class _TestWorkflow(Workflow):
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def save_dir():
     d = tempfile.mkdtemp(prefix="wf_exp_test_")
@@ -63,6 +68,7 @@ def save_dir():
 # 9.1 — Basic Workflow expansion
 # ===========================================================================
 
+
 class TestBasicExpansion:
     """Task 9.1: step returns ExpansionResult -> new steps inserted and executed."""
 
@@ -72,6 +78,7 @@ class TestBasicExpansion:
 
         def step_a(x):
             call_log.append(("a", x))
+
             # Return an ExpansionResult that inserts two new steps
             def new_step_1(x):
                 call_log.append(("new1", x))
@@ -177,6 +184,7 @@ class TestBasicExpansion:
 # 9.2 — Expansion with loops
 # ===========================================================================
 
+
 class TestExpansionWithLoops:
     """Task 9.2: expanded steps with loop_back_to."""
 
@@ -200,7 +208,10 @@ class TestExpansionWithLoops:
                 expanded_end,
                 name="exp_end",
                 loop_back_to="exp_start",
-                loop_condition=lambda state, result: loop_count.__setitem__(0, loop_count[0] + 1) or loop_count[0] <= 1,
+                loop_condition=lambda state, result: loop_count.__setitem__(
+                    0, loop_count[0] + 1
+                )
+                or loop_count[0] <= 1,
                 max_loop_iterations=3,
             )
 
@@ -251,7 +262,10 @@ class TestExpansionWithLoops:
                     expanded_step,
                     name="expanded_loop",
                     loop_back_to="static_a",
-                    loop_condition=lambda state, result: loop_count.__setitem__(0, loop_count[0] + 1) or loop_count[0] <= 1,
+                    loop_condition=lambda state, result: loop_count.__setitem__(
+                        0, loop_count[0] + 1
+                    )
+                    or loop_count[0] <= 1,
                     max_loop_iterations=3,
                 )
                 return ExpansionResult(
@@ -310,6 +324,7 @@ class TestExpansionWithLoops:
 # ===========================================================================
 # 9.3 — Termination guarantees
 # ===========================================================================
+
 
 class TestExpansionTermination:
     """Task 9.3: termination guarantees."""
@@ -409,6 +424,7 @@ class TestExpansionTermination:
 # ===========================================================================
 # 9.4 — Checkpoint/resume
 # ===========================================================================
+
 
 class TestExpansionCheckpointResume:
     """Task 9.4: checkpoint contains expansion records, resume reconstructs."""
@@ -554,6 +570,7 @@ class TestExpansionCheckpointResume:
 # 9.5 — Async support
 # ===========================================================================
 
+
 @pytest.mark.asyncio
 class TestExpansionAsync:
     """Task 9.5: _arun handles ExpansionResult, async expanded steps awaited."""
@@ -624,6 +641,7 @@ class TestExpansionAsync:
 # 9.6 — State management
 # ===========================================================================
 
+
 class TestExpansionStateManagement:
     """Task 9.6: state flows through expanded steps, update_state works, __expansion_count updated."""
 
@@ -641,7 +659,12 @@ class TestExpansionStateManagement:
                     StepWrapper(
                         new_step,
                         name="exp_1",
-                        update_state=lambda state, result: {**state, "exp_1_result": result} or state.update({"exp_1_result": result}) or state,
+                        update_state=lambda state, result: {
+                            **state,
+                            "exp_1_result": result,
+                        }
+                        or state.update({"exp_1_result": result})
+                        or state,
                     ),
                 ],
             )
@@ -671,6 +694,7 @@ class TestExpansionStateManagement:
 
     def test_update_state_on_expanded_step_wrapper(self, save_dir):
         """update_state on expanded StepWrapper steps works."""
+
         def step_a(x):
             def new_step(x):
                 return x + 100
@@ -681,7 +705,10 @@ class TestExpansionStateManagement:
                     StepWrapper(
                         new_step,
                         name="exp_with_state",
-                        update_state=lambda state, result: state.update({"from_expanded": result}) or state,
+                        update_state=lambda state, result: state.update(
+                            {"from_expanded": result}
+                        )
+                        or state,
                     ),
                 ],
             )
@@ -695,7 +722,8 @@ class TestExpansionStateManagement:
                 StepWrapper(
                     step_a,
                     name="step_a",
-                    update_state=lambda state, result: state.update({"from_a": result}) or state,
+                    update_state=lambda state, result: state.update({"from_a": result})
+                    or state,
                 ),
                 step_b,
             ],
@@ -711,6 +739,7 @@ class TestExpansionStateManagement:
 
     def test_expansion_count_in_state(self, save_dir):
         """state['__expansion_count'] is updated after expansion."""
+
         def step_a(x):
             return ExpansionResult(
                 result=x + 1,

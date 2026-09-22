@@ -1,10 +1,8 @@
 from collections import defaultdict
 from math import inf
-from typing import Iterable, TypeVar, List, Dict
+from typing import Dict, Iterable, List, Sequence, Tuple, TypeVar, Union
 
-from typing import Sequence, Union, Tuple
-
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 def prefix_sum(arr: Sequence[T], zero: T = 0) -> List[T]:
@@ -73,7 +71,6 @@ def prefix_sum_2d(matrix: Sequence[Sequence[T]], zero: T = 0) -> List[List[T]]:
     return prefix_sums
 
 
-
 def max_subarray_sum(arr: Sequence[T], zero: T = 0) -> T:
     """
     Finds the maximum sum of a subarray using a recursive approach.
@@ -129,15 +126,15 @@ def max_subarray_sum(arr: Sequence[T], zero: T = 0) -> T:
 
         (
             _max_subarray_sum,  # optimal value by any descendants
-            _max_sub_sum_ending_at_child  # optimal value involving an immediate child
+            _max_sub_sum_ending_at_child,  # optimal value involving an immediate child
         ) = dfs(_arr, end_index - 1)
 
         _max_sub_sum_ending_here = max(
-            _max_sub_sum_ending_at_child + _arr[end_index],
-            _arr[end_index],
-            zero
+            _max_sub_sum_ending_at_child + _arr[end_index], _arr[end_index], zero
         )
-        return max(_max_subarray_sum, _max_sub_sum_ending_here), _max_sub_sum_ending_here
+        return max(
+            _max_subarray_sum, _max_sub_sum_ending_here
+        ), _max_sub_sum_ending_here
 
     return dfs(arr, len(arr) - 1)[0]
 
@@ -176,11 +173,7 @@ def max_subarray_sum2(arr: Iterable[T], zero: T = 0) -> T:
 
     for x in it:  # iterate through remaining elements
         _max_sum_ending_at_last_position.append(
-            max(
-                _max_sum_ending_at_last_position[-1] + x,
-                x,
-                zero
-            )
+            max(_max_sum_ending_at_last_position[-1] + x, x, zero)
         )
         _max_sum.append(max(_max_sum[-1], _max_sum_ending_at_last_position[-1]))
 
@@ -254,9 +247,13 @@ def max_subarray_sum3(arr: Sequence[T], zero: T = 0) -> Tuple[T, int, int]:
         _max_sum_ending_at_last_position = max_sum_ending_at_last_position[-1]
         max_sum_ending_at_last_position.append(
             max(
-                (_max_sum_ending_at_last_position[0] + arr[i], _max_sum_ending_at_last_position[1], i),
+                (
+                    _max_sum_ending_at_last_position[0] + arr[i],
+                    _max_sum_ending_at_last_position[1],
+                    i,
+                ),
                 (arr[i], i, i),
-                empty
+                empty,
             )
         )
         max_sum.append(max(max_sum[-1], max_sum_ending_at_last_position[-1]))
@@ -408,23 +405,23 @@ def max_subarray_product(arr: Sequence[T], infinity: T = inf) -> T:
         (
             _max_subarray_prod,  # optimal value by any descendants
             _max_sub_prod_ending_at_child,  # optimal value involving an immediate child
-            _min_sub_prod_ending_at_child  # optimal value involving an immediate child
+            _min_sub_prod_ending_at_child,  # optimal value involving an immediate child
         ) = dfs(_arr, end_index - 1)
 
         _max_sub_prod_ending_here = max(
             _max_sub_prod_ending_at_child * _arr[end_index],
             _min_sub_prod_ending_at_child * _arr[end_index],
-            _arr[end_index]
+            _arr[end_index],
         )
         _min_sub_prod_ending_here = min(
             _max_sub_prod_ending_at_child * _arr[end_index],
             _min_sub_prod_ending_at_child * _arr[end_index],
-            _arr[end_index]
+            _arr[end_index],
         )
         return (
             max(_max_subarray_prod, _max_sub_prod_ending_here),
             _max_sub_prod_ending_here,
-            _min_sub_prod_ending_here
+            _min_sub_prod_ending_here,
         )
 
     return dfs(arr, len(arr) - 1)[0]
@@ -466,20 +463,11 @@ def max_subarray_product2(arr: Iterable[T], infinity: T = inf) -> T:
         max_min_candidates = (
             _max_prod_ending_at_last_position[-1] * x,
             _min_prod_ending_at_last_position[-1] * x,
-            x
+            x,
         )
-        _max_prod_ending_at_last_position.append(
-            max(max_min_candidates)
-        )
-        _min_prod_ending_at_last_position.append(
-            min(max_min_candidates)
-        )
-        _max_prod.append(
-            max(
-                _max_prod[-1],
-                _max_prod_ending_at_last_position[-1]
-            )
-        )
+        _max_prod_ending_at_last_position.append(max(max_min_candidates))
+        _min_prod_ending_at_last_position.append(min(max_min_candidates))
+        _max_prod.append(max(_max_prod[-1], _max_prod_ending_at_last_position[-1]))
 
     return _max_prod[-1]
 
@@ -560,22 +548,21 @@ def max_subarray_product3(arr: Sequence[T], infinity: T = inf) -> Tuple[T, int, 
         _max_prod_ending_at_last_position = max_prod_ending_at_last_position[-1]
         _min_prod_ending_at_last_position = min_prod_ending_at_last_position[-1]
         max_min_candidates = (
-            (_max_prod_ending_at_last_position[0] * x, _max_prod_ending_at_last_position[1], i),
-            (_min_prod_ending_at_last_position[0] * x, _min_prod_ending_at_last_position[1], i),
-            (x, i, i)
+            (
+                _max_prod_ending_at_last_position[0] * x,
+                _max_prod_ending_at_last_position[1],
+                i,
+            ),
+            (
+                _min_prod_ending_at_last_position[0] * x,
+                _min_prod_ending_at_last_position[1],
+                i,
+            ),
+            (x, i, i),
         )
-        max_prod_ending_at_last_position.append(
-            max(max_min_candidates)
-        )
-        min_prod_ending_at_last_position.append(
-            min(max_min_candidates)
-        )
-        max_prod.append(
-            max(
-                max_prod[-1],
-                max_prod_ending_at_last_position[-1]
-            )
-        )
+        max_prod_ending_at_last_position.append(max(max_min_candidates))
+        min_prod_ending_at_last_position.append(min(max_min_candidates))
+        max_prod.append(max(max_prod[-1], max_prod_ending_at_last_position[-1]))
 
     return max_prod[-1]
 
@@ -696,12 +683,17 @@ def subarray_sum_equals_k(arr: Sequence[T], k: T) -> Sequence[Tuple[int, int]]:
         if _end_index == 0:
             return [(0, _end_index + 1)] if _arr[0] == _k else []
 
-        prev_tailing_sub_arrays_equals_k_minus_current = dfs2(_arr, _end_index - 1, _k - arr[_end_index])
+        prev_tailing_sub_arrays_equals_k_minus_current = dfs2(
+            _arr, _end_index - 1, _k - arr[_end_index]
+        )
         prev_tailing_sub_arrays_equals_k_minus_current = [
-            (x[0], _end_index + 1) for x in prev_tailing_sub_arrays_equals_k_minus_current
+            (x[0], _end_index + 1)
+            for x in prev_tailing_sub_arrays_equals_k_minus_current
         ]
         if arr[_end_index] == _k:
-            return prev_tailing_sub_arrays_equals_k_minus_current + [(_end_index, _end_index + 1)]
+            return prev_tailing_sub_arrays_equals_k_minus_current + [
+                (_end_index, _end_index + 1)
+            ]
         else:
             return prev_tailing_sub_arrays_equals_k_minus_current
 
@@ -776,7 +768,9 @@ def subarray_sum_equals_k_2(seq: Iterable[T], k: T) -> Sequence[Tuple[int, int]]
     return result
 
 
-def exists_subarray_modular_by_k(seq: Iterable[int], k: int, min_subarray_size: int = 2) -> bool:
+def exists_subarray_modular_by_k(
+    seq: Iterable[int], k: int, min_subarray_size: int = 2
+) -> bool:
     """
     Checks if there exists a subarray of at least `min_subarray_size` whose sum is divisible by `k`.
 
@@ -821,9 +815,12 @@ def exists_subarray_modular_by_k(seq: Iterable[int], k: int, min_subarray_size: 
             if mod_k_record[mod_k] < i - min_subarray_size + 1:
                 return True
         else:
-            mod_k_record[mod_k] = i  # Store the first occurrence index of this remainder
+            mod_k_record[mod_k] = (
+                i  # Store the first occurrence index of this remainder
+            )
 
     return False
+
 
 def subarray_modular_by_k(seq: Iterable[int], k: int) -> List[Tuple[int, int]]:
     """
@@ -929,7 +926,9 @@ def subarray_modular_by_k(seq: Iterable[int], k: int) -> List[Tuple[int, int]]:
 
         mod = cum_sum % k  # Compute the modulo of the current prefix sum with k
         if mod in sum_to_indices:
-            start_indices = sum_to_indices[mod]  # Retrieve all indices with the same modulo
+            start_indices = sum_to_indices[
+                mod
+            ]  # Retrieve all indices with the same modulo
             for start_index in start_indices:
                 # Append the subarray indices (start_index + 1, current index)
                 result.append((start_index + 1, i))

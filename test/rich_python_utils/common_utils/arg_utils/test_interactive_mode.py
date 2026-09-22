@@ -4,17 +4,18 @@ Test interactive mode functionality for get_parsed_args.
 
 import os
 import sys
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 # Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../../src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../../src"))
 
 from rich_python_utils.common_utils.arg_utils.arg_parse import get_parsed_args
 from rich_python_utils.common_utils.arg_utils.parsing.interactive import (
     InteractiveCollector,
-    is_jupyter,
     is_ipython_terminal,
+    is_jupyter,
 )
 
 
@@ -42,7 +43,7 @@ class TestInteractiveCollectorBasic:
         # In normal environment, should not detect IPython
         assert collector.is_ipython is False
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_collect_simple_string(self, mock_input):
         """Test collecting a simple string argument."""
         mock_input.return_value = "test_value"
@@ -55,7 +56,7 @@ class TestInteractiveCollectorBasic:
         assert "arg_name" in result
         assert result["arg_name"] == "test_value"
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_collect_with_default_value(self, mock_input):
         """Test that pressing Enter uses default value."""
         mock_input.return_value = ""  # User presses Enter
@@ -67,7 +68,7 @@ class TestInteractiveCollectorBasic:
 
         assert result["arg_name"] == "default_value"
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_collect_boolean_true(self, mock_input):
         """Test collecting boolean true value."""
         mock_input.return_value = "true"
@@ -79,7 +80,7 @@ class TestInteractiveCollectorBasic:
 
         assert result["debug"] is True
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_collect_boolean_false(self, mock_input):
         """Test collecting boolean false value."""
         mock_input.return_value = "false"
@@ -91,7 +92,7 @@ class TestInteractiveCollectorBasic:
 
         assert result["debug"] is False
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_collect_integer(self, mock_input):
         """Test collecting integer value."""
         mock_input.return_value = "42"
@@ -103,7 +104,7 @@ class TestInteractiveCollectorBasic:
 
         assert result["count"] == 42
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_collect_float(self, mock_input):
         """Test collecting float value."""
         mock_input.return_value = "3.14"
@@ -115,7 +116,7 @@ class TestInteractiveCollectorBasic:
 
         assert result["rate"] == 3.14
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_collect_list(self, mock_input):
         """Test collecting list value."""
         mock_input.return_value = "[1, 2, 3, 4]"
@@ -127,7 +128,7 @@ class TestInteractiveCollectorBasic:
 
         assert result["layers"] == [1, 2, 3, 4]
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_collect_dict(self, mock_input):
         """Test collecting dict value."""
         mock_input.return_value = "{'key': 'value', 'num': 42}"
@@ -137,9 +138,9 @@ class TestInteractiveCollectorBasic:
 
         result = collector.collect_arguments(arg_definitions)
 
-        assert result["config"] == {'key': 'value', 'num': 42}
+        assert result["config"] == {"key": "value", "num": 42}
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_collect_invalid_integer_uses_default(self, mock_input):
         """Test that invalid integer input uses default."""
         mock_input.return_value = "not_a_number"
@@ -152,7 +153,7 @@ class TestInteractiveCollectorBasic:
         # Should fall back to default when parsing fails
         assert result["count"] == 10
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_collect_multiple_arguments(self, mock_input):
         """Test collecting multiple arguments."""
         # Return different values for each call to input()
@@ -175,7 +176,7 @@ class TestInteractiveCollectorBasic:
 class TestInteractiveWithPresets:
     """Test interactive mode combined with presets."""
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_preset_overrides_default(self, mock_input):
         """Test that preset values are shown as defaults."""
         mock_input.return_value = ""  # User accepts preset value
@@ -189,7 +190,7 @@ class TestInteractiveWithPresets:
         # Should use preset value when user presses Enter
         assert result["learning_rate"] == 0.01
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_user_input_overrides_preset(self, mock_input):
         """Test that user input overrides preset values."""
         mock_input.return_value = "0.1"
@@ -207,7 +208,7 @@ class TestInteractiveWithPresets:
 class TestGetParsedArgsInteractive:
     """Test get_parsed_args with interactive mode."""
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_basic_interactive_mode(self, mock_input):
         """Test basic interactive mode with get_parsed_args."""
         mock_input.side_effect = ["0.01", "64"]
@@ -223,7 +224,7 @@ class TestGetParsedArgsInteractive:
         assert args.learning_rate == 0.01
         assert args.batch_size == 64
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_interactive_with_default_kwargs(self, mock_input):
         """Test interactive mode with default_xxx kwargs."""
         mock_input.side_effect = ["", ""]  # Accept all defaults
@@ -239,7 +240,7 @@ class TestGetParsedArgsInteractive:
         assert args.learning_rate == 0.001
         assert args.batch_size == 32
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_interactive_with_preset(self, mock_input):
         """Test interactive mode combined with preset."""
         mock_input.side_effect = ["", "128"]  # Accept first, override second
@@ -261,7 +262,7 @@ class TestGetParsedArgsInteractive:
         assert args.learning_rate == 0.01  # From preset
         assert args.batch_size == 128  # User override
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_interactive_with_various_types(self, mock_input):
         """Test interactive mode with various data types."""
         mock_input.side_effect = [
@@ -289,7 +290,7 @@ class TestGetParsedArgsInteractive:
         assert args.layers == [64, 128, 256]
         assert args.model_name == "test_model"
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_interactive_empty_responses_use_defaults(self, mock_input):
         """Test that empty responses use default values."""
         mock_input.side_effect = ["", "", "", ""]
@@ -309,7 +310,7 @@ class TestGetParsedArgsInteractive:
         assert args.arg3 is False
         assert args.arg4 == [1, 2, 3]
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_interactive_with_arginfo_tuples(self, mock_input):
         """Test interactive mode with 3-tuple ArgInfo format."""
         mock_input.side_effect = ["0.01"]
@@ -323,7 +324,7 @@ class TestGetParsedArgsInteractive:
 
         assert args.learning_rate == 0.01
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_interactive_preserves_non_interactive_args(self, mock_input):
         """Test that non-interactive args still work."""
         # The interactive collector will be called for all registered args
@@ -336,13 +337,13 @@ class TestGetParsedArgsInteractive:
             argv=["script"],
         )
 
-        assert hasattr(args, 'learning_rate')
+        assert hasattr(args, "learning_rate")
 
 
 class TestInteractiveEdgeCases:
     """Test edge cases for interactive mode."""
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_invalid_list_syntax_uses_default(self, mock_input):
         """Test that invalid list syntax falls back to default."""
         mock_input.return_value = "[1, 2, invalid]"
@@ -355,7 +356,7 @@ class TestInteractiveEdgeCases:
         # Should use default when parsing fails
         assert result["layers"] == [128, 256]
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_invalid_dict_syntax_uses_default(self, mock_input):
         """Test that invalid dict syntax falls back to default."""
         mock_input.return_value = "{'key': invalid}"
@@ -368,7 +369,7 @@ class TestInteractiveEdgeCases:
         # Should use default when parsing fails
         assert result["config"] == {"default": "value"}
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_none_default_value(self, mock_input):
         """Test handling None as default value."""
         mock_input.return_value = "some_value"
@@ -380,7 +381,7 @@ class TestInteractiveEdgeCases:
 
         assert result["optional_arg"] == "some_value"
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_empty_description(self, mock_input):
         """Test handling empty description."""
         mock_input.return_value = "value"
@@ -392,7 +393,7 @@ class TestInteractiveEdgeCases:
 
         assert result["arg"] == "value"
 
-    @patch('builtins.input')
+    @patch("builtins.input")
     def test_tuple_type(self, mock_input):
         """Test collecting tuple value."""
         mock_input.return_value = "(1, 2, 3)"
@@ -408,4 +409,5 @@ class TestInteractiveEdgeCases:
 if __name__ == "__main__":
     # Run tests
     import subprocess
+
     subprocess.run([sys.executable, "-m", "pytest", __file__, "-v"])

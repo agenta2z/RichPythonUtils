@@ -1,10 +1,11 @@
 from collections.abc import Mapping
 from typing import Hashable, Sequence
 
+
 def build_trie(
-        sequences: Sequence[Sequence[Hashable]],
-        null_leaf: bool = True,
-        eos_label: Hashable = chr(31)
+    sequences: Sequence[Sequence[Hashable]],
+    null_leaf: bool = True,
+    eos_label: Hashable = chr(31),
 ) -> Mapping:
     """
     Builds a Trie (prefix tree) from a sequence of sequences, where each sequence

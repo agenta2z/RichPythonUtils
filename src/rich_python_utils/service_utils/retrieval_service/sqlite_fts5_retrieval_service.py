@@ -62,7 +62,7 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from attr import attrs, attrib
+from attr import attrib, attrs
 
 from .document import Document
 from .filter_utils import matches_filters
@@ -258,7 +258,9 @@ class SQLiteFTS5RetrievalService(RetrievalServiceBase):
             )
         return doc.doc_id
 
-    def get_by_id(self, doc_id: str, namespace: Optional[str] = None) -> Optional[Document]:
+    def get_by_id(
+        self, doc_id: str, namespace: Optional[str] = None
+    ) -> Optional[Document]:
         """Retrieve a document by its ID.
 
         Args:
@@ -521,9 +523,7 @@ class SQLiteFTS5RetrievalService(RetrievalServiceBase):
         Returns:
             List of distinct namespace strings.
         """
-        cursor = self._conn.execute(
-            "SELECT DISTINCT namespace FROM documents"
-        )
+        cursor = self._conn.execute("SELECT DISTINCT namespace FROM documents")
         return [row[0] for row in cursor.fetchall()]
 
     def get_stats(self, namespace: Optional[str] = None) -> Dict[str, Any]:
@@ -555,9 +555,7 @@ class SQLiteFTS5RetrievalService(RetrievalServiceBase):
                 "tokenizer": self.tokenizer,
                 "namespace_count": len(all_ns),
                 "total_documents": total_docs,
-                "namespaces": {
-                    ns: self.size(namespace=ns) for ns in all_ns
-                },
+                "namespaces": {ns: self.size(namespace=ns) for ns in all_ns},
             }
 
     def ping(self) -> bool:

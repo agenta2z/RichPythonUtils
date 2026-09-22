@@ -8,21 +8,21 @@ from argparse import ArgumentParser, Namespace
 from os import path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-from rich_python_utils.common_utils.environment_helper import is_ipython
 from rich_python_utils.common_utils.arg_utils.arg_naming import (
     solve_arg_full_and_short_name,
     solve_parameter_info,
 )
 from rich_python_utils.common_utils.arg_utils.arg_parse import (
-    sanitize_arg_name,
     get_seen_actions,
+    sanitize_arg_name,
 )
+from rich_python_utils.common_utils.environment_helper import is_ipython
 from rich_python_utils.console_utils import hprint_message
 
-from .preset_loader import PresetLoaderRegistry
 from .argument_registrar import ArgumentRegistrar
-from .value_converter import ValueConverter
+from .preset_loader import PresetLoaderRegistry
 from .validator import ArgumentValidator
+from .value_converter import ValueConverter
 
 
 class ArgumentParserBuilder:
@@ -292,7 +292,9 @@ class ArgumentParserBuilder:
             sanitized_arg_name = sanitize_arg_name(arg_full_name)
             if sanitized_arg_name != arg_full_name:
                 if sanitized_arg_name not in registrar.sanitized_to_original_map:
-                    registrar.sanitized_to_original_map[sanitized_arg_name] = arg_full_name
+                    registrar.sanitized_to_original_map[sanitized_arg_name] = (
+                        arg_full_name
+                    )
                 else:
                     raise ValueError(
                         f"argument name '{arg_full_name}' conflicts with "
@@ -345,7 +347,7 @@ class ArgumentParserBuilder:
         for arg_full_name, default_value in preset_dict.items():
             # Strip default_value_prefix if present
             if arg_full_name.startswith(self.default_value_prefix):
-                arg_full_name = arg_full_name[len(self.default_value_prefix):]
+                arg_full_name = arg_full_name[len(self.default_value_prefix) :]
 
             # Solve name
             arg_full_name, arg_short_name = solve_arg_full_and_short_name(
@@ -384,7 +386,7 @@ class ArgumentParserBuilder:
         """
         for arg_full_name, default_value in list(kwargs.items()):
             if arg_full_name.startswith(self.default_value_prefix):
-                arg_full_name = arg_full_name[len(self.default_value_prefix):]
+                arg_full_name = arg_full_name[len(self.default_value_prefix) :]
 
                 arg_full_name, arg_short_name = solve_arg_full_and_short_name(
                     arg_name_str=arg_full_name,
@@ -448,7 +450,7 @@ class ArgumentParserBuilder:
         arg_definitions = []
         for action in self.parser._actions:
             # Skip help and special actions
-            if action.dest in ('help', '_help', 'version'):
+            if action.dest in ("help", "_help", "version"):
                 continue
 
             # Get the full name (without -- prefix)

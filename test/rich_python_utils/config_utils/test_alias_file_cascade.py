@@ -8,21 +8,17 @@ shorthand expansion. Search order:
   3. Leave as string              (shorthand expansion in _walk creates {_target_: Alias})
 """
 
-import pytest
 from pathlib import Path
 
-from rich_python_utils.config_utils import load_config, instantiate
+import pytest
+from rich_python_utils.config_utils import instantiate, load_config
 from rich_python_utils.config_utils._instantiate import _resolve_import_
-from rich_python_utils.config_utils._registry import register_alias, _registry
-
-
+from rich_python_utils.config_utils._registry import _registry, register_alias
 # ---------------------------------------------------------------------------
 # Test fixtures
 # ---------------------------------------------------------------------------
 
-from test.rich_python_utils.config_utils._cascade_fixtures import (
-    MockBase, MockParent,
-)
+from test.rich_python_utils.config_utils._cascade_fixtures import MockBase, MockParent
 
 _FIXTURE_MOD = "test.rich_python_utils.config_utils._cascade_fixtures"
 
@@ -132,11 +128,10 @@ class TestAliasCascadeResolve:
         (tmp_path / "parent.yaml").write_text(
             "wrapper:\n  _import_: child_config.yaml\n"
         )
-        (tmp_path / "child_config.yaml").write_text(
-            "child: TestBase\n"
-        )
+        (tmp_path / "child_config.yaml").write_text("child: TestBase\n")
         cfg = load_config(str(tmp_path / "parent.yaml"))
         from omegaconf import OmegaConf
+
         d = OmegaConf.to_container(cfg, resolve=True)
         assert d["wrapper"]["child"]["model_name"] == "imported_cascade"
 
@@ -173,6 +168,7 @@ class TestAliasCascadeEndToEnd:
         """Runtime overrides apply on top of cascade-resolved config."""
         cfg = load_config(str(cascade_dir / "main.yaml"))
         from omegaconf import OmegaConf
+
         d = OmegaConf.to_container(cfg, resolve=True)
         d["base_inferencer"]["model_name"] = "overridden"
         obj = instantiate(OmegaConf.create(d))
@@ -193,11 +189,10 @@ class TestImportYamlExtensionFallback:
         (tmp_path / "child_config.yaml").write_text(
             "_target_: TestBase\nmodel_name: no_ext\n"
         )
-        (tmp_path / "main.yaml").write_text(
-            "child:\n  _import_: child_config\n"
-        )
+        (tmp_path / "main.yaml").write_text("child:\n  _import_: child_config\n")
         cfg = load_config(str(tmp_path / "main.yaml"))
         from omegaconf import OmegaConf
+
         d = OmegaConf.to_container(cfg, resolve=True)
         assert d["child"]["_target_"] == "TestBase"
         assert d["child"]["model_name"] == "no_ext"
@@ -207,19 +202,16 @@ class TestImportYamlExtensionFallback:
         (tmp_path / "child_config.yaml").write_text(
             "_target_: TestBase\nmodel_name: with_ext\n"
         )
-        (tmp_path / "main.yaml").write_text(
-            "child:\n  _import_: child_config.yaml\n"
-        )
+        (tmp_path / "main.yaml").write_text("child:\n  _import_: child_config.yaml\n")
         cfg = load_config(str(tmp_path / "main.yaml"))
         from omegaconf import OmegaConf
+
         d = OmegaConf.to_container(cfg, resolve=True)
         assert d["child"]["model_name"] == "with_ext"
 
     def test_import_missing_still_raises(self, tmp_path):
         """_import_: nonexistent raises FileNotFoundError."""
-        (tmp_path / "main.yaml").write_text(
-            "child:\n  _import_: nonexistent\n"
-        )
+        (tmp_path / "main.yaml").write_text("child:\n  _import_: nonexistent\n")
         with pytest.raises(FileNotFoundError):
             load_config(str(tmp_path / "main.yaml"))
 
@@ -244,6 +236,7 @@ class TestDirectoryNarrowing:
         )
         cfg = load_config(str(tmp_path / "main.yaml"))
         from omegaconf import OmegaConf
+
         d = OmegaConf.to_container(cfg, resolve=True)
         assert d["outer"]["inner"]["_target_"] == "TestBase"
         assert d["outer"]["inner"]["model_name"] == "narrowed"
@@ -260,6 +253,7 @@ class TestDirectoryNarrowing:
         )
         cfg = load_config(str(tmp_path / "main.yaml"))
         from omegaconf import OmegaConf
+
         d = OmegaConf.to_container(cfg, resolve=True)
         assert d["base"]["planner"]["model_name"] == "from_plan"
         assert d["base"]["planner"]["permission_mode"] == "relaxed"
@@ -275,5 +269,6 @@ class TestDirectoryNarrowing:
         # No outer/ or outer/inner/ dirs — _import_ resolves from root
         cfg = load_config(str(tmp_path / "main.yaml"))
         from omegaconf import OmegaConf
+
         d = OmegaConf.to_container(cfg, resolve=True)
         assert d["outer"]["inner"]["model_name"] == "from_root"

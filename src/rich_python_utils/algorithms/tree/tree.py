@@ -1,5 +1,5 @@
 from collections import deque
-from typing import Any, Callable, List, Union, Optional
+from typing import Any, Callable, List, Optional, Union
 
 from rich_python_utils.algorithms.graph.node import Node
 from rich_python_utils.algorithms.tree.traversal import bfs_traversal
@@ -8,10 +8,10 @@ from rich_python_utils.string_utils import join_
 
 class Tree(Node):
     def encode(
-            self,
-            null_flag: Any,
-            value_encoder: Callable = None,
-            encode_as_string_sep: str = chr(31)
+        self,
+        null_flag: Any,
+        value_encoder: Callable = None,
+        encode_as_string_sep: str = chr(31),
     ) -> Union[List, str]:
         """
         Encodes the tree into a string or list representation.
@@ -90,12 +90,12 @@ class Tree(Node):
 
     @classmethod
     def decode(
-            cls,
-            encoding: Union[str, List[str]],
-            null_flag: Any,
-            value_decoder: Callable = None,
-            encode_as_string_sep: str = chr(31)
-    ) -> 'Tree':
+        cls,
+        encoding: Union[str, List[str]],
+        null_flag: Any,
+        value_decoder: Callable = None,
+        encode_as_string_sep: str = chr(31),
+    ) -> "Tree":
         """
         Decodes the encoded data back into a Tree.
 
@@ -170,7 +170,9 @@ class Tree(Node):
             children = []
             for _ in range(num_children):
                 if index >= len(tokens):
-                    raise ValueError("Incomplete encoding: expected node value or null flag.")
+                    raise ValueError(
+                        "Incomplete encoding: expected node value or null flag."
+                    )
                 token = tokens[index]
                 index += 1
                 if token == str(null_flag):
@@ -178,7 +180,9 @@ class Tree(Node):
                 else:
                     value = value_decoder(token)
                     if index >= len(tokens):
-                        raise ValueError("Incomplete encoding: expected number of children.")
+                        raise ValueError(
+                            "Incomplete encoding: expected number of children."
+                        )
                     num_children_token = tokens[index]
                     index += 1
                     child_num_children = int(num_children_token)

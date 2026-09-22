@@ -4,28 +4,35 @@ Tests for _level_print utility and _ColoredLogFormatter in debuggable.py.
 Validates that log-level-based coloring works correctly for both the
 print-based logger path and the logging.StreamHandler path.
 """
+
 import logging
 import sys
 from io import StringIO
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 from rich_python_utils.common_objects.debuggable import (
-    _level_print,
     _ColoredLogFormatter,
+    _level_print,
     Debuggable,
 )
 
 
 # region _level_print tests
 
+
 class TestLevelPrint:
     """Tests for the _level_print utility function."""
 
     def test_level_print_does_not_raise_at_any_level(self):
         """_level_print should not raise regardless of log level."""
-        for level in (logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL):
+        for level in (
+            logging.DEBUG,
+            logging.INFO,
+            logging.WARNING,
+            logging.ERROR,
+            logging.CRITICAL,
+        ):
             _level_print("test message", level)
 
     def test_level_print_default_level_is_info(self):
@@ -45,10 +52,14 @@ class TestLevelPrint:
                 pass  # The actual fallback is tested via the function behavior
 
         # Direct test: mock the import to raise ImportError
-        original_import = __builtins__.__import__ if hasattr(__builtins__, '__import__') else __import__
+        original_import = (
+            __builtins__.__import__
+            if hasattr(__builtins__, "__import__")
+            else __import__
+        )
 
         def failing_import(name, *args, **kwargs):
-            if 'console_utils' in name:
+            if "console_utils" in name:
                 raise ImportError("mocked")
             return original_import(name, *args, **kwargs)
 
@@ -79,15 +90,19 @@ class TestLevelPrint:
         captured = capsys.readouterr()
         assert "debug info" in captured.out
 
+
 # endregion
 
 
 # region _ColoredLogFormatter tests
 
+
 class TestColoredLogFormatter:
     """Tests for the _ColoredLogFormatter logging formatter."""
 
-    def _make_record(self, level: int, message: str = "test message") -> logging.LogRecord:
+    def _make_record(
+        self, level: int, message: str = "test message"
+    ) -> logging.LogRecord:
         """Create a LogRecord for testing."""
         return logging.LogRecord(
             name="test_logger",
@@ -102,7 +117,13 @@ class TestColoredLogFormatter:
     def test_format_returns_string(self):
         """Formatted output should always be a string."""
         formatter = _ColoredLogFormatter("%(levelname)s - %(message)s")
-        for level in (logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL):
+        for level in (
+            logging.DEBUG,
+            logging.INFO,
+            logging.WARNING,
+            logging.ERROR,
+            logging.CRITICAL,
+        ):
             record = self._make_record(level)
             result = formatter.format(record)
             assert isinstance(result, str)
@@ -139,17 +160,18 @@ class TestColoredLogFormatter:
     def test_formatter_with_datefmt(self):
         """Formatter should work with custom date format."""
         formatter = _ColoredLogFormatter(
-            "%(asctime)s - %(message)s",
-            datefmt="%Y-%m-%d"
+            "%(asctime)s - %(message)s", datefmt="%Y-%m-%d"
         )
         record = self._make_record(logging.INFO, "dated message")
         result = formatter.format(record)
         assert "dated message" in result
 
+
 # endregion
 
 
 # region Debuggable integration tests
+
 
 class TestDebuggableColoredOutput:
     """Integration tests for colored output in Debuggable.log()."""
@@ -161,7 +183,7 @@ class TestDebuggableColoredOutput:
             debug_mode=True,
             log_time=False,
             always_add_logging_based_logger=False,
-            id='test_obj'
+            id="test_obj",
         )
         d.log_info("info message", "TestType")
         captured = capsys.readouterr()
@@ -175,7 +197,7 @@ class TestDebuggableColoredOutput:
             debug_mode=True,
             log_time=False,
             always_add_logging_based_logger=False,
-            id='test_obj'
+            id="test_obj",
         )
         d.log_error("error happened", "TestType")
         captured = capsys.readouterr()
@@ -189,7 +211,7 @@ class TestDebuggableColoredOutput:
             debug_mode=True,
             log_time=False,
             always_add_logging_based_logger=False,
-            id='test_obj'
+            id="test_obj",
         )
         d.log_warning("warn msg", "TestType")
         captured = capsys.readouterr()
@@ -200,22 +222,22 @@ class TestDebuggableColoredOutput:
         """When always_add_logging_based_logger=True, handler should use stdout not stderr."""
         # Use a unique logger name to avoid handler reuse
         import uuid
+
         unique_name = f"test_stdout_{uuid.uuid4().hex[:8]}"
         d = Debuggable(
             log_name=unique_name,
             debug_mode=True,
             log_time=False,
             always_add_logging_based_logger=True,
-            id='test_stdout'
+            id="test_stdout",
         )
         # Find the StreamHandler in the default logger
-        default_logger = d.logger.get('_default')
+        default_logger = d.logger.get("_default")
         assert default_logger is not None
         assert isinstance(default_logger, logging.Logger)
 
         stream_handlers = [
-            h for h in default_logger.handlers
-            if isinstance(h, logging.StreamHandler)
+            h for h in default_logger.handlers if isinstance(h, logging.StreamHandler)
         ]
         assert len(stream_handlers) > 0
 
@@ -227,20 +249,20 @@ class TestDebuggableColoredOutput:
     def test_default_logging_handler_uses_colored_formatter(self):
         """When always_add_logging_based_logger=True, handler should use _ColoredLogFormatter."""
         import uuid
+
         unique_name = f"test_fmt_{uuid.uuid4().hex[:8]}"
         d = Debuggable(
             log_name=unique_name,
             debug_mode=True,
             log_time=False,
             always_add_logging_based_logger=True,
-            id='test_fmt'
+            id="test_fmt",
         )
-        default_logger = d.logger.get('_default')
+        default_logger = d.logger.get("_default")
         assert default_logger is not None
 
         stream_handlers = [
-            h for h in default_logger.handlers
-            if isinstance(h, logging.StreamHandler)
+            h for h in default_logger.handlers if isinstance(h, logging.StreamHandler)
         ]
         assert len(stream_handlers) > 0
 
@@ -252,17 +274,19 @@ class TestDebuggableColoredOutput:
     def test_logging_handler_output_goes_to_stdout(self, capsys):
         """Messages through logging.Logger should appear in stdout, not stderr."""
         import uuid
+
         unique_name = f"test_out_{uuid.uuid4().hex[:8]}"
         d = Debuggable(
             log_name=unique_name,
             debug_mode=True,
             log_time=False,
             always_add_logging_based_logger=True,
-            id='test_out'
+            id="test_out",
         )
         d.log_info("stdout test", "TestType")
         captured = capsys.readouterr()
         assert "stdout test" in captured.out
         assert "stdout test" not in captured.err
+
 
 # endregion

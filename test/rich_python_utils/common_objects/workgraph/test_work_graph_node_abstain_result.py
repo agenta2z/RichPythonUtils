@@ -18,12 +18,17 @@ This test suite verifies:
 - Multi-parent nodes handle AbstainResult in queue correctly
 - Queue filtering for AbstainResult flags
 """
-import pytest
+
 from queue import Queue
 
-from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode, WorkGraph
-from rich_python_utils.common_objects.workflow.common.worknode_base import WorkGraphStopFlags
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
+import pytest
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
+)
+from rich_python_utils.common_objects.workflow.common.worknode_base import (
+    WorkGraphStopFlags,
+)
+from rich_python_utils.common_objects.workflow.workgraph import WorkGraph, WorkGraphNode
 
 
 class TestAbstainResultBasicBehavior:
@@ -51,11 +56,14 @@ class TestAbstainResultBasicBehavior:
         node_a = WorkGraphNode(
             name="A",
             value=lambda x: (execution_order.append("A"), x)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_b = WorkGraphNode(
             name="B",
-            value=lambda x: (execution_order.append("B"), (WorkGraphStopFlags.AbstainResult, "B_abstained"))[1],
+            value=lambda x: (
+                execution_order.append("B"),
+                (WorkGraphStopFlags.AbstainResult, "B_abstained"),
+            )[1],
         )
         node_c = WorkGraphNode(
             name="C",
@@ -92,11 +100,14 @@ class TestAbstainResultBasicBehavior:
         node_a = WorkGraphNode(
             name="A",
             value=lambda x: (execution_order.append("A"), x + 1)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_b = WorkGraphNode(
             name="B",
-            value=lambda x: (execution_order.append("B"), (WorkGraphStopFlags.AbstainResult, x + 2))[1],
+            value=lambda x: (
+                execution_order.append("B"),
+                (WorkGraphStopFlags.AbstainResult, x + 2),
+            )[1],
         )
 
         node_a.add_next(node_b)
@@ -125,21 +136,27 @@ class TestAbstainResultMultiParentNotification:
         node_a = WorkGraphNode(
             name="A",
             value=lambda x: (execution_order.append("A"), x)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_b = WorkGraphNode(
             name="B",
-            value=lambda x: (execution_order.append("B"), (WorkGraphStopFlags.AbstainResult, "B_abstained"))[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            value=lambda x: (
+                execution_order.append("B"),
+                (WorkGraphStopFlags.AbstainResult, "B_abstained"),
+            )[1],
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_c = WorkGraphNode(
             name="C",
             value=lambda x: (execution_order.append("C"), x + 10)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_d = WorkGraphNode(
             name="D",
-            value=lambda *args: (execution_order.append("D"), sum(a for a in args if isinstance(a, int)))[1],
+            value=lambda *args: (
+                execution_order.append("D"),
+                sum(a for a in args if isinstance(a, int)),
+            )[1],
             remove_abstain_result_flag_from_upstream_input=True,
         )
 
@@ -169,17 +186,17 @@ class TestAbstainResultMultiParentNotification:
         node_a = WorkGraphNode(
             name="A",
             value=lambda x: (execution_order.append("A"), x)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_b = WorkGraphNode(
             name="B",
             value=lambda x: (execution_order.append("B"), x + 1)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_c = WorkGraphNode(
             name="C",
             value=lambda x: (execution_order.append("C"), x + 2)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_d = WorkGraphNode(
             name="D",
@@ -218,11 +235,14 @@ class TestAbstainResultDiffersFromTerminate:
         node_a = WorkGraphNode(
             name="A",
             value=lambda x: (execution_order_abstain.append("A"), x)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_b = WorkGraphNode(
             name="B",
-            value=lambda x: (execution_order_abstain.append("B"), (WorkGraphStopFlags.AbstainResult, "B"))[1],
+            value=lambda x: (
+                execution_order_abstain.append("B"),
+                (WorkGraphStopFlags.AbstainResult, "B"),
+            )[1],
         )
         node_c = WorkGraphNode(
             name="C",
@@ -247,11 +267,14 @@ class TestAbstainResultDiffersFromTerminate:
         node_a2 = WorkGraphNode(
             name="A",
             value=lambda x: (execution_order_term.append("A"), x)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_b2 = WorkGraphNode(
             name="B",
-            value=lambda x: (execution_order_term.append("B"), (WorkGraphStopFlags.Terminate, "B"))[1],
+            value=lambda x: (
+                execution_order_term.append("B"),
+                (WorkGraphStopFlags.Terminate, "B"),
+            )[1],
         )
         node_c2 = WorkGraphNode(
             name="C",
@@ -283,7 +306,7 @@ class TestAbstainResultConditional:
         node_a = WorkGraphNode(
             name="A",
             value=lambda x: (execution_order.append("A"), x)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
 
         def threshold_check(x, threshold=5):
@@ -329,7 +352,10 @@ class TestAbstainResultInWorkGraph:
 
         node_a = WorkGraphNode(
             name="A",
-            value=lambda x: (execution_order.append("A"), (WorkGraphStopFlags.AbstainResult, "A_abstained"))[1],
+            value=lambda x: (
+                execution_order.append("A"),
+                (WorkGraphStopFlags.AbstainResult, "A_abstained"),
+            )[1],
         )
         node_b = WorkGraphNode(
             name="B",
@@ -360,17 +386,17 @@ class TestAbstainResultQueueFiltering:
         node_a = WorkGraphNode(
             name="A",
             value=lambda x: (execution_order.append("A"), x)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_b = WorkGraphNode(
             name="B",
             value=lambda x: (execution_order.append("B"), x + 1)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_c = WorkGraphNode(
             name="C",
             value=lambda x: (execution_order.append("C"), x + 2)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_d = WorkGraphNode(
             name="D",
@@ -412,12 +438,15 @@ class TestAbstainResultEdgeCases:
         node_a = WorkGraphNode(
             name="A",
             value=lambda x: (execution_order.append("A"), x + 1)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_b = WorkGraphNode(
             name="B",
-            value=lambda x: (execution_order.append("B"), (WorkGraphStopFlags.AbstainResult, x + 1))[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            value=lambda x: (
+                execution_order.append("B"),
+                (WorkGraphStopFlags.AbstainResult, x + 1),
+            )[1],
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_c = WorkGraphNode(
             name="C",
@@ -444,11 +473,14 @@ class TestAbstainResultEdgeCases:
         node_a = WorkGraphNode(
             name="A",
             value=lambda x: (execution_order.append("A"), x)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_b = WorkGraphNode(
             name="B",
-            value=lambda x: (execution_order.append("B"), (WorkGraphStopFlags.AbstainResult, "leaf_abstain"))[1],
+            value=lambda x: (
+                execution_order.append("B"),
+                (WorkGraphStopFlags.AbstainResult, "leaf_abstain"),
+            )[1],
         )
 
         node_a.add_next(node_b)
@@ -461,5 +493,5 @@ class TestAbstainResultEdgeCases:
         assert "leaf_abstain" in str(result)
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v', '--tb=short'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v", "--tb=short"])

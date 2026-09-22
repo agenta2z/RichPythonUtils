@@ -12,55 +12,64 @@ This test suite covers:
 - Edge cases and mocking strategies for TUI components
 """
 
+from unittest.mock import MagicMock, Mock, patch, PropertyMock
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock, PropertyMock
-from textual.app import App
 from rich_python_utils.console_utils.textual_console_utils import (
-    # Prompt utilities
-    prompt_confirm, prompt_choice, prompt_input,
-    ConfirmApp, ConfirmScreen,
-    ChoiceApp, ChoiceScreen,
-    InputApp, InputScreen,
-    # Progress display
-    ProgressDashboard,
-    # Data display
-    InteractiveTable, display_table,
-    # Log viewer
-    LogViewer,
-    # Notifications
-    show_notification,
+    ChoiceApp,
+    ChoiceScreen,
+    ConfirmApp,
+    ConfirmScreen,
+    display_help,
+    display_table,
+    HelpApp,
     # Help display
-    HelpScreen, HelpApp, display_help,
+    HelpScreen,
+    InputApp,
+    InputScreen,
+    # Data display
+    InteractiveTable,
     # Metrics
     LiveMetrics,
+    # Log viewer
+    LogViewer,
+    # Progress display
+    ProgressDashboard,
+    prompt_choice,
+    # Prompt utilities
+    prompt_confirm,
+    prompt_input,
     # Utility
     run_tui_app,
+    # Notifications
+    show_notification,
 )
+from textual.app import App
 
 
 class TestConfirmPrompt:
     """Tests for confirmation prompt functionality."""
 
-    @patch.object(ConfirmApp, 'run', return_value=True)
+    @patch.object(ConfirmApp, "run", return_value=True)
     def test_prompt_confirm_yes(self, mock_run):
         """Test prompt_confirm returns True when user confirms."""
         result = prompt_confirm("Are you sure?")
         assert result is True
         mock_run.assert_called_once()
 
-    @patch.object(ConfirmApp, 'run', return_value=False)
+    @patch.object(ConfirmApp, "run", return_value=False)
     def test_prompt_confirm_no(self, mock_run):
         """Test prompt_confirm returns False when user denies."""
         result = prompt_confirm("Delete file?")
         assert result is False
 
-    @patch.object(ConfirmApp, 'run', return_value=None)
+    @patch.object(ConfirmApp, "run", return_value=None)
     def test_prompt_confirm_cancel_default_false(self, mock_run):
         """Test prompt_confirm returns default when cancelled."""
         result = prompt_confirm("Continue?", default=False)
         assert result is False
 
-    @patch.object(ConfirmApp, 'run', return_value=None)
+    @patch.object(ConfirmApp, "run", return_value=None)
     def test_prompt_confirm_cancel_default_true(self, mock_run):
         """Test prompt_confirm returns default True when cancelled."""
         result = prompt_confirm("Continue?", default=True)
@@ -82,30 +91,30 @@ class TestConfirmPrompt:
 class TestChoicePrompt:
     """Tests for choice prompt functionality."""
 
-    @patch.object(ChoiceApp, 'run', return_value=1)
+    @patch.object(ChoiceApp, "run", return_value=1)
     def test_prompt_choice_basic(self, mock_run):
         """Test prompt_choice returns selected index."""
-        choices = ['Option A', 'Option B', 'Option C']
+        choices = ["Option A", "Option B", "Option C"]
         result = prompt_choice("Select option:", choices)
         assert result == 1
 
-    @patch.object(ChoiceApp, 'run', return_value=0)
+    @patch.object(ChoiceApp, "run", return_value=0)
     def test_prompt_choice_first_option(self, mock_run):
         """Test prompt_choice can return first option."""
-        choices = ['First', 'Second']
+        choices = ["First", "Second"]
         result = prompt_choice("Choose:", choices, default_index=0)
         assert result == 0
 
-    @patch.object(ChoiceApp, 'run', return_value=None)
+    @patch.object(ChoiceApp, "run", return_value=None)
     def test_prompt_choice_cancelled(self, mock_run):
         """Test prompt_choice returns None when cancelled."""
-        choices = ['A', 'B']
+        choices = ["A", "B"]
         result = prompt_choice("Pick:", choices)
         assert result is None
 
     def test_choice_screen_initialization(self):
         """Test ChoiceScreen initializes with choices."""
-        choices = ['Choice 1', 'Choice 2']
+        choices = ["Choice 1", "Choice 2"]
         screen = ChoiceScreen("Select:", choices, default_index=1)
         assert screen.message == "Select:"
         assert screen.choices == choices
@@ -113,7 +122,7 @@ class TestChoicePrompt:
 
     def test_choice_app_initialization(self):
         """Test ChoiceApp initializes correctly."""
-        choices = ['A', 'B', 'C']
+        choices = ["A", "B", "C"]
         app = ChoiceApp("Pick:", choices, default_index=2)
         assert app.message == "Pick:"
         assert app.choices == choices
@@ -123,28 +132,29 @@ class TestChoicePrompt:
 class TestInputPrompt:
     """Tests for text input prompt functionality."""
 
-    @patch.object(InputApp, 'run', return_value="test input")
+    @patch.object(InputApp, "run", return_value="test input")
     def test_prompt_input_basic(self, mock_run):
         """Test prompt_input returns user input."""
         result = prompt_input("Enter name:")
         assert result == "test input"
 
-    @patch.object(InputApp, 'run', return_value="default text")
+    @patch.object(InputApp, "run", return_value="default text")
     def test_prompt_input_with_default(self, mock_run):
         """Test prompt_input uses default value."""
         result = prompt_input("Name:", default="default text")
         assert result == "default text"
 
-    @patch.object(InputApp, 'run', return_value="valid@email.com")
+    @patch.object(InputApp, "run", return_value="valid@email.com")
     def test_prompt_input_with_validation(self, mock_run):
         """Test prompt_input with validator function."""
+
         def validate_email(value):
-            return '@' in value
+            return "@" in value
 
         result = prompt_input("Email:", validator=validate_email)
         assert result == "valid@email.com"
 
-    @patch.object(InputApp, 'run', return_value=None)
+    @patch.object(InputApp, "run", return_value=None)
     def test_prompt_input_cancelled(self, mock_run):
         """Test prompt_input returns None when cancelled."""
         result = prompt_input("Input:")
@@ -152,10 +162,13 @@ class TestInputPrompt:
 
     def test_input_screen_initialization(self):
         """Test InputScreen initializes with parameters."""
+
         def validator(val):
             return len(val) > 3
 
-        screen = InputScreen("Enter:", default="test", validator=validator, placeholder="Type here")
+        screen = InputScreen(
+            "Enter:", default="test", validator=validator, placeholder="Type here"
+        )
         assert screen.message == "Enter:"
         assert screen.default == "test"
         assert screen.validator is validator
@@ -178,25 +191,25 @@ class TestProgressDashboard:
         assert isinstance(dashboard, App)
         assert dashboard.tasks == {}
 
-    @patch.object(ProgressDashboard, '_update_display')
+    @patch.object(ProgressDashboard, "_update_display")
     def test_progress_dashboard_add_task(self, mock_update):
         """Test adding task to progress dashboard."""
         dashboard = ProgressDashboard()
         task_id = dashboard.add_task("Processing files", total=100)
         assert task_id in dashboard.tasks
-        assert dashboard.tasks[task_id]['description'] == "Processing files"
-        assert dashboard.tasks[task_id]['total'] == 100
-        assert dashboard.tasks[task_id]['completed'] == 0
+        assert dashboard.tasks[task_id]["description"] == "Processing files"
+        assert dashboard.tasks[task_id]["total"] == 100
+        assert dashboard.tasks[task_id]["completed"] == 0
 
-    @patch.object(ProgressDashboard, '_update_display')
+    @patch.object(ProgressDashboard, "_update_display")
     def test_progress_dashboard_update_task(self, mock_update):
         """Test updating task progress."""
         dashboard = ProgressDashboard()
         task_id = dashboard.add_task("Upload", total=50)
         dashboard.update_task(task_id, completed=25)
-        assert dashboard.tasks[task_id]['completed'] == 25
+        assert dashboard.tasks[task_id]["completed"] == 25
 
-    @patch.object(ProgressDashboard, '_update_display')
+    @patch.object(ProgressDashboard, "_update_display")
     def test_progress_dashboard_multiple_tasks(self, mock_update):
         """Test dashboard handles multiple tasks."""
         dashboard = ProgressDashboard()
@@ -211,19 +224,19 @@ class TestInteractiveTable:
 
     def test_interactive_table_initialization(self):
         """Test InteractiveTable initializes with data."""
-        data = [['A', 1], ['B', 2]]
-        columns = ['Letter', 'Number']
-        table = InteractiveTable(data, columns, title='Test')
+        data = [["A", 1], ["B", 2]]
+        columns = ["Letter", "Number"]
+        table = InteractiveTable(data, columns, title="Test")
         assert table.data == data
         assert table.columns == columns
-        assert table.title_text == 'Test'
+        assert table.title_text == "Test"
 
-    @patch.object(InteractiveTable, 'run')
+    @patch.object(InteractiveTable, "run")
     def test_display_table_calls_run(self, mock_run):
         """Test display_table creates and runs InteractiveTable."""
-        data = [['X', 10]]
-        columns = ['Col1', 'Col2']
-        display_table(data, columns, title='Data')
+        data = [["X", 10]]
+        columns = ["Col1", "Col2"]
+        display_table(data, columns, title="Data")
         mock_run.assert_called_once()
 
 
@@ -240,13 +253,13 @@ class TestLogViewer:
         viewer = LogViewer()
         # This would normally interact with UI
         # Test that method exists and is callable
-        assert hasattr(viewer, 'add_log')
+        assert hasattr(viewer, "add_log")
         assert callable(viewer.add_log)
 
     def test_log_viewer_clear_action(self):
         """Test LogViewer has clear action."""
         viewer = LogViewer()
-        assert hasattr(viewer, 'action_clear')
+        assert hasattr(viewer, "action_clear")
         assert callable(viewer.action_clear)
 
 
@@ -295,7 +308,7 @@ class TestHelpDisplay:
         assert app.help_text == "Help content"
         assert app.title == "Guide"
 
-    @patch.object(HelpApp, 'run')
+    @patch.object(HelpApp, "run")
     def test_display_help_calls_run(self, mock_run):
         """Test display_help creates and runs HelpApp."""
         display_help("Instructions", title="Manual")
@@ -311,7 +324,7 @@ class TestLiveMetrics:
         assert isinstance(metrics, App)
         assert metrics.metrics == {}
 
-    @patch.object(LiveMetrics, '_refresh_display')
+    @patch.object(LiveMetrics, "_refresh_display")
     def test_live_metrics_update_metric(self, mock_refresh):
         """Test updating metric values."""
         metrics = LiveMetrics()
@@ -319,7 +332,7 @@ class TestLiveMetrics:
         assert "CPU" in metrics.metrics
         assert metrics.metrics["CPU"] == "45%"
 
-    @patch.object(LiveMetrics, '_refresh_display')
+    @patch.object(LiveMetrics, "_refresh_display")
     def test_live_metrics_multiple_metrics(self, mock_refresh):
         """Test updating multiple metrics."""
         metrics = LiveMetrics()
@@ -330,7 +343,7 @@ class TestLiveMetrics:
         assert metrics.metrics["CPU"] == "50%"
         assert metrics.metrics["Memory"] == "2.3 GB"
 
-    @patch.object(LiveMetrics, '_refresh_display')
+    @patch.object(LiveMetrics, "_refresh_display")
     def test_live_metrics_overwrite(self, mock_refresh):
         """Test updating existing metric overwrites value."""
         metrics = LiveMetrics()
@@ -342,17 +355,17 @@ class TestLiveMetrics:
 class TestUtilityFunctions:
     """Tests for utility functions."""
 
-    @patch.object(ConfirmApp, 'run', return_value=True)
+    @patch.object(ConfirmApp, "run", return_value=True)
     def test_run_tui_app_basic(self, mock_run):
         """Test run_tui_app runs app and returns result."""
         result = run_tui_app(ConfirmApp, "Test?", default=True)
         assert result is True
         mock_run.assert_called_once()
 
-    @patch.object(ChoiceApp, 'run', return_value=2)
+    @patch.object(ChoiceApp, "run", return_value=2)
     def test_run_tui_app_with_args(self, mock_run):
         """Test run_tui_app passes arguments correctly."""
-        choices = ['A', 'B', 'C']
+        choices = ["A", "B", "C"]
         result = run_tui_app(ChoiceApp, "Pick:", choices, default_index=0)
         assert result == 2
 
@@ -364,29 +377,29 @@ class TestScreenBindings:
         """Test ConfirmScreen has proper keybindings."""
         screen = ConfirmScreen("Test", default=False)
         # Bindings should include 'y', 'n', 'escape'
-        assert hasattr(ConfirmScreen, 'BINDINGS')
+        assert hasattr(ConfirmScreen, "BINDINGS")
         assert len(ConfirmScreen.BINDINGS) >= 3
 
     def test_choice_screen_has_bindings(self):
         """Test ChoiceScreen has proper keybindings."""
         # Bindings should include 'escape', 'enter'
-        assert hasattr(ChoiceScreen, 'BINDINGS')
+        assert hasattr(ChoiceScreen, "BINDINGS")
 
     def test_input_screen_has_bindings(self):
         """Test InputScreen has proper keybindings."""
         # Bindings should include 'escape', 'ctrl+s'
-        assert hasattr(InputScreen, 'BINDINGS')
+        assert hasattr(InputScreen, "BINDINGS")
 
     def test_help_screen_has_bindings(self):
         """Test HelpScreen has close bindings."""
         # Should have 'escape' and 'q'
-        assert hasattr(HelpScreen, 'BINDINGS')
+        assert hasattr(HelpScreen, "BINDINGS")
 
 
 class TestEdgeCases:
     """Tests for edge cases and error handling."""
 
-    @patch.object(ChoiceApp, 'run', return_value=0)
+    @patch.object(ChoiceApp, "run", return_value=0)
     def test_empty_choices_list(self, mock_run):
         """Test prompt_choice with empty choices list."""
         result = prompt_choice("Pick:", [])
@@ -404,7 +417,7 @@ class TestEdgeCases:
         # Should initialize with empty metrics
         assert metrics.metrics == {}
 
-    @patch.object(InputApp, 'run', return_value="")
+    @patch.object(InputApp, "run", return_value="")
     def test_prompt_input_empty_string(self, mock_run):
         """Test prompt_input with empty string input."""
         result = prompt_input("Name:")
@@ -412,7 +425,7 @@ class TestEdgeCases:
 
     def test_interactive_table_empty_data(self):
         """Test InteractiveTable with empty data."""
-        table = InteractiveTable([], ['Col1'], title='Empty')
+        table = InteractiveTable([], ["Col1"], title="Empty")
         assert table.data == []
         assert len(table.columns) == 1
 
@@ -423,9 +436,10 @@ class TestEdgeCases:
         # Should default to "information"
         assert "Message" in captured.out
 
-    @patch.object(InputApp, 'run', return_value="invalid")
+    @patch.object(InputApp, "run", return_value="invalid")
     def test_input_validation_failure_handling(self, mock_run):
         """Test input validation failure is handled."""
+
         def strict_validator(val):
             return val == "valid"
 
@@ -441,25 +455,25 @@ class TestComponentComposition:
         """Test ConfirmApp mounts ConfirmScreen on mount."""
         app = ConfirmApp("Test?")
         # Has on_mount method that pushes screen
-        assert hasattr(app, 'on_mount')
+        assert hasattr(app, "on_mount")
         assert callable(app.on_mount)
 
     def test_choice_app_mounts_screen(self):
         """Test ChoiceApp mounts ChoiceScreen on mount."""
-        app = ChoiceApp("Pick:", ['A', 'B'])
-        assert hasattr(app, 'on_mount')
+        app = ChoiceApp("Pick:", ["A", "B"])
+        assert hasattr(app, "on_mount")
         assert callable(app.on_mount)
 
     def test_input_app_mounts_screen(self):
         """Test InputApp mounts InputScreen on mount."""
         app = InputApp("Enter:")
-        assert hasattr(app, 'on_mount')
+        assert hasattr(app, "on_mount")
         assert callable(app.on_mount)
 
     def test_help_app_mounts_screen(self):
         """Test HelpApp mounts HelpScreen on mount."""
         app = HelpApp("Help text")
-        assert hasattr(app, 'on_mount')
+        assert hasattr(app, "on_mount")
         assert callable(app.on_mount)
 
 
@@ -468,17 +482,17 @@ class TestCSSandStyling:
 
     def test_progress_dashboard_has_css(self):
         """Test ProgressDashboard has CSS defined."""
-        assert hasattr(ProgressDashboard, 'CSS')
+        assert hasattr(ProgressDashboard, "CSS")
         assert isinstance(ProgressDashboard.CSS, str)
 
     def test_live_metrics_has_css(self):
         """Test LiveMetrics has CSS defined."""
-        assert hasattr(LiveMetrics, 'CSS')
+        assert hasattr(LiveMetrics, "CSS")
         assert isinstance(LiveMetrics.CSS, str)
 
     def test_log_viewer_has_css(self):
         """Test LogViewer has CSS defined."""
-        assert hasattr(LogViewer, 'CSS')
+        assert hasattr(LogViewer, "CSS")
         assert isinstance(LogViewer.CSS, str)
 
 
@@ -487,11 +501,11 @@ class TestInteractiveTableActions:
 
     def test_interactive_table_has_search_action(self):
         """Test InteractiveTable has search action defined."""
-        data = [['A', 1]]
-        table = InteractiveTable(data, ['Col'], title='Test')
-        assert hasattr(table, 'action_search')
+        data = [["A", 1]]
+        table = InteractiveTable(data, ["Col"], title="Test")
+        assert hasattr(table, "action_search")
         assert callable(table.action_search)
 
     def test_interactive_table_has_bindings(self):
         """Test InteractiveTable has keybindings."""
-        assert hasattr(InteractiveTable, 'BINDINGS')
+        assert hasattr(InteractiveTable, "BINDINGS")

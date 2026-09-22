@@ -7,7 +7,20 @@ import uuid
 from datetime import datetime
 from itertools import chain, islice
 from os import path
-from typing import Any as TypingAny, Union, Iterable, Iterator, Dict, List, Mapping, Type, Callable, Sequence, Optional
+from typing import (
+    Any as TypingAny,
+    Callable,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Type,
+    Union,
+)
+
 
 def _json_safe_default(o):
     """Fallback serializer for ``json.dumps`` — degrades unknown types to strings.
@@ -20,6 +33,7 @@ def _json_safe_default(o):
         return f"<callable:{getattr(o, '__qualname__', repr(o))}>"
     try:
         import attr
+
         if attr.has(type(o)):
             return attr.asdict(o, recurse=False)
     except Exception:
@@ -31,70 +45,99 @@ from rich_python_utils.common_objects.partial import Partial
 from rich_python_utils.common_utils import dict__, get_relevant_named_args
 from rich_python_utils.common_utils.iter_helper import iter__
 from rich_python_utils.common_utils.map_helper import (
-    has_path, get_at_path, set_at_path, delete_at_path, parse_key_path,
+    delete_at_path,
+    get_at_path,
+    has_path,
     obj_walk_through,
+    parse_key_path,
+    set_at_path,
 )
 from rich_python_utils.console_utils import eprint_message
-from rich_python_utils.io_utils.common import DEFAULT_ENCODING, open_, _default_space_handler, read_text_or_file
-from rich_python_utils.io_utils.text_io import _get_input_file_stream, write_all_lines, read_all_text
-from rich_python_utils.path_utils.path_string_operations import get_main_name, get_ext_name
-from rich_python_utils.path_utils.path_listing import get_files_by_pattern, get_sorted_files_from_all_sub_dirs
-from rich_python_utils.path_utils.common import ensure_dir_existence, resolve_ext
 
 # Artifact decorators and helpers — canonical home is artifact.py;
 # re-exported here for backward compatibility.
 from rich_python_utils.io_utils.artifact import (  # noqa: F401
-    PartsKeyPath,
     artifact_field,
     artifact_type,
     get_key_paths_for_artifacts,
+    PartsKeyPath,
+)
+from rich_python_utils.io_utils.common import (
+    _default_space_handler,
+    DEFAULT_ENCODING,
+    open_,
+    read_text_or_file,
+)
+from rich_python_utils.io_utils.text_io import (
+    _get_input_file_stream,
+    read_all_text,
+    write_all_lines,
+)
+from rich_python_utils.path_utils.common import ensure_dir_existence, resolve_ext
+from rich_python_utils.path_utils.path_listing import (
+    get_files_by_pattern,
+    get_sorted_files_from_all_sub_dirs,
+)
+from rich_python_utils.path_utils.path_string_operations import (
+    get_ext_name,
+    get_main_name,
 )
 
-DEFAULT_JSON_FILE_PATTERN = '*.json*'
+DEFAULT_JSON_FILE_PATTERN = "*.json*"
 
 try:
     from enum import StrEnum
 
     class JsonConverter(StrEnum):
-        DICT = 'dict'                                # Use dict__(recursive=True) — current default
-        DICT_NON_RECURSIVE = 'dict_non_recursive'    # Use dict__(recursive=False)
-        STR = 'str'                                  # Use str()
-        NONE = 'none'                                # No conversion, pass to json.dumps as-is
+        DICT = "dict"  # Use dict__(recursive=True) — current default
+        DICT_NON_RECURSIVE = "dict_non_recursive"  # Use dict__(recursive=False)
+        STR = "str"  # Use str()
+        NONE = "none"  # No conversion, pass to json.dumps as-is
 
     class PartsReplacementMode(StrEnum):
-        REMOVE = 'remove'
-        TRUNCATE = 'truncate'
-        ABSOLUTE_PATH = 'absolute_path'
-        RELATIVE_PATH = 'relative_path'
-        FILENAME_ONLY = 'filename_only'
-        REFERENCE = 'reference'
+        REMOVE = "remove"
+        TRUNCATE = "truncate"
+        ABSOLUTE_PATH = "absolute_path"
+        RELATIVE_PATH = "relative_path"
+        FILENAME_ONLY = "filename_only"
+        REFERENCE = "reference"
+        # LINK: like REFERENCE, but for a field whose value has ALREADY been
+        # written to a file by the caller. Instead of writing a SECOND copy,
+        # the caller supplies the pre-existing path via ``parts_link_paths``
+        # and jsonfy stores ``{"__parts_file__": <path>, "__value_type__": ...}``
+        # pointing at that one file ("write once, link"). Opt-in and additive:
+        # a field NOT present in ``parts_link_paths`` degrades to REFERENCE
+        # (a copy is written) so no data is ever silently dropped.
+        LINK = "link"
 
     class SpaceExtMode(StrEnum):
-        NONE = 'none'
-        MOVE = 'move'
-        ADD = 'add'
+        NONE = "none"
+        MOVE = "move"
+        ADD = "add"
 
 except ImportError:
     from enum import Enum
 
     class JsonConverter(str, Enum):
-        DICT = 'dict'
-        DICT_NON_RECURSIVE = 'dict_non_recursive'
-        STR = 'str'
-        NONE = 'none'
+        DICT = "dict"
+        DICT_NON_RECURSIVE = "dict_non_recursive"
+        STR = "str"
+        NONE = "none"
 
     class PartsReplacementMode(str, Enum):
-        REMOVE = 'remove'
-        TRUNCATE = 'truncate'
-        ABSOLUTE_PATH = 'absolute_path'
-        RELATIVE_PATH = 'relative_path'
-        FILENAME_ONLY = 'filename_only'
-        REFERENCE = 'reference'
+        REMOVE = "remove"
+        TRUNCATE = "truncate"
+        ABSOLUTE_PATH = "absolute_path"
+        RELATIVE_PATH = "relative_path"
+        FILENAME_ONLY = "filename_only"
+        REFERENCE = "reference"
+        # See the StrEnum branch above for LINK semantics ("write once, link").
+        LINK = "link"
 
     class SpaceExtMode(str, Enum):
-        NONE = 'none'
-        MOVE = 'move'
-        ADD = 'add'
+        NONE = "none"
+        MOVE = "move"
+        ADD = "add"
 
 
 class JsonLogger(Partial):
@@ -125,24 +168,22 @@ class JsonLogger(Partial):
     """
 
     _PARAM_MAP = {
-        'group': 'subfolder',
-        'max_message_length': 'leaf_as_parts_if_exceeding_size',
+        "group": "subfolder",
+        "max_message_length": "leaf_as_parts_if_exceeding_size",
     }
 
-    _FIRST_ARG_VALUES_TO_PARAM_MAP = {
-        'type': 'parts_subfolder'
-    }
+    _FIRST_ARG_VALUES_TO_PARAM_MAP = {"type": "parts_subfolder"}
 
     def __init__(self, **kwargs):
         super().__init__(write_json, **kwargs)
 
     @property
     def file_path(self):
-        return self._kwargs.get('file_path')
+        return self._kwargs.get("file_path")
 
     def __repr__(self):
-        params = ', '.join(f'{k}={v!r}' for k, v in self._kwargs.items())
-        return f'JsonLogger({params})' if params else 'JsonLogger()'
+        params = ", ".join(f"{k}={v!r}" for k, v in self._kwargs.items())
+        return f"JsonLogger({params})" if params else "JsonLogger()"
 
 
 class JsonLogReader:
@@ -166,7 +207,7 @@ class JsonLogReader:
         self,
         file_path: str,
         resolve_parts: bool = True,
-        parts_suffix: str = '.parts',
+        parts_suffix: str = ".parts",
         selection=None,
         result_type=dict,
         encoding: str = None,
@@ -189,7 +230,7 @@ class JsonLogReader:
             use_tqdm=use_tqdm,
         )
         if json_file_pattern is not None:
-            self._kwargs['json_file_pattern'] = json_file_pattern
+            self._kwargs["json_file_pattern"] = json_file_pattern
 
     @property
     def file_path(self):
@@ -200,10 +241,10 @@ class JsonLogReader:
         return iter_json_objs(self._file_path, **self._kwargs)
 
     def __repr__(self):
-        params = ', '.join(f'{k}={v!r}' for k, v in self._kwargs.items())
-        fp = f'file_path={self._file_path!r}'
-        inner = f'{fp}, {params}' if params else fp
-        return f'JsonLogReader({inner})'
+        params = ", ".join(f"{k}={v!r}" for k, v in self._kwargs.items())
+        fp = f"file_path={self._file_path!r}"
+        inner = f"{fp}, {params}" if params else fp
+        return f"JsonLogReader({inner})"
 
 
 def _normalize_extract_path_entry(entry):
@@ -223,7 +264,9 @@ def _normalize_extract_path_entry(entry):
         path_str = str(entry[0])
         ext_override = entry[1] if len(entry) > 1 else None
         name_alias = entry[2] if len(entry) > 2 else None
-        entry_subfolder = str(entry[3]) if len(entry) > 3 and entry[3] is not None else None
+        entry_subfolder = (
+            str(entry[3]) if len(entry) > 3 and entry[3] is not None else None
+        )
         return path_str, ext_override, name_alias, entry_subfolder
     return str(entry), None, None, None
 
@@ -232,58 +275,99 @@ def _detect_extension(value):
     """Auto-detect file extension based on value content."""
     if isinstance(value, str):
         stripped = value.strip()
-        if stripped[:5].lower() == '<html' or stripped[:5].lower() == '<!doc':
-            return '.html'
-        return '.txt'
-    return '.json'
+        if stripped[:5].lower() == "<html" or stripped[:5].lower() == "<!doc":
+            return ".html"
+        return ".txt"
+    return ".json"
 
 
 def _serialize_value(value, ensure_ascii=False):
     """Serialize a value to string for writing to a parts file."""
     if isinstance(value, str):
         return value
-    return json.dumps(value, ensure_ascii=ensure_ascii, indent=2,
-                       default=_json_safe_default)
+    return json.dumps(
+        value, ensure_ascii=ensure_ascii, indent=2, default=_json_safe_default
+    )
 
 
-def _resolve_parts_references(obj, parts_dir):
+def _resolve_parts_references(obj, parts_dir, workspace_root=None):
     """
     Recursively walk a dict tree and replace __parts_file__ reference markers
     with the loaded file content.
 
-    Only works with REFERENCE replacement mode markers:
+    Works with both REFERENCE and LINK replacement-mode markers (identical on
+    disk):
         {"__parts_file__": "filename.txt", "__value_type__": "str"|"json"}
+
+    A REFERENCE marker's ``__parts_file__`` is relative to ``parts_dir`` (the
+    adjacent ``*.parts`` directory). A LINK marker's ``__parts_file__`` is
+    relative to the WORKSPACE (it points at a file the framework wrote once,
+    e.g. ``artifacts/inference/response.txt``). Resolution tries ``parts_dir``
+    FIRST — so every existing ``.parts/`` log keeps resolving byte-for-byte —
+    and falls back to ``workspace_root`` only when the ``parts_dir`` candidate
+    is absent AND ``workspace_root`` was supplied. When ``workspace_root`` is
+    None (the default), behavior is identical to the original two-arg form.
     """
     if isinstance(obj, dict):
-        if (
-            '__parts_file__' in obj
-            and '__value_type__' in obj
-        ):
-            parts_file = path.join(parts_dir, obj['__parts_file__'])
+        if "__parts_file__" in obj and "__value_type__" in obj:
+            _pf_rel = obj["__parts_file__"]
+            parts_file = path.join(parts_dir, _pf_rel)
+            if not path.isfile(parts_file):
+                # LINK marker: ``__parts_file__`` is WORKSPACE-relative (e.g.
+                # ``artifacts/round01_output.md``) — it points at a file the
+                # framework wrote ONCE, not into this ``.parts/`` dir. Try the
+                # explicit ``workspace_root`` first, then AUTO-DERIVE the base by
+                # walking up from ``parts_dir`` (which lives at
+                # ``<workspace>/logs/session/<log>.parts``) until the relative path
+                # resolves. This lets ANY reader resolve a LINK with no
+                # ``workspace_root`` threading. ``parts_dir`` is tried FIRST above,
+                # so every existing REFERENCE ``.parts/`` log stays byte-identical.
+                _bases = []
+                if workspace_root is not None:
+                    _bases.append(workspace_root)
+                _anc = parts_dir
+                for _ in range(8):
+                    _parent = path.dirname(_anc)
+                    if not _parent or _parent == _anc:
+                        break
+                    _bases.append(_parent)
+                    _anc = _parent
+                for _base in _bases:
+                    _cand = path.join(_base, _pf_rel)
+                    if path.isfile(_cand):
+                        parts_file = _cand
+                        break
             if path.isfile(parts_file):
-                with open(parts_file, 'r', encoding='utf-8') as f:
+                with open(parts_file, "r", encoding="utf-8") as f:
                     content = f.read()
-                if obj['__value_type__'] == 'json':
+                if obj["__value_type__"] == "json":
                     return json.loads(content)
                 return content
             return obj
-        return {k: _resolve_parts_references(v, parts_dir) for k, v in obj.items()}
+        return {
+            k: _resolve_parts_references(v, parts_dir, workspace_root=workspace_root)
+            for k, v in obj.items()
+        }
     elif isinstance(obj, list):
-        return [_resolve_parts_references(item, parts_dir) for item in obj]
+        return [
+            _resolve_parts_references(item, parts_dir, workspace_root=workspace_root)
+            for item in obj
+        ]
     return obj
 
 
 def resolve_json_parts(
-        obj,
-        source_path: str,
-        parts_suffix: str = '.parts',
+    obj,
+    source_path: str,
+    parts_suffix: str = ".parts",
+    workspace_root: str = None,
 ):
     """
     Resolve ``__parts_file__`` reference markers in a JSON object by loading
     the referenced file content from the adjacent parts directory.
 
     This is the read-side counterpart to ``jsonfy()`` with parts extraction.
-    Only works with REFERENCE replacement mode markers:
+    Works with both REFERENCE and LINK replacement-mode markers:
         {"__parts_file__": "filename.txt", "__value_type__": "str"|"json"}
 
     Args:
@@ -292,15 +376,28 @@ def resolve_json_parts(
         source_path (str): Path to the source JSON file. The parts directory is located
             at ``source_path + parts_suffix``.
         parts_suffix (str): Suffix used to locate the parts directory. Default is '.parts'.
+        workspace_root (str, optional): Base directory for resolving LINK-mode
+            markers (whose ``__parts_file__`` is stored WORKSPACE-relative, e.g.
+            ``artifacts/inference/response.txt``). The adjacent parts directory is
+            still tried FIRST for every marker, so all existing ``.parts/`` logs
+            keep resolving unchanged; ``workspace_root`` is consulted only as a
+            fallback when the parts-directory candidate is absent. Default None
+            (LINK markers left unresolved — byte-identical to the prior behavior).
 
     Returns:
         The object with all parts references resolved (file contents loaded in-place).
-        If the parts directory does not exist, returns obj unchanged.
+        If neither the parts directory nor the workspace fallback yields a file,
+        that marker is returned unchanged.
     """
     if isinstance(obj, dict) and isinstance(source_path, str):
         parts_dir = source_path + parts_suffix
-        if path.isdir(parts_dir):
-            return _resolve_parts_references(obj, parts_dir)
+        # A LINK marker can resolve via workspace_root even when the adjacent
+        # ``.parts`` directory does not exist (LINK writes no .parts/ dir at
+        # all), so proceed whenever EITHER base is available.
+        if path.isdir(parts_dir) or workspace_root is not None:
+            return _resolve_parts_references(
+                obj, parts_dir, workspace_root=workspace_root
+            )
     return obj
 
 
@@ -313,6 +410,7 @@ def _get_origin(tp):
     """Extract the generic origin of a type (e.g., ``List[int]`` → ``list``)."""
     try:
         from typing import get_origin
+
         result = get_origin(tp)
         if result is not None:
             return result
@@ -325,6 +423,7 @@ def _get_type_args(tp):
     """Extract generic type arguments (e.g., ``List[int]`` → ``(int,)``)."""
     try:
         from typing import get_args
+
         result = get_args(tp)
         if result:
             return result
@@ -369,14 +468,21 @@ def _dejsonfy_enum(value, enum_type):
     return value
 
 
-def _dejsonfy_sequence(data, element_type, container, _type_map=None, _path="", _allowed_modules=None):
+def _dejsonfy_sequence(
+    data, element_type, container, _type_map=None, _path="", _allowed_modules=None
+):
     """Reconstruct a sequence (list, tuple, set) with typed elements."""
     if not isinstance(data, (list, tuple)):
         return data
     if element_type is not None:
         results = [
-            dejsonfy(item, target_type=element_type, _type_map=_type_map,
-                     _path=(_path + ".*") if _path else "*", _allowed_modules=_allowed_modules)
+            dejsonfy(
+                item,
+                target_type=element_type,
+                _type_map=_type_map,
+                _path=(_path + ".*") if _path else "*",
+                _allowed_modules=_allowed_modules,
+            )
             for item in data
         ]
     else:
@@ -384,54 +490,120 @@ def _dejsonfy_sequence(data, element_type, container, _type_map=None, _path="", 
     return container(results)
 
 
-def _dejsonfy_positional_tuple(data, type_args, _type_map=None, _path="", _allowed_modules=None):
+def _dejsonfy_positional_tuple(
+    data, type_args, _type_map=None, _path="", _allowed_modules=None
+):
     """Reconstruct a heterogeneous Tuple[A, B, C] with positional types."""
     if not isinstance(data, (list, tuple)):
         return data
     n = min(len(data), len(type_args))
     results = [
-        dejsonfy(data[i], target_type=type_args[i], _type_map=_type_map,
-                 _path=_path, _allowed_modules=_allowed_modules)
+        dejsonfy(
+            data[i],
+            target_type=type_args[i],
+            _type_map=_type_map,
+            _path=_path,
+            _allowed_modules=_allowed_modules,
+        )
         for i in range(n)
     ]
     return tuple(results)
 
 
-def _dejsonfy_mapping(data, key_type, value_type, target_type, _type_map=None, _path="", _allowed_modules=None):
+def _dejsonfy_mapping(
+    data,
+    key_type,
+    value_type,
+    target_type,
+    _type_map=None,
+    _path="",
+    _allowed_modules=None,
+):
     """Reconstruct a dict, including non-string-key reversal from list-of-pairs."""
     origin = _get_origin(target_type)
     if isinstance(data, list) and (origin is dict or target_type is dict):
-        if data and all(isinstance(item, dict) and "key" in item and "value" in item for item in data):
+        if data and all(
+            isinstance(item, dict) and "key" in item and "value" in item
+            for item in data
+        ):
             result = {}
             for item in data:
-                k = dejsonfy(item["key"], target_type=key_type, _type_map=_type_map,
-                             _path=_path, _allowed_modules=_allowed_modules) if key_type else item["key"]
-                v = dejsonfy(item["value"], target_type=value_type, _type_map=_type_map,
-                             _path=(_path + ".*") if _path else "*", _allowed_modules=_allowed_modules) if value_type else item["value"]
+                k = (
+                    dejsonfy(
+                        item["key"],
+                        target_type=key_type,
+                        _type_map=_type_map,
+                        _path=_path,
+                        _allowed_modules=_allowed_modules,
+                    )
+                    if key_type
+                    else item["key"]
+                )
+                v = (
+                    dejsonfy(
+                        item["value"],
+                        target_type=value_type,
+                        _type_map=_type_map,
+                        _path=(_path + ".*") if _path else "*",
+                        _allowed_modules=_allowed_modules,
+                    )
+                    if value_type
+                    else item["value"]
+                )
                 result[k] = v
             return result
     if not isinstance(data, dict):
         return data
-    need_key_reconstruction = (key_type is not None and key_type is not str
-                               and isinstance(key_type, type) and key_type not in (int, float, bool, type(None)))
-    need_value_reconstruction = (value_type is not None
-                                 and value_type not in (str, int, float, bool, type(None)))
+    need_key_reconstruction = (
+        key_type is not None
+        and key_type is not str
+        and isinstance(key_type, type)
+        and key_type not in (int, float, bool, type(None))
+    )
+    need_value_reconstruction = value_type is not None and value_type not in (
+        str,
+        int,
+        float,
+        bool,
+        type(None),
+    )
     if need_key_reconstruction or need_value_reconstruction:
         result = {}
         for k, v in data.items():
-            new_k = dejsonfy(k, target_type=key_type, _type_map=_type_map,
-                             _path=_path, _allowed_modules=_allowed_modules) if need_key_reconstruction else k
-            new_v = dejsonfy(v, target_type=value_type, _type_map=_type_map,
-                             _path=(_path + "." + k) if _path else k, _allowed_modules=_allowed_modules) if need_value_reconstruction else v
+            new_k = (
+                dejsonfy(
+                    k,
+                    target_type=key_type,
+                    _type_map=_type_map,
+                    _path=_path,
+                    _allowed_modules=_allowed_modules,
+                )
+                if need_key_reconstruction
+                else k
+            )
+            new_v = (
+                dejsonfy(
+                    v,
+                    target_type=value_type,
+                    _type_map=_type_map,
+                    _path=(_path + "." + k) if _path else k,
+                    _allowed_modules=_allowed_modules,
+                )
+                if need_value_reconstruction
+                else v
+            )
             result[new_k] = new_v
         return result
     return dict(data)
 
 
-def _dejsonfy_structured(data, target_type, target=None, _type_map=None, _path="", _allowed_modules=None):
+def _dejsonfy_structured(
+    data, target_type, target=None, _type_map=None, _path="", _allowed_modules=None
+):
     """Reconstruct an attrs class or dataclass from a dict."""
-    import attr
     import dataclasses
+
+    import attr
 
     if not isinstance(data, dict):
         return data
@@ -445,6 +617,7 @@ def _dejsonfy_structured(data, target_type, target=None, _type_map=None, _path="
 
     try:
         import typing
+
         hints = typing.get_type_hints(target_type)
     except Exception:
         hints = getattr(target_type, "__annotations__", {})
@@ -460,8 +633,13 @@ def _dejsonfy_structured(data, target_type, target=None, _type_map=None, _path="
             continue
         field_type = hints.get(name)
         child_path = (_path + "." + name) if _path else name
-        value = dejsonfy(data[name], target_type=field_type, _type_map=_type_map,
-                         _path=child_path, _allowed_modules=_allowed_modules)
+        value = dejsonfy(
+            data[name],
+            target_type=field_type,
+            _type_map=_type_map,
+            _path=child_path,
+            _allowed_modules=_allowed_modules,
+        )
         if target is not None:
             setattr(target, name, value)
         else:
@@ -472,7 +650,9 @@ def _dejsonfy_structured(data, target_type, target=None, _type_map=None, _path="
     return target_type(**kwargs)
 
 
-def _dejsonfy_namedtuple(data, target_type, _type_map=None, _path="", _allowed_modules=None):
+def _dejsonfy_namedtuple(
+    data, target_type, _type_map=None, _path="", _allowed_modules=None
+):
     """Reconstruct a namedtuple from a dict."""
     if not isinstance(data, dict):
         return data
@@ -484,12 +664,19 @@ def _dejsonfy_namedtuple(data, target_type, _type_map=None, _path="", _allowed_m
             continue
         field_type = hints.get(name)
         child_path = (_path + "." + name) if _path else name
-        filtered[name] = dejsonfy(data[name], target_type=field_type, _type_map=_type_map,
-                                  _path=child_path, _allowed_modules=_allowed_modules)
+        filtered[name] = dejsonfy(
+            data[name],
+            target_type=field_type,
+            _type_map=_type_map,
+            _path=child_path,
+            _allowed_modules=_allowed_modules,
+        )
     return target_type(**filtered)
 
 
-def _dejsonfy_plain_object(data, target_type, target=None, _type_map=None, _path="", _allowed_modules=None):
+def _dejsonfy_plain_object(
+    data, target_type, target=None, _type_map=None, _path="", _allowed_modules=None
+):
     """Reconstruct a plain class from a dict using __init__ kwargs."""
     if not isinstance(data, dict):
         return data
@@ -501,7 +688,9 @@ def _dejsonfy_plain_object(data, target_type, target=None, _type_map=None, _path
     return target_type(**relevant)
 
 
-def _dejsonfy_slots(data, target_type, target=None, _type_map=None, _path="", _allowed_modules=None):
+def _dejsonfy_slots(
+    data, target_type, target=None, _type_map=None, _path="", _allowed_modules=None
+):
     """Reconstruct a __slots__-based object."""
     if not isinstance(data, dict):
         return data
@@ -511,6 +700,7 @@ def _dejsonfy_slots(data, target_type, target=None, _type_map=None, _path="", _a
             all_slots.extend(cls.__dict__["__slots__"])
     try:
         import typing
+
         hints = typing.get_type_hints(target_type)
     except Exception:
         hints = getattr(target_type, "__annotations__", {})
@@ -525,16 +715,23 @@ def _dejsonfy_slots(data, target_type, target=None, _type_map=None, _path="", _a
             continue
         slot_type = hints.get(slot)
         child_path = (_path + "." + slot) if _path else slot
-        value = dejsonfy(data[slot], target_type=slot_type, _type_map=_type_map,
-                         _path=child_path, _allowed_modules=_allowed_modules)
+        value = dejsonfy(
+            data[slot],
+            target_type=slot_type,
+            _type_map=_type_map,
+            _path=child_path,
+            _allowed_modules=_allowed_modules,
+        )
         setattr(obj, slot, value)
     return obj
 
 
 def _is_typed_object(obj):
     """Check if obj is a non-primitive typed object (attrs, dataclass, namedtuple, __slots__, __dict__)."""
-    import attr
     import dataclasses
+
+    import attr
+
     if obj is None or isinstance(obj, (int, float, str, bool, bytes)):
         return False
     if isinstance(obj, enum.Enum):
@@ -556,8 +753,9 @@ def _is_typed_object(obj):
 
 def _inject_type_metadata(original_obj, converted):
     """Embed __type__/__module__ metadata into converted dicts from typed objects."""
-    import attr
     import dataclasses
+
+    import attr
 
     if _is_typed_object(original_obj) and isinstance(converted, dict):
         converted["__type__"] = type(original_obj).__qualname__
@@ -590,7 +788,10 @@ def _inject_type_metadata(original_obj, converted):
             _inject_type_metadata(orig_list[i], converted[i])
 
     elif isinstance(original_obj, dict) and isinstance(converted, list):
-        if converted and all(isinstance(item, dict) and "key" in item and "value" in item for item in converted):
+        if converted and all(
+            isinstance(item, dict) and "key" in item and "value" in item
+            for item in converted
+        ):
             orig_values = list(original_obj.values())
             for i, item in enumerate(converted):
                 if i < len(orig_values):
@@ -605,8 +806,9 @@ def _inject_type_metadata(original_obj, converted):
 
 def _collect_type_metadata(original_obj, converted, path_str=""):
     """Collect path-based type map from parallel walk of original and converted objects."""
-    import attr
     import dataclasses
+
+    import attr
 
     result = {}
 
@@ -636,13 +838,17 @@ def _collect_type_metadata(original_obj, converted, path_str=""):
             if name in converted:
                 child_path = (path_str + "." + name) if path_str else name
                 orig_val = getattr(original_obj, name, None)
-                result.update(_collect_type_metadata(orig_val, converted[name], child_path))
+                result.update(
+                    _collect_type_metadata(orig_val, converted[name], child_path)
+                )
 
     elif isinstance(original_obj, (list, tuple, set)) and isinstance(converted, list):
         orig_list = list(original_obj)
         wildcard_path = (path_str + ".*") if path_str else "*"
         for i in range(min(len(orig_list), len(converted))):
-            result.update(_collect_type_metadata(orig_list[i], converted[i], wildcard_path))
+            result.update(
+                _collect_type_metadata(orig_list[i], converted[i], wildcard_path)
+            )
 
     elif isinstance(original_obj, dict) and isinstance(converted, dict):
         for k, v in original_obj.items():
@@ -656,8 +862,9 @@ def _collect_type_metadata(original_obj, converted, path_str=""):
 
 def _collect_type_driven_parts(original_obj, converted, type_map, path_str=""):
     """Walk original object tree and collect key paths matching types in type_map."""
-    import attr
     import dataclasses
+
+    import attr
 
     results = []
 
@@ -666,9 +873,15 @@ def _collect_type_driven_parts(original_obj, converted, type_map, path_str=""):
             if isinstance(original_obj, target_type):
                 entry = PartsKeyPath(
                     key=path_str,
-                    ext=config.get("ext") if isinstance(config, dict) else getattr(config, "ext", None),
-                    alias=config.get("alias") if isinstance(config, dict) else getattr(config, "alias", None),
-                    subfolder=config.get("subfolder") if isinstance(config, dict) else getattr(config, "subfolder", None),
+                    ext=config.get("ext")
+                    if isinstance(config, dict)
+                    else getattr(config, "ext", None),
+                    alias=config.get("alias")
+                    if isinstance(config, dict)
+                    else getattr(config, "alias", None),
+                    subfolder=config.get("subfolder")
+                    if isinstance(config, dict)
+                    else getattr(config, "subfolder", None),
                 )
                 results.append(entry)
                 return results
@@ -697,20 +910,32 @@ def _collect_type_driven_parts(original_obj, converted, type_map, path_str=""):
             if orig_val is None:
                 continue
             child_path = (path_str + "." + name) if path_str else name
-            results.extend(_collect_type_driven_parts(orig_val, converted[name], type_map, child_path))
+            results.extend(
+                _collect_type_driven_parts(
+                    orig_val, converted[name], type_map, child_path
+                )
+            )
 
     elif isinstance(original_obj, (list, tuple, set)) and isinstance(converted, list):
         orig_list = list(original_obj)
         for i in range(min(len(orig_list), len(converted))):
             child_path = (path_str + "." + str(i)) if path_str else str(i)
-            results.extend(_collect_type_driven_parts(orig_list[i], converted[i], type_map, child_path))
+            results.extend(
+                _collect_type_driven_parts(
+                    orig_list[i], converted[i], type_map, child_path
+                )
+            )
 
     elif isinstance(original_obj, dict) and isinstance(converted, dict):
         for k in original_obj:
             str_k = str(k)
             if str_k in converted:
                 child_path = (path_str + "." + str_k) if path_str else str_k
-                results.extend(_collect_type_driven_parts(original_obj[k], converted[str_k], type_map, child_path))
+                results.extend(
+                    _collect_type_driven_parts(
+                        original_obj[k], converted[str_k], type_map, child_path
+                    )
+                )
 
     return results
 
@@ -736,8 +961,8 @@ def _read_type_file(type_file):
 
 def _import_type(qualname, module_name, allowed_modules=None):
     """Securely resolve a class from inline type metadata."""
-    import sys
     import importlib
+    import sys
 
     mod = None
     if module_name in sys.modules:
@@ -770,8 +995,9 @@ def _is_inline_metadata(data, allowed_modules=None):
     if resolved is None:
         return None
 
-    import attr
     import dataclasses
+
+    import attr
 
     remaining_keys = set(data.keys()) - {"__type__", "__module__"}
     field_names = set()
@@ -788,6 +1014,7 @@ def _is_inline_metadata(data, allowed_modules=None):
                     field_names.update(cls.__dict__["__slots__"])
         elif hasattr(resolved, "__init__"):
             import inspect
+
             try:
                 sig = inspect.signature(resolved.__init__)
                 field_names = {p for p in sig.parameters if p != "self"}
@@ -828,8 +1055,9 @@ def dejsonfy(
         the mutated target object (if target was provided),
         or data unchanged for basic types / when no type can be resolved.
     """
-    import attr
     import dataclasses
+
+    import attr
 
     if _path == "" and target_type is not None and target is not None:
         raise ValueError(
@@ -845,7 +1073,9 @@ def dejsonfy(
     if isinstance(data, dict) and "__type__" in data and "__module__" in data:
         resolved = _is_inline_metadata(data, _allowed_modules)
         if resolved is not None:
-            data = {k: v for k, v in data.items() if k not in ("__type__", "__module__")}
+            data = {
+                k: v for k, v in data.items() if k not in ("__type__", "__module__")
+            }
             if target_type is None:
                 target_type = resolved
 
@@ -885,8 +1115,13 @@ def dejsonfy(
 
     is_opt, inner_type = _unwrap_optional(target_type)
     if is_opt:
-        return dejsonfy(data, target_type=inner_type, _type_map=_type_map,
-                        _path=_path, _allowed_modules=_allowed_modules)
+        return dejsonfy(
+            data,
+            target_type=inner_type,
+            _type_map=_type_map,
+            _path=_path,
+            _allowed_modules=_allowed_modules,
+        )
 
     origin = _get_origin(target_type)
     args = _get_type_args(target_type)
@@ -895,8 +1130,13 @@ def dejsonfy(
             if union_type is type(None):
                 continue
             try:
-                result = dejsonfy(data, target_type=union_type, _type_map=_type_map,
-                                  _path=_path, _allowed_modules=_allowed_modules)
+                result = dejsonfy(
+                    data,
+                    target_type=union_type,
+                    _type_map=_type_map,
+                    _path=_path,
+                    _allowed_modules=_allowed_modules,
+                )
                 return result
             except Exception:
                 continue
@@ -907,93 +1147,169 @@ def dejsonfy(
 
     if origin is list or (isinstance(target_type, type) and target_type is list):
         element_type = args[0] if args else None
-        return _dejsonfy_sequence(data, element_type, list, _type_map=_type_map,
-                                  _path=_path, _allowed_modules=_allowed_modules)
+        return _dejsonfy_sequence(
+            data,
+            element_type,
+            list,
+            _type_map=_type_map,
+            _path=_path,
+            _allowed_modules=_allowed_modules,
+        )
 
     if origin is tuple or (isinstance(target_type, type) and target_type is tuple):
         if args:
             if len(args) == 2 and args[1] is Ellipsis:
-                return _dejsonfy_sequence(data, args[0], tuple, _type_map=_type_map,
-                                          _path=_path, _allowed_modules=_allowed_modules)
+                return _dejsonfy_sequence(
+                    data,
+                    args[0],
+                    tuple,
+                    _type_map=_type_map,
+                    _path=_path,
+                    _allowed_modules=_allowed_modules,
+                )
             elif Ellipsis not in args:
-                return _dejsonfy_positional_tuple(data, args, _type_map=_type_map,
-                                                  _path=_path, _allowed_modules=_allowed_modules)
+                return _dejsonfy_positional_tuple(
+                    data,
+                    args,
+                    _type_map=_type_map,
+                    _path=_path,
+                    _allowed_modules=_allowed_modules,
+                )
         if isinstance(data, (list, tuple)):
             return tuple(data)
         return data
 
     if origin is set or (isinstance(target_type, type) and target_type is set):
         element_type = args[0] if args else None
-        return _dejsonfy_sequence(data, element_type, set, _type_map=_type_map,
-                                  _path=_path, _allowed_modules=_allowed_modules)
+        return _dejsonfy_sequence(
+            data,
+            element_type,
+            set,
+            _type_map=_type_map,
+            _path=_path,
+            _allowed_modules=_allowed_modules,
+        )
 
     if origin is dict or (isinstance(target_type, type) and target_type is dict):
         key_type = args[0] if len(args) >= 1 else None
         value_type = args[1] if len(args) >= 2 else None
-        return _dejsonfy_mapping(data, key_type, value_type, target_type,
-                                 _type_map=_type_map, _path=_path, _allowed_modules=_allowed_modules)
+        return _dejsonfy_mapping(
+            data,
+            key_type,
+            value_type,
+            target_type,
+            _type_map=_type_map,
+            _path=_path,
+            _allowed_modules=_allowed_modules,
+        )
 
     try:
         if attr.has(target_type):
-            return _dejsonfy_structured(data, target_type, target=target,
-                                        _type_map=_type_map, _path=_path, _allowed_modules=_allowed_modules)
+            return _dejsonfy_structured(
+                data,
+                target_type,
+                target=target,
+                _type_map=_type_map,
+                _path=_path,
+                _allowed_modules=_allowed_modules,
+            )
     except Exception:
         pass
 
     try:
         if dataclasses.is_dataclass(target_type) and isinstance(target_type, type):
-            return _dejsonfy_structured(data, target_type, target=target,
-                                        _type_map=_type_map, _path=_path, _allowed_modules=_allowed_modules)
+            return _dejsonfy_structured(
+                data,
+                target_type,
+                target=target,
+                _type_map=_type_map,
+                _path=_path,
+                _allowed_modules=_allowed_modules,
+            )
     except Exception:
         pass
 
-    if isinstance(target_type, type) and issubclass(target_type, tuple) and hasattr(target_type, "_fields"):
-        return _dejsonfy_namedtuple(data, target_type, _type_map=_type_map,
-                                    _path=_path, _allowed_modules=_allowed_modules)
+    if (
+        isinstance(target_type, type)
+        and issubclass(target_type, tuple)
+        and hasattr(target_type, "_fields")
+    ):
+        return _dejsonfy_namedtuple(
+            data,
+            target_type,
+            _type_map=_type_map,
+            _path=_path,
+            _allowed_modules=_allowed_modules,
+        )
 
     if isinstance(target_type, type) and hasattr(target_type, "__slots__"):
-        return _dejsonfy_slots(data, target_type, target=target,
-                               _type_map=_type_map, _path=_path, _allowed_modules=_allowed_modules)
+        return _dejsonfy_slots(
+            data,
+            target_type,
+            target=target,
+            _type_map=_type_map,
+            _path=_path,
+            _allowed_modules=_allowed_modules,
+        )
 
     if isinstance(target_type, type) and isinstance(data, dict):
-        return _dejsonfy_plain_object(data, target_type, target=target,
-                                      _type_map=_type_map, _path=_path, _allowed_modules=_allowed_modules)
+        return _dejsonfy_plain_object(
+            data,
+            target_type,
+            target=target,
+            _type_map=_type_map,
+            _path=_path,
+            _allowed_modules=_allowed_modules,
+        )
 
     return data
 
 
-def iter_all_json_strs(json_obj_iter, process_func=None, indent=None, ensure_ascii=False, **kwargs):
+def iter_all_json_strs(
+    json_obj_iter, process_func=None, indent=None, ensure_ascii=False, **kwargs
+):
     if process_func:
         for json_obj in json_obj_iter:
             try:
-                yield json.dumps(process_func(json_obj), indent=indent, ensure_ascii=ensure_ascii,
-                                 default=_json_safe_default, **kwargs)
+                yield json.dumps(
+                    process_func(json_obj),
+                    indent=indent,
+                    ensure_ascii=ensure_ascii,
+                    default=_json_safe_default,
+                    **kwargs,
+                )
             except Exception as ex:
                 print(json_obj)
                 raise ex
     else:
         for json_obj in json_obj_iter:
             try:
-                yield json.dumps(json_obj, indent=indent, ensure_ascii=ensure_ascii,
-                                 default=_json_safe_default, **kwargs)
+                yield json.dumps(
+                    json_obj,
+                    indent=indent,
+                    ensure_ascii=ensure_ascii,
+                    default=_json_safe_default,
+                    **kwargs,
+                )
             except Exception as ex:
                 print(json_obj)
                 raise ex
 
 
 def _iter_json_objs(
-        json_input: Union[str, Iterable, Iterator],
-        use_tqdm: bool = True,
-        disp_msg: str = None,
-        verbose: bool = __debug__,
-        encoding: str = DEFAULT_ENCODING,
-        ignore_error: bool = False,
-        top: int = None,
-        selection: Union[str, Iterable[str]] = None,
-        result_type: Union[str, Type] = dict,
-        json_file_pattern: str = DEFAULT_JSON_FILE_PATTERN,
-        resolve_parts: bool = False,
-        parts_suffix: str = '.parts',
+    json_input: Union[str, Iterable, Iterator],
+    use_tqdm: bool = True,
+    disp_msg: str = None,
+    verbose: bool = __debug__,
+    encoding: str = DEFAULT_ENCODING,
+    ignore_error: bool = False,
+    top: int = None,
+    selection: Union[str, Iterable[str]] = None,
+    result_type: Union[str, Type] = dict,
+    json_file_pattern: str = DEFAULT_JSON_FILE_PATTERN,
+    resolve_parts: bool = False,
+    parts_suffix: str = ".parts",
+    workspace_root: str = None,
 ) -> Iterator[Dict]:
     """
     Iterates over JSON objects from various input sources.
@@ -1042,38 +1358,40 @@ def _iter_json_objs(
 
     def _process_json_obj(json_obj):
         if selection:
-            if result_type is dict or result_type == 'dict':
-                json_obj = {
-                    k: json_obj[k] for k in iter__(selection)
-                }
+            if result_type is dict or result_type == "dict":
+                json_obj = {k: json_obj[k] for k in iter__(selection)}
             elif (
-                    (result_type is list)
-                    or (result_type is tuple)
-                    or result_type == 'list'
-                    or result_type == 'tuple'
+                (result_type is list)
+                or (result_type is tuple)
+                or result_type == "list"
+                or result_type == "tuple"
             ):
                 json_obj = result_type(json_obj[k] for k in iter__(selection))
         elif (
-                (result_type is list)
-                or (result_type is tuple)
-                or result_type == 'list'
-                or result_type == 'tuple'
+            (result_type is list)
+            or (result_type is tuple)
+            or result_type == "list"
+            or result_type == "tuple"
         ):
             json_obj = result_type(json_obj.values())
         return json_obj
 
     def _maybe_resolve_parts(json_obj, source_file):
         if resolve_parts:
-            return resolve_json_parts(json_obj, source_file, parts_suffix=parts_suffix)
+            return resolve_json_parts(
+                json_obj,
+                source_file,
+                parts_suffix=parts_suffix,
+                workspace_root=workspace_root,
+            )
         return json_obj
 
     def _iter_single_input(json_input):
-
         if not (
-                (result_type is dict)
-                or (result_type is list)
-                or (result_type is tuple)
-                or result_type in ('dict', 'list', 'tuple')
+            (result_type is dict)
+            or (result_type is list)
+            or (result_type is tuple)
+            or result_type in ("dict", "list", "tuple")
         ):
             raise ValueError("'result_type' must be one of dict, list or tuple")
 
@@ -1083,8 +1401,8 @@ def _iter_json_objs(
             encoding=encoding,
             top=top,
             use_tqdm=use_tqdm,
-            display_msg=disp_msg or 'read json object from {}',
-            verbose=verbose
+            display_msg=disp_msg or "read json object from {}",
+            verbose=verbose,
         )
         # iterate through the json input
         try_parse_as_single_line = False
@@ -1098,12 +1416,14 @@ def _iter_json_objs(
                         try_parse_as_single_line = True
                         break
 
-                    yield _process_json_obj(_maybe_resolve_parts(json_obj, _source_file))
+                    yield _process_json_obj(
+                        _maybe_resolve_parts(json_obj, _source_file)
+                    )
                 except Exception as ex:
                     if ignore_error is True:
                         print(line)
                         print(ex)
-                    elif ignore_error == 'silent':
+                    elif ignore_error == "silent":
                         continue
                     else:
                         print(line)
@@ -1113,11 +1433,15 @@ def _iter_json_objs(
             try:
                 json_obj = read_single_line_json_file(json_input)
                 if isinstance(json_obj, Dict):
-                    yield _process_json_obj(_maybe_resolve_parts(json_obj, _source_file))
+                    yield _process_json_obj(
+                        _maybe_resolve_parts(json_obj, _source_file)
+                    )
                 else:
                     json_objs = json_obj
                     for json_obj in json_objs:
-                        yield _process_json_obj(_maybe_resolve_parts(json_obj, _source_file))
+                        yield _process_json_obj(
+                            _maybe_resolve_parts(json_obj, _source_file)
+                        )
             except:
                 pass
 
@@ -1131,19 +1455,17 @@ def _iter_json_objs(
             # assuming otherwise the input is a directory,
             # then iterate over JSON objects in the json files under the directory
             for _json_input in get_files_by_pattern(
-                    json_input,
-                    pattern=json_file_pattern,
-                    full_path=True,
-                    recursive=False,
-                    sort=True
+                json_input,
+                pattern=json_file_pattern,
+                full_path=True,
+                recursive=False,
+                sort=True,
             ):
                 try:
                     yield from _iter_single_input(_json_input)
                 except Exception as ex:
                     if verbose:
-                        eprint_message(
-                            'reading JSON file failed', json_input
-                        )
+                        eprint_message("reading JSON file failed", json_input)
                     raise ex
     else:
         # otherwise, just try iterating the input,
@@ -1152,9 +1474,7 @@ def _iter_json_objs(
             yield from _iter_single_input(json_input)
         except Exception as ex:
             if verbose:
-                eprint_message(
-                    'reading JSON file failed', json_input
-                )
+                eprint_message("reading JSON file failed", json_input)
             raise ex
 
 
@@ -1217,32 +1537,37 @@ def read_json(json_text_or_file: str):
     return read_text_or_file(
         text_or_file=json_text_or_file,
         read_text_func=json.loads,
-        read_file_func=read_single_line_json_file
+        read_file_func=read_single_line_json_file,
     )
 
 
 def read_jsonl(jsonl_text_or_file: str):
     return read_text_or_file(
         text_or_file=jsonl_text_or_file,
-        read_text_func=lambda _: [json.loads(json_line) for json_line in jsonl_text_or_file.split('\n') if json_line],
-        read_file_func=lambda _: list(iter_json_objs(jsonl_text_or_file))
+        read_text_func=lambda _: [
+            json.loads(json_line)
+            for json_line in jsonl_text_or_file.split("\n")
+            if json_line
+        ],
+        read_file_func=lambda _: list(iter_json_objs(jsonl_text_or_file)),
     )
 
 
 def iter_json_objs(
-        json_input: Union[str, Iterable, Iterator],
-        use_tqdm: bool = True,
-        disp_msg: str = None,
-        verbose: bool = __debug__,
-        encoding: str = DEFAULT_ENCODING,
-        ignore_error: bool = False,
-        top: int = None,
-        selection: Union[str, Iterable[str]] = None,
-        result_type: Union[str, Type] = dict,
-        return_input_source_and_index_for_each_json_obj: bool = False,
-        json_file_pattern: str = DEFAULT_JSON_FILE_PATTERN,
-        resolve_parts: bool = False,
-        parts_suffix: str = '.parts',
+    json_input: Union[str, Iterable, Iterator],
+    use_tqdm: bool = True,
+    disp_msg: str = None,
+    verbose: bool = __debug__,
+    encoding: str = DEFAULT_ENCODING,
+    ignore_error: bool = False,
+    top: int = None,
+    selection: Union[str, Iterable[str]] = None,
+    result_type: Union[str, Type] = dict,
+    return_input_source_and_index_for_each_json_obj: bool = False,
+    json_file_pattern: str = DEFAULT_JSON_FILE_PATTERN,
+    resolve_parts: bool = False,
+    parts_suffix: str = ".parts",
+    workspace_root: str = None,
 ) -> Iterator[Dict]:
     """
     Iterate through all JSON objects in a file, all JSON objects in all '.json' files in a directory,
@@ -1307,20 +1632,21 @@ def iter_json_objs(
         if return_input_source_and_index_for_each_json_obj:
             for _json_input in json_input:
                 for jobj_index, jobj in enumerate(
-                        _iter_json_objs(
-                            json_input=_json_input,
-                            use_tqdm=use_tqdm,
-                            disp_msg=disp_msg,
-                            verbose=verbose,
-                            encoding=encoding,
-                            ignore_error=ignore_error,
-                            top=top,
-                            selection=selection,
-                            result_type=result_type,
-                            json_file_pattern=json_file_pattern,
+                    _iter_json_objs(
+                        json_input=_json_input,
+                        use_tqdm=use_tqdm,
+                        disp_msg=disp_msg,
+                        verbose=verbose,
+                        encoding=encoding,
+                        ignore_error=ignore_error,
+                        top=top,
+                        selection=selection,
+                        result_type=result_type,
+                        json_file_pattern=json_file_pattern,
                         resolve_parts=resolve_parts,
                         parts_suffix=parts_suffix,
-                        )
+                        workspace_root=workspace_root,
+                    )
                 ):
                     yield jobj, _json_input, jobj_index
         else:
@@ -1338,24 +1664,26 @@ def iter_json_objs(
                     json_file_pattern=json_file_pattern,
                     resolve_parts=resolve_parts,
                     parts_suffix=parts_suffix,
+                    workspace_root=workspace_root,
                 )
     else:
         if return_input_source_and_index_for_each_json_obj:
             for jobj_index, jobj in enumerate(
-                    _iter_json_objs(
-                        json_input=json_input,
-                        use_tqdm=use_tqdm,
-                        disp_msg=disp_msg,
-                        verbose=verbose,
-                        encoding=encoding,
-                        ignore_error=ignore_error,
-                        top=top,
-                        selection=selection,
-                        result_type=result_type,
-                        json_file_pattern=json_file_pattern,
-                        resolve_parts=resolve_parts,
-                        parts_suffix=parts_suffix,
-                    )
+                _iter_json_objs(
+                    json_input=json_input,
+                    use_tqdm=use_tqdm,
+                    disp_msg=disp_msg,
+                    verbose=verbose,
+                    encoding=encoding,
+                    ignore_error=ignore_error,
+                    top=top,
+                    selection=selection,
+                    result_type=result_type,
+                    json_file_pattern=json_file_pattern,
+                    resolve_parts=resolve_parts,
+                    parts_suffix=parts_suffix,
+                    workspace_root=workspace_root,
+                )
             ):
                 yield jobj, json_input, jobj_index
         else:
@@ -1372,23 +1700,25 @@ def iter_json_objs(
                 json_file_pattern=json_file_pattern,
                 resolve_parts=resolve_parts,
                 parts_suffix=parts_suffix,
+                workspace_root=workspace_root,
             )
 
 
 def _iter_all_json_objs_from_all_sub_dirs(
-        input_path: str,
-        pattern: str = DEFAULT_JSON_FILE_PATTERN,
-        use_tqdm: bool = False,
-        display_msg: str = None,
-        verbose: bool = __debug__,
-        encoding: str = DEFAULT_ENCODING,
-        ignore_error: bool = False,
-        top: int = None,
-        selection: Union[str, Iterable[str]] = None,
-        result_type: Union[str, Type] = dict,
-        return_input_source_and_index_for_each_json_obj: bool = False,
-        resolve_parts: bool = False,
-        parts_suffix: str = '.parts',
+    input_path: str,
+    pattern: str = DEFAULT_JSON_FILE_PATTERN,
+    use_tqdm: bool = False,
+    display_msg: str = None,
+    verbose: bool = __debug__,
+    encoding: str = DEFAULT_ENCODING,
+    ignore_error: bool = False,
+    top: int = None,
+    selection: Union[str, Iterable[str]] = None,
+    result_type: Union[str, Type] = dict,
+    return_input_source_and_index_for_each_json_obj: bool = False,
+    resolve_parts: bool = False,
+    parts_suffix: str = ".parts",
+    workspace_root: str = None,
 ) -> Iterator[Dict]:
     """
     Iterate through all JSON objects from all subdirectories (including nested subdirectories)
@@ -1418,7 +1748,9 @@ def _iter_all_json_objs_from_all_sub_dirs(
     if path.isfile(input_path):
         all_files = [input_path]
     else:
-        all_files = get_sorted_files_from_all_sub_dirs(dir_path=input_path, pattern=pattern)
+        all_files = get_sorted_files_from_all_sub_dirs(
+            dir_path=input_path, pattern=pattern
+        )
 
     yield from iter_json_objs(
         json_input=all_files,
@@ -1433,24 +1765,26 @@ def _iter_all_json_objs_from_all_sub_dirs(
         return_input_source_and_index_for_each_json_obj=return_input_source_and_index_for_each_json_obj,
         resolve_parts=resolve_parts,
         parts_suffix=parts_suffix,
+        workspace_root=workspace_root,
     )
 
 
 def iter_all_json_objs_from_all_sub_dirs(
-        input_path_or_paths: Union[str, Iterable[str]],
-        pattern: str = DEFAULT_JSON_FILE_PATTERN,
-        use_tqdm: bool = False,
-        display_msg: str = None,
-        verbose: bool = __debug__,
-        encoding: str = DEFAULT_ENCODING,
-        ignore_error: bool = False,
-        top: int = None,
-        top_per_input_path: int = None,
-        selection: Union[str, Iterable[str]] = None,
-        result_type: Union[str, Type] = dict,
-        return_input_source_and_index_for_each_json_obj: bool = False,
-        resolve_parts: bool = False,
-        parts_suffix: str = '.parts',
+    input_path_or_paths: Union[str, Iterable[str]],
+    pattern: str = DEFAULT_JSON_FILE_PATTERN,
+    use_tqdm: bool = False,
+    display_msg: str = None,
+    verbose: bool = __debug__,
+    encoding: str = DEFAULT_ENCODING,
+    ignore_error: bool = False,
+    top: int = None,
+    top_per_input_path: int = None,
+    selection: Union[str, Iterable[str]] = None,
+    result_type: Union[str, Type] = dict,
+    return_input_source_and_index_for_each_json_obj: bool = False,
+    resolve_parts: bool = False,
+    parts_suffix: str = ".parts",
+    workspace_root: str = None,
 ) -> Iterator[Dict]:
     """
     Iterate through all JSON objects from all subdirectories of a given directory or directories,
@@ -1498,6 +1832,7 @@ def iter_all_json_objs_from_all_sub_dirs(
             return_input_source_and_index_for_each_json_obj=return_input_source_and_index_for_each_json_obj,
             resolve_parts=resolve_parts,
             parts_suffix=parts_suffix,
+            workspace_root=workspace_root,
         )
     else:
         _it = chain(
@@ -1516,6 +1851,7 @@ def iter_all_json_objs_from_all_sub_dirs(
                     return_input_source_and_index_for_each_json_obj=return_input_source_and_index_for_each_json_obj,
                     resolve_parts=resolve_parts,
                     parts_suffix=parts_suffix,
+                    workspace_root=workspace_root,
                 )
                 for input_path in input_path_or_paths
             )
@@ -1526,32 +1862,38 @@ def iter_all_json_objs_from_all_sub_dirs(
 
 
 def write_json_objs(
-        json_obj_iter,
-        output_path,
-        process_func=None,
-        use_tqdm=False,
-        disp_msg=None,
-        append=False,
-        encoding='utf-8',
-        ensure_ascii=False,
-        indent=None,
-        chunk_size: int = None,
-        chunk_name_format: str = 'part_{:05}',
-        chunked_file_ext_name: str = '.json',
-        verbose=__debug__,
-        create_dir=True,
-        pid=None,
-        **kwargs
+    json_obj_iter,
+    output_path,
+    process_func=None,
+    use_tqdm=False,
+    disp_msg=None,
+    append=False,
+    encoding="utf-8",
+    ensure_ascii=False,
+    indent=None,
+    chunk_size: int = None,
+    chunk_name_format: str = "part_{:05}",
+    chunked_file_ext_name: str = ".json",
+    verbose=__debug__,
+    create_dir=True,
+    pid=None,
+    **kwargs,
 ):
     if pid is not None:
         output_path = path.join(
             path.dirname(output_path),
             get_main_name(output_path),
-            f'{pid}.{get_ext_name(output_path)}'
+            f"{pid}.{get_ext_name(output_path)}",
         )
 
     write_all_lines(
-        iterable=iter_all_json_strs(json_obj_iter, process_func, indent=indent, ensure_ascii=ensure_ascii, **kwargs),
+        iterable=iter_all_json_strs(
+            json_obj_iter,
+            process_func,
+            indent=indent,
+            ensure_ascii=ensure_ascii,
+            **kwargs,
+        ),
         output_path=output_path,
         use_tqdm=use_tqdm,
         display_msg=disp_msg,
@@ -1561,34 +1903,35 @@ def write_json_objs(
         create_dir=create_dir,
         chunk_size=chunk_size,
         chunk_name_format=chunk_name_format,
-        chunked_file_ext_name=chunked_file_ext_name
+        chunked_file_ext_name=chunked_file_ext_name,
     )
 
 
 def jsonfy(
-        obj,
-        recursively_ensure_json_conversion: bool = True,
-        converter: Union[JsonConverter, str, Callable, None] = None,
-        parts_root_path: str = None,
-        parts_key_paths=None,
-        parts_min_size: int = 0,
-        parts_mode: Union[PartsReplacementMode, str] = 'reference',
-        parts_suffix: str = '.parts',
-        parts_preview_len: int = 200,
-        parts_preview_with_path: bool = False,
-        parts_path_as_url: bool = False,
-        parts_file_namer: Callable = None,
-        parts_subfolder: str = None,
-        parts_group_by_key: bool = False,
-        parts_key_path_root: str = None,
-        artifacts_as_parts=None,
-        leaf_as_parts_if_exceeding_size: int = None,
-        is_artifact=False,
-        overwrite: bool = True,
-        ensure_ascii: bool = False,
-        save_type: Union[None, bool, str] = None,
-        type_file_path: str = None,
-        parts_type_map: Dict[Type, Union[dict, "PartsKeyPath"]] = None,
+    obj,
+    recursively_ensure_json_conversion: bool = True,
+    converter: Union[JsonConverter, str, Callable, None] = None,
+    parts_root_path: str = None,
+    parts_key_paths=None,
+    parts_min_size: int = 0,
+    parts_mode: Union[PartsReplacementMode, str] = "reference",
+    parts_link_paths: Dict[str, str] = None,
+    parts_suffix: str = ".parts",
+    parts_preview_len: int = 200,
+    parts_preview_with_path: bool = False,
+    parts_path_as_url: bool = False,
+    parts_file_namer: Callable = None,
+    parts_subfolder: str = None,
+    parts_group_by_key: bool = False,
+    parts_key_path_root: str = None,
+    artifacts_as_parts=None,
+    leaf_as_parts_if_exceeding_size: int = None,
+    is_artifact=False,
+    overwrite: bool = True,
+    ensure_ascii: bool = False,
+    save_type: Union[None, bool, str] = None,
+    type_file_path: str = None,
+    parts_type_map: Dict[Type, Union[dict, "PartsKeyPath"]] = None,
 ):
     """
     Converts an object to a JSON-serializable form, optionally extracting
@@ -1627,6 +1970,16 @@ def jsonfy(
             Values smaller than this are left inline. Defaults to 0.
         parts_mode: What replaces extracted values in the main dict.
             One of PartsReplacementMode values. Defaults to 'reference'.
+        parts_link_paths (Dict[str, str], optional): Only consulted when
+            ``parts_mode`` is ``LINK`` ("write once, link"). Maps a dotted key
+            path (the SAME path used in ``parts_key_paths``, un-prefixed by
+            ``parts_key_path_root``) to a PRE-EXISTING file that already holds
+            that field's value. For a mapped field, jsonfy stores a
+            ``{"__parts_file__": <supplied path>, "__value_type__": ...}`` marker
+            WITHOUT writing a second copy. A field NOT in this map degrades to
+            REFERENCE (a copy is written) so no data is silently dropped. Store
+            the supplied path WORKSPACE-relative so it survives workspace
+            relocation on resume/reuse. Defaults to None.
         parts_suffix (str, optional): Suffix for the parts directory. Defaults to '.parts'.
         parts_preview_len (int, optional): Max chars for inline preview in TRUNCATE mode. Defaults to 200.
         parts_preview_with_path (bool, optional): When True with path/filename modes,
@@ -1674,33 +2027,40 @@ def jsonfy(
     # Convenience shorthand: is_artifact → extract all fields
     if is_artifact and parts_key_paths is None:
         if is_artifact is True:
-            parts_key_paths = '*'
+            parts_key_paths = "*"
         else:
             # is_artifact is a tuple of types — check the content type
-            _check_val = obj.get(parts_key_path_root) if parts_key_path_root and isinstance(obj, dict) else obj
+            _check_val = (
+                obj.get(parts_key_path_root)
+                if parts_key_path_root and isinstance(obj, dict)
+                else obj
+            )
             if isinstance(_check_val, is_artifact):
-                parts_key_paths = '*'
+                parts_key_paths = "*"
 
     # Capture original type/object before dict conversion
     _has_artifact_types = (
-        hasattr(type(obj), "__artifact_types__")
-        and type(obj).__artifact_types__
+        hasattr(type(obj), "__artifact_types__") and type(obj).__artifact_types__
     )
     _original_type = type(obj) if (artifacts_as_parts or _has_artifact_types) else None
-    _original_obj_for_type = obj if (save_type or parts_type_map or _has_artifact_types or artifacts_as_parts) else None
+    _original_obj_for_type = (
+        obj
+        if (save_type or parts_type_map or _has_artifact_types or artifacts_as_parts)
+        else None
+    )
 
     if converter is not None:
         if callable(converter) and not isinstance(converter, (JsonConverter, str)):
             obj = converter(obj)
-        elif converter in (JsonConverter.DICT, 'dict'):
+        elif converter in (JsonConverter.DICT, "dict"):
             if not isinstance(obj, Mapping):
                 obj = dict__(obj, recursive=True)
-        elif converter in (JsonConverter.DICT_NON_RECURSIVE, 'dict_non_recursive'):
+        elif converter in (JsonConverter.DICT_NON_RECURSIVE, "dict_non_recursive"):
             if not isinstance(obj, Mapping):
                 obj = dict__(obj, recursive=False)
-        elif converter in (JsonConverter.STR, 'str'):
+        elif converter in (JsonConverter.STR, "str"):
             obj = str(obj)
-        elif converter in (JsonConverter.NONE, 'none'):
+        elif converter in (JsonConverter.NONE, "none"):
             pass
         else:
             raise ValueError(f"Unknown converter: {converter!r}")
@@ -1714,8 +2074,14 @@ def jsonfy(
 
         _artifact_type = _original_type
         if parts_key_path_root and _original_obj_for_type is not None:
-            _inner_orig = getattr(_original_obj_for_type, parts_key_path_root, None) if hasattr(_original_obj_for_type, parts_key_path_root) else None
-            if _inner_orig is None and has_path(_original_obj_for_type, parts_key_path_root):
+            _inner_orig = (
+                getattr(_original_obj_for_type, parts_key_path_root, None)
+                if hasattr(_original_obj_for_type, parts_key_path_root)
+                else None
+            )
+            if _inner_orig is None and has_path(
+                _original_obj_for_type, parts_key_path_root
+            ):
                 _inner_orig = get_at_path(_original_obj_for_type, parts_key_path_root)
             if _inner_orig is not None:
                 _artifact_type = type(_inner_orig)
@@ -1727,16 +2093,26 @@ def jsonfy(
                 explicit_keys = {
                     _normalize_extract_path_entry(e)[0] for e in parts_key_paths
                 }
-                artifact_entries = [e for e in artifact_entries if e.key not in explicit_keys]
-            parts_key_paths = artifact_entries + (list(parts_key_paths) if parts_key_paths else [])
+                artifact_entries = [
+                    e for e in artifact_entries if e.key not in explicit_keys
+                ]
+            parts_key_paths = artifact_entries + (
+                list(parts_key_paths) if parts_key_paths else []
+            )
 
     # Build parts_type_map from @artifact_type decorators
     if _has_artifact_types and _original_obj_for_type is not None:
         _artifact_type_map = {}
         _artifact_type_cls = _original_type
         if parts_key_path_root:
-            _inner_obj = getattr(_original_obj_for_type, parts_key_path_root, None) if hasattr(_original_obj_for_type, parts_key_path_root) else None
-            if _inner_obj is not None and hasattr(type(_inner_obj), "__artifact_types__"):
+            _inner_obj = (
+                getattr(_original_obj_for_type, parts_key_path_root, None)
+                if hasattr(_original_obj_for_type, parts_key_path_root)
+                else None
+            )
+            if _inner_obj is not None and hasattr(
+                type(_inner_obj), "__artifact_types__"
+            ):
                 _artifact_type_cls = type(_inner_obj)
         for entry in getattr(_artifact_type_cls, "__artifact_types__", []):
             _artifact_type_map[entry["target_type"]] = {
@@ -1765,13 +2141,23 @@ def jsonfy(
         _walk_orig = _original_obj_for_type
         _walk_conv = obj
         if parts_key_path_root:
-            _walk_orig = getattr(_original_obj_for_type, parts_key_path_root, None) if hasattr(_original_obj_for_type, parts_key_path_root) else None
+            _walk_orig = (
+                getattr(_original_obj_for_type, parts_key_path_root, None)
+                if hasattr(_original_obj_for_type, parts_key_path_root)
+                else None
+            )
             if _walk_orig is None:
                 try:
-                    _walk_orig = get_at_path(_original_obj_for_type, parts_key_path_root)
+                    _walk_orig = get_at_path(
+                        _original_obj_for_type, parts_key_path_root
+                    )
                 except (KeyError, AttributeError, TypeError, IndexError):
                     _walk_orig = None
-            _walk_conv = get_at_path(obj, parts_key_path_root) if has_path(obj, parts_key_path_root) else None
+            _walk_conv = (
+                get_at_path(obj, parts_key_path_root)
+                if has_path(obj, parts_key_path_root)
+                else None
+            )
         if _walk_orig is not None and _walk_conv is not None:
             type_driven_entries = _collect_type_driven_parts(
                 _walk_orig, _walk_conv, parts_type_map
@@ -1786,21 +2172,29 @@ def jsonfy(
                 type_driven_entries = [
                     e for e in type_driven_entries if e.key not in explicit_keys
                 ]
-            parts_key_paths = (list(parts_key_paths) if parts_key_paths else []) + type_driven_entries
+            parts_key_paths = (
+                list(parts_key_paths) if parts_key_paths else []
+            ) + type_driven_entries
 
     # Ensure nested objects at parts_key_path_root are dict-converted
     # so has_path/get_at_path can navigate into them during extraction.
     if parts_key_path_root and parts_key_paths and isinstance(obj, dict):
         _inner = obj.get(parts_key_path_root)
-        if _inner is not None and not isinstance(_inner, (dict, list, str, int, float, bool, type(None), bytes)):
+        if _inner is not None and not isinstance(
+            _inner, (dict, list, str, int, float, bool, type(None), bytes)
+        ):
             obj = dict(obj)  # shallow copy to avoid mutating caller's dict
             obj[parts_key_path_root] = dict__(_inner, recursive=True)
 
     # Extract large values to .parts/ files (only when parts_root_path is set)
     _deepcopied = False
-    if parts_key_paths is not None and parts_root_path is not None and isinstance(obj, dict):
+    if (
+        parts_key_paths is not None
+        and parts_root_path is not None
+        and isinstance(obj, dict)
+    ):
         # Expand wildcard
-        if parts_key_paths == '*':
+        if parts_key_paths == "*":
             if parts_key_path_root:
                 _root_val = obj.get(parts_key_path_root)
                 if isinstance(_root_val, dict):
@@ -1820,14 +2214,20 @@ def jsonfy(
 
         mode = PartsReplacementMode(parts_mode)
         base_parts_dir = parts_root_path + parts_suffix
-        parts_dir = os.path.join(base_parts_dir, parts_subfolder) if parts_subfolder else base_parts_dir
+        parts_dir = (
+            os.path.join(base_parts_dir, parts_subfolder)
+            if parts_subfolder
+            else base_parts_dir
+        )
 
         # Clear parts directory if overwriting
         if overwrite and os.path.isdir(parts_dir):
             shutil.rmtree(parts_dir)
 
         for entry in parts_key_paths:
-            path_str, ext_override, name_alias, entry_subfolder = _normalize_extract_path_entry(entry)
+            path_str, ext_override, name_alias, entry_subfolder = (
+                _normalize_extract_path_entry(entry)
+            )
             original_path_str = path_str  # for file naming (un-prefixed)
 
             # Apply root prefix for data access
@@ -1844,21 +2244,44 @@ def jsonfy(
             if not is_artifact and len(serialized) < parts_min_size:
                 continue
 
+            # LINK mode ("write once, link"): if this field's un-prefixed path
+            # was supplied a pre-existing file, store a marker pointing at THAT
+            # file and DO NOT write a second copy. A field with no supplied path
+            # falls through to the normal write below (i.e. behaves as REFERENCE)
+            # so no data is ever silently dropped.
+            if mode == PartsReplacementMode.LINK and parts_link_paths:
+                _linked_path = parts_link_paths.get(original_path_str)
+                if _linked_path is not None:
+                    value_type = "str" if isinstance(value, str) else "json"
+                    set_at_path(
+                        obj,
+                        path_str,
+                        {
+                            "__parts_file__": _linked_path,
+                            "__value_type__": value_type,
+                        },
+                    )
+                    continue
+
             # Determine extension (normalize: 'html' → '.html')
-            ext = resolve_ext(ext_override) if ext_override else _detect_extension(value)
+            ext = (
+                resolve_ext(ext_override) if ext_override else _detect_extension(value)
+            )
 
             # Build filename with timestamp+uuid for uniqueness
-            file_stem = name_alias if name_alias else original_path_str.replace('.', '__')
-            ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+            file_stem = (
+                name_alias if name_alias else original_path_str.replace(".", "__")
+            )
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             uid = uuid.uuid4().hex[:8]
             name_hint = parts_file_namer(obj) if parts_file_namer is not None else None
             segments = [ts]
             if name_hint:
                 segments.append(name_hint)
-            if file_stem and file_stem != 'item':
+            if file_stem and file_stem != "item":
                 segments.append(file_stem)
             segments.append(uid)
-            filename = '_'.join(segments) + ext
+            filename = "_".join(segments) + ext
 
             # Write to parts file
             entry_dir = parts_dir
@@ -1868,7 +2291,7 @@ def jsonfy(
                 entry_dir = path.join(entry_dir, file_stem)
             os.makedirs(entry_dir, exist_ok=True)
             parts_file_path = path.join(entry_dir, filename)
-            with open(parts_file_path, 'w', encoding='utf-8') as pf:
+            with open(parts_file_path, "w", encoding="utf-8") as pf:
                 pf.write(serialized)
 
             # Path from parts_dir to the file (accounts for entry_subfolder and parts_group_by_key)
@@ -1884,46 +2307,72 @@ def jsonfy(
             if mode == PartsReplacementMode.REMOVE:
                 delete_at_path(obj, path_str)
             elif mode == PartsReplacementMode.TRUNCATE:
-                parts_ref = path.join(parts_subfolder, rel_to_parts_dir) if parts_subfolder else rel_to_parts_dir
-                truncated = serialized[:parts_preview_len] + f'...[truncated, see {parts_ref}]'
+                parts_ref = (
+                    path.join(parts_subfolder, rel_to_parts_dir)
+                    if parts_subfolder
+                    else rel_to_parts_dir
+                )
+                truncated = (
+                    serialized[:parts_preview_len] + f"...[truncated, see {parts_ref}]"
+                )
                 set_at_path(obj, path_str, truncated)
-            elif mode in (PartsReplacementMode.ABSOLUTE_PATH,
-                          PartsReplacementMode.RELATIVE_PATH,
-                          PartsReplacementMode.FILENAME_ONLY):
+            elif mode in (
+                PartsReplacementMode.ABSOLUTE_PATH,
+                PartsReplacementMode.RELATIVE_PATH,
+                PartsReplacementMode.FILENAME_ONLY,
+            ):
                 if mode == PartsReplacementMode.ABSOLUTE_PATH:
                     ref_path = path.abspath(parts_file_path)
                 elif mode == PartsReplacementMode.RELATIVE_PATH:
                     base_parts_name = path.basename(base_parts_dir)
                     if parts_subfolder:
-                        ref_path = path.join(base_parts_name, parts_subfolder, rel_to_parts_dir)
+                        ref_path = path.join(
+                            base_parts_name, parts_subfolder, rel_to_parts_dir
+                        )
                     else:
                         ref_path = path.join(base_parts_name, rel_to_parts_dir)
                 else:
                     ref_path = filename
 
                 if parts_path_as_url:
-                    ref_path = 'file:///' + ref_path
+                    ref_path = "file:///" + ref_path
 
                 if parts_preview_with_path:
-                    ref_path = ref_path + '\n---\n' + serialized[:parts_preview_len] + '...'
+                    ref_path = (
+                        ref_path + "\n---\n" + serialized[:parts_preview_len] + "..."
+                    )
 
                 set_at_path(obj, path_str, ref_path)
             else:
                 # REFERENCE mode (default)
-                value_type = 'str' if isinstance(value, str) else 'json'
-                set_at_path(obj, path_str, {
-                    '__parts_file__': path.join(parts_subfolder, rel_to_parts_dir) if parts_subfolder else rel_to_parts_dir,
-                    '__value_type__': value_type,
-                })
+                value_type = "str" if isinstance(value, str) else "json"
+                set_at_path(
+                    obj,
+                    path_str,
+                    {
+                        "__parts_file__": path.join(parts_subfolder, rel_to_parts_dir)
+                        if parts_subfolder
+                        else rel_to_parts_dir,
+                        "__value_type__": value_type,
+                    },
+                )
 
     # Auto-extract oversized leaf string values
-    if leaf_as_parts_if_exceeding_size is not None and parts_root_path is not None and isinstance(obj, dict):
+    if (
+        leaf_as_parts_if_exceeding_size is not None
+        and parts_root_path is not None
+        and isinstance(obj, dict)
+    ):
         if not _deepcopied:
             obj = copy.deepcopy(obj)
 
         mode = PartsReplacementMode(parts_mode)
         base_parts_dir = parts_root_path + parts_suffix
-        _leaf_parts_dir = os.path.join(base_parts_dir, parts_subfolder) if parts_subfolder else base_parts_dir
+        _leaf_parts_dir = (
+            os.path.join(base_parts_dir, parts_subfolder)
+            if parts_subfolder
+            else base_parts_dir
+        )
 
         for key_path, value in obj_walk_through(obj):
             if not isinstance(value, str):
@@ -1931,24 +2380,24 @@ def jsonfy(
             if len(value) < leaf_as_parts_if_exceeding_size:
                 continue
 
-            path_str = '.'.join(key_path)
-            file_stem = path_str.replace('.', '__')
+            path_str = ".".join(key_path)
+            file_stem = path_str.replace(".", "__")
 
-            ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             uid = uuid.uuid4().hex[:8]
             ext = _detect_extension(value)
             name_hint = parts_file_namer(obj) if parts_file_namer is not None else None
             segments = [ts]
             if name_hint:
                 segments.append(name_hint)
-            if file_stem and file_stem != 'item':
+            if file_stem and file_stem != "item":
                 segments.append(file_stem)
             segments.append(uid)
-            filename = '_'.join(segments) + ext
+            filename = "_".join(segments) + ext
 
             os.makedirs(_leaf_parts_dir, exist_ok=True)
             parts_file_path = path.join(_leaf_parts_dir, filename)
-            with open(parts_file_path, 'w', encoding='utf-8') as pf:
+            with open(parts_file_path, "w", encoding="utf-8") as pf:
                 pf.write(value)
 
             rel_to_parts_dir = filename
@@ -1956,47 +2405,63 @@ def jsonfy(
             if mode == PartsReplacementMode.REMOVE:
                 delete_at_path(obj, path_str)
             elif mode == PartsReplacementMode.TRUNCATE:
-                parts_ref = path.join(parts_subfolder, rel_to_parts_dir) if parts_subfolder else rel_to_parts_dir
-                truncated = value[:parts_preview_len] + f'...[truncated, see {parts_ref}]'
+                parts_ref = (
+                    path.join(parts_subfolder, rel_to_parts_dir)
+                    if parts_subfolder
+                    else rel_to_parts_dir
+                )
+                truncated = (
+                    value[:parts_preview_len] + f"...[truncated, see {parts_ref}]"
+                )
                 set_at_path(obj, path_str, truncated)
-            elif mode in (PartsReplacementMode.ABSOLUTE_PATH,
-                          PartsReplacementMode.RELATIVE_PATH,
-                          PartsReplacementMode.FILENAME_ONLY):
+            elif mode in (
+                PartsReplacementMode.ABSOLUTE_PATH,
+                PartsReplacementMode.RELATIVE_PATH,
+                PartsReplacementMode.FILENAME_ONLY,
+            ):
                 if mode == PartsReplacementMode.ABSOLUTE_PATH:
                     ref_path = path.abspath(parts_file_path)
                 elif mode == PartsReplacementMode.RELATIVE_PATH:
                     base_parts_name = path.basename(base_parts_dir)
                     if parts_subfolder:
-                        ref_path = path.join(base_parts_name, parts_subfolder, rel_to_parts_dir)
+                        ref_path = path.join(
+                            base_parts_name, parts_subfolder, rel_to_parts_dir
+                        )
                     else:
                         ref_path = path.join(base_parts_name, rel_to_parts_dir)
                 else:
                     ref_path = filename
                 if parts_path_as_url:
-                    ref_path = 'file:///' + ref_path
+                    ref_path = "file:///" + ref_path
                 if parts_preview_with_path:
-                    ref_path = ref_path + '\n---\n' + value[:parts_preview_len] + '...'
+                    ref_path = ref_path + "\n---\n" + value[:parts_preview_len] + "..."
                 set_at_path(obj, path_str, ref_path)
             else:
-                set_at_path(obj, path_str, {
-                    '__parts_file__': path.join(parts_subfolder, rel_to_parts_dir) if parts_subfolder else rel_to_parts_dir,
-                    '__value_type__': 'str',
-                })
+                set_at_path(
+                    obj,
+                    path_str,
+                    {
+                        "__parts_file__": path.join(parts_subfolder, rel_to_parts_dir)
+                        if parts_subfolder
+                        else rel_to_parts_dir,
+                        "__value_type__": "str",
+                    },
+                )
 
     return obj
 
 
 def write_json(
-        obj,
-        file_path: str,
-        append: bool = False,
-        indent=None,
-        create_dir=True,
-        encoding='utf-8',
-        ensure_ascii: bool = False,
-        subfolder: str = None,
-        space_ext_mode: Union[SpaceExtMode, str, bool, None] = None,
-        **kwargs
+    obj,
+    file_path: str,
+    append: bool = False,
+    indent=None,
+    create_dir=True,
+    encoding="utf-8",
+    ensure_ascii: bool = False,
+    subfolder: str = None,
+    space_ext_mode: Union[SpaceExtMode, str, bool, None] = None,
+    **kwargs,
 ):
     """
     Writes a JSON representation of an object to a file.
@@ -2064,30 +2529,37 @@ def write_json(
 
     # Resolve actual file path (accounts for space + space_ext_mode)
     _resolved_file_path = file_path
-    space = kwargs.get('space')
-    if space is not None and space_ext_mode not in (None, False, SpaceExtMode.NONE, 'none'):
+    space = kwargs.get("space")
+    if space is not None and space_ext_mode not in (
+        None,
+        False,
+        SpaceExtMode.NONE,
+        "none",
+    ):
         # Normalize True to MOVE for backward compatibility
-        mode = SpaceExtMode.MOVE if space_ext_mode is True else SpaceExtMode(space_ext_mode)
+        mode = (
+            SpaceExtMode.MOVE
+            if space_ext_mode is True
+            else SpaceExtMode(space_ext_mode)
+        )
         base, ext = os.path.splitext(file_path)
         if mode == SpaceExtMode.MOVE:
             # Move ext from file_path to space: 'log.jsonl' → dir='log', space='id.jsonl'
             _resolved_file_path = base
             space = space + ext
-            kwargs['space'] = space
+            kwargs["space"] = space
             file_path = _resolved_file_path
         elif mode == SpaceExtMode.ADD:
             # Add ext to space, keep file_path as-is: space='id' → space='id.jsonl'
             space = space + ext
-            kwargs['space'] = space
+            kwargs["space"] = space
     if space is not None:
-        space_handler = kwargs.get('space_handler', _default_space_handler)
+        space_handler = kwargs.get("space_handler", _default_space_handler)
         _resolved_file_path = space_handler(file_path, space)
 
     # Split kwargs: jsonfy params vs remaining (open_ + json.dumps)
     jsonfy_kwargs, other_kwargs = get_relevant_named_args(
-        jsonfy,
-        return_other_args=True,
-        **kwargs
+        jsonfy, return_other_args=True, **kwargs
     )
 
     # Convert and extract parts
@@ -2096,25 +2568,31 @@ def write_json(
         parts_root_path=_resolved_file_path,
         overwrite=not append,
         ensure_ascii=ensure_ascii,
-        **jsonfy_kwargs
+        **jsonfy_kwargs,
     )
 
     # Split remaining kwargs: open_ params vs json.dumps params
     kwargs_open_explicitly_named, kwargs_others = get_relevant_named_args(
-        open_.__init__,
-        return_other_args=True,
-        **other_kwargs
+        open_.__init__, return_other_args=True, **other_kwargs
     )
 
-    with open_(file_path, 'a' if append else 'w', encoding=encoding, **other_kwargs) as fout:
+    with open_(
+        file_path, "a" if append else "w", encoding=encoding, **other_kwargs
+    ) as fout:
         fout.write(
-            json.dumps(obj, indent=indent, ensure_ascii=ensure_ascii,
-                       default=_json_safe_default, **kwargs_others)
+            json.dumps(
+                obj,
+                indent=indent,
+                ensure_ascii=ensure_ascii,
+                default=_json_safe_default,
+                **kwargs_others,
+            )
             if encoding
-            else json.dumps(obj, indent=indent, default=_json_safe_default,
-                            **other_kwargs)
+            else json.dumps(
+                obj, indent=indent, default=_json_safe_default, **other_kwargs
+            )
         )
-        fout.write('\n')
+        fout.write("\n")
         fout.flush()
 
     return obj

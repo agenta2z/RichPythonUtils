@@ -10,12 +10,10 @@ Covers:
 """
 
 import pickle
-import pytest
 from pathlib import Path
 
-from rich_python_utils.string_utils.formatting.template_manager import (
-    TemplateManager,
-)
+import pytest
+from rich_python_utils.string_utils.formatting.template_manager import TemplateManager
 from rich_python_utils.string_utils.formatting.template_manager.template_manager import (
     _OriginTaggedStr,
 )
@@ -24,6 +22,7 @@ from rich_python_utils.string_utils.formatting.template_manager.template_manager
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _write(path: Path, content: str):
     """Create parent dirs and write text to *path*."""
@@ -51,13 +50,16 @@ def _make_root(base: Path, templates: dict, variables: dict = None):
     if variables:
         for key, content in variables.items():
             parts = key.split("/")
-            file_path = base.joinpath("_variables", "notes", *parts[:-1], f"{parts[-1]}.hbs")
+            file_path = base.joinpath(
+                "_variables", "notes", *parts[:-1], f"{parts[-1]}.hbs"
+            )
             _write(file_path, content)
 
 
 # ---------------------------------------------------------------------------
 # _OriginTaggedStr unit tests
 # ---------------------------------------------------------------------------
+
 
 class TestOriginTaggedStr:
     """Tests for the _OriginTaggedStr internal class."""
@@ -79,7 +81,10 @@ class TestOriginTaggedStr:
         s = _OriginTaggedStr("  hello  ", origin_root="/path")
         stripped = s.strip()
         assert stripped == "hello"
-        assert not hasattr(stripped, "_origin_root") or getattr(stripped, "_origin_root", None) is None
+        assert (
+            not hasattr(stripped, "_origin_root")
+            or getattr(stripped, "_origin_root", None) is None
+        )
 
     def test_pickle_roundtrip(self):
         s = _OriginTaggedStr("hello", origin_root="/my/root")
@@ -115,6 +120,7 @@ class TestOriginTaggedStr:
 # Multi-root overlay: basic merge behavior
 # ---------------------------------------------------------------------------
 
+
 class TestMultiRootOverlay:
     """Tests for templates=[override_dir, base_dir] merge behavior."""
 
@@ -137,10 +143,13 @@ class TestMultiRootOverlay:
         override = tmp_path / "override"
         base = tmp_path / "base"
         _make_root(override, {"main/Greet": "CUSTOM Greet {{name}}"})
-        _make_root(base, {
-            "main/Greet": "BASE Greet {{name}}",
-            "main/Farewell": "BASE Farewell {{name}}",
-        })
+        _make_root(
+            base,
+            {
+                "main/Greet": "BASE Greet {{name}}",
+                "main/Farewell": "BASE Farewell {{name}}",
+            },
+        )
 
         tm = TemplateManager(
             templates=[str(override), str(base)],
@@ -184,11 +193,14 @@ class TestMultiRootOverlay:
         r3 = tmp_path / "r3"
         _make_root(r1, {"main/A": "R1-A {{v}}"})
         _make_root(r2, {"main/A": "R2-A {{v}}", "main/B": "R2-B {{v}}"})
-        _make_root(r3, {
-            "main/A": "R3-A {{v}}",
-            "main/B": "R3-B {{v}}",
-            "main/C": "R3-C {{v}}",
-        })
+        _make_root(
+            r3,
+            {
+                "main/A": "R3-A {{v}}",
+                "main/B": "R3-B {{v}}",
+                "main/C": "R3-C {{v}}",
+            },
+        )
 
         tm = TemplateManager(
             templates=[str(r1), str(r2), str(r3)],
@@ -228,6 +240,7 @@ class TestMultiRootOverlay:
 # Deep merge: same space key from different roots
 # ---------------------------------------------------------------------------
 
+
 class TestDeepMerge:
     """Verify one-level-deep merge within the same space key."""
 
@@ -250,10 +263,13 @@ class TestDeepMerge:
         override = tmp_path / "override"
         base = tmp_path / "base"
         _make_root(override, {"agent/main/Search": "CUSTOM Search"})
-        _make_root(base, {
-            "agent/main/Search": "BASE Search",
-            "agent/main/Browse": "BASE Browse",
-        })
+        _make_root(
+            base,
+            {
+                "agent/main/Search": "BASE Search",
+                "agent/main/Browse": "BASE Browse",
+            },
+        )
 
         tm = TemplateManager(
             templates=[str(override), str(base)],
@@ -267,6 +283,7 @@ class TestDeepMerge:
 # ---------------------------------------------------------------------------
 # Component merging across roots
 # ---------------------------------------------------------------------------
+
 
 class TestComponentMerge:
     """Test that components from different roots deep-merge correctly."""
@@ -310,6 +327,7 @@ class TestComponentMerge:
 # ---------------------------------------------------------------------------
 # Origin tagging through lookup chain
 # ---------------------------------------------------------------------------
+
 
 class TestOriginTracking:
     """Verify _OriginTaggedStr survives the lookup chain."""
@@ -360,6 +378,7 @@ class TestOriginTracking:
 # ---------------------------------------------------------------------------
 # Variable isolation across roots
 # ---------------------------------------------------------------------------
+
 
 class TestVariableIsolation:
     """Templates from root A use root A's _variables, not root B's."""
@@ -466,10 +485,14 @@ class TestVariableIsolation:
         OpenStartup (has _variables/).  The fallback path must produce a fully
         rendered string containing the variable content.
         """
-        vars_root = tmp_path / "vars_root"       # has _variables/, no template for "Greet"
+        vars_root = tmp_path / "vars_root"  # has _variables/, no template for "Greet"
         template_root = tmp_path / "template_root"  # has template, no _variables/
 
-        _make_root(vars_root, {"main/default": "unused"}, variables={"greeting": "HELLO-FROM-VARS-ROOT"})
+        _make_root(
+            vars_root,
+            {"main/default": "unused"},
+            variables={"greeting": "HELLO-FROM-VARS-ROOT"},
+        )
         _make_root(template_root, {"main/Greet": "{{notes_greeting}} {{user}}!"})
         # template_root intentionally has NO _variables/
 
@@ -511,6 +534,7 @@ class TestVariableIsolation:
 # ---------------------------------------------------------------------------
 # switch() with multi-root
 # ---------------------------------------------------------------------------
+
 
 class TestSwitchMultiRoot:
     """Tests for switch() behavior with multi-root templates."""
@@ -583,15 +607,19 @@ class TestSwitchMultiRoot:
 # Fallback chain with multi-root
 # ---------------------------------------------------------------------------
 
+
 class TestFallbackChainMultiRoot:
     """Ensure the existing fallback chain works with merged multi-root dict."""
 
     def test_parent_space_fallback(self, tmp_path):
         """Template not found at space → falls back through parent spaces."""
         root = tmp_path / "root"
-        _make_root(root, {
-            "agent/main/default": "agent-default {{v}}",
-        })
+        _make_root(
+            root,
+            {
+                "agent/main/default": "agent-default {{v}}",
+            },
+        )
 
         tm = TemplateManager(
             templates=[str(root)],
@@ -605,9 +633,12 @@ class TestFallbackChainMultiRoot:
     def test_root_space_removal_fallback(self, tmp_path):
         """Template not found with root_space → tries without root_space."""
         root = tmp_path / "root"
-        _make_root(root, {
-            "main/FallbackTemplate": "global-main {{v}}",
-        })
+        _make_root(
+            root,
+            {
+                "main/FallbackTemplate": "global-main {{v}}",
+            },
+        )
 
         tm = TemplateManager(
             templates=[str(root)],
@@ -645,6 +676,7 @@ class TestFallbackChainMultiRoot:
 # get_raw_template with multi-root
 # ---------------------------------------------------------------------------
 
+
 class TestGetRawTemplateMultiRoot:
     """get_raw_template respects multi-root merge."""
 
@@ -676,6 +708,7 @@ class TestGetRawTemplateMultiRoot:
 # ---------------------------------------------------------------------------
 # Cross-space root with multi-root
 # ---------------------------------------------------------------------------
+
 
 class TestCrossSpaceWithMultiRoot:
     """Verify cross_space_root works correctly with per-root loaders."""

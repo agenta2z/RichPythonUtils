@@ -7,12 +7,17 @@ This test suite verifies:
 - Queue clearing allows graph reuse after Terminate
 - Terminate propagates correctly through different DAG topologies
 """
-import pytest
+
 from queue import Queue
 
-from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode, WorkGraph
-from rich_python_utils.common_objects.workflow.common.worknode_base import WorkGraphStopFlags
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
+import pytest
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
+)
+from rich_python_utils.common_objects.workflow.common.worknode_base import (
+    WorkGraphStopFlags,
+)
+from rich_python_utils.common_objects.workflow.workgraph import WorkGraph, WorkGraphNode
 
 
 class TestTerminateLinearChain:
@@ -25,17 +30,20 @@ class TestTerminateLinearChain:
         node_a = WorkGraphNode(
             name="A",
             value=lambda x: (execution_order.append("A"), x + 1)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_b = WorkGraphNode(
             name="B",
-            value=lambda x: (execution_order.append("B"), (WorkGraphStopFlags.Terminate, x + 1))[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            value=lambda x: (
+                execution_order.append("B"),
+                (WorkGraphStopFlags.Terminate, x + 1),
+            )[1],
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_c = WorkGraphNode(
             name="C",
             value=lambda x: (execution_order.append("C"), x + 1)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_d = WorkGraphNode(
             name="D",
@@ -48,8 +56,12 @@ class TestTerminateLinearChain:
 
         result = node_a.run(0)
 
-        assert execution_order == ["A", "B"], f"Expected ['A', 'B'], got {execution_order}"
-        assert result == (WorkGraphStopFlags.Terminate, 2), f"Expected Terminate with result 2, got {result}"
+        assert execution_order == ["A", "B"], (
+            f"Expected ['A', 'B'], got {execution_order}"
+        )
+        assert result == (WorkGraphStopFlags.Terminate, 2), (
+            f"Expected Terminate with result 2, got {result}"
+        )
 
     def test_terminate_at_first_node(self):
         """A(Terminate) -> B -> C: B and C should not execute."""
@@ -57,13 +69,16 @@ class TestTerminateLinearChain:
 
         node_a = WorkGraphNode(
             name="A",
-            value=lambda x: (execution_order.append("A"), (WorkGraphStopFlags.Terminate, "stopped"))[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            value=lambda x: (
+                execution_order.append("A"),
+                (WorkGraphStopFlags.Terminate, "stopped"),
+            )[1],
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_b = WorkGraphNode(
             name="B",
             value=lambda x: (execution_order.append("B"), x)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_c = WorkGraphNode(
             name="C",
@@ -85,16 +100,19 @@ class TestTerminateLinearChain:
         node_a = WorkGraphNode(
             name="A",
             value=lambda x: (execution_order.append("A"), x + 1)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_b = WorkGraphNode(
             name="B",
             value=lambda x: (execution_order.append("B"), x + 1)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_c = WorkGraphNode(
             name="C",
-            value=lambda x: (execution_order.append("C"), (WorkGraphStopFlags.Terminate, x + 1))[1],
+            value=lambda x: (
+                execution_order.append("C"),
+                (WorkGraphStopFlags.Terminate, x + 1),
+            )[1],
         )
 
         node_a.add_next(node_b)
@@ -116,11 +134,14 @@ class TestTerminateFork:
         node_a = WorkGraphNode(
             name="A",
             value=lambda x: (execution_order.append("A"), x + 1)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_b = WorkGraphNode(
             name="B",
-            value=lambda x: (execution_order.append("B"), (WorkGraphStopFlags.Terminate, "B_result"))[1],
+            value=lambda x: (
+                execution_order.append("B"),
+                (WorkGraphStopFlags.Terminate, "B_result"),
+            )[1],
         )
         node_c = WorkGraphNode(
             name="C",
@@ -147,7 +168,7 @@ class TestTerminateFork:
         node_a = WorkGraphNode(
             name="A",
             value=lambda x: (execution_order.append("A"), x)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_b = WorkGraphNode(
             name="B",
@@ -155,7 +176,10 @@ class TestTerminateFork:
         )
         node_c = WorkGraphNode(
             name="C",
-            value=lambda x: (execution_order.append("C"), (WorkGraphStopFlags.Terminate, "C_terminate"))[1],
+            value=lambda x: (
+                execution_order.append("C"),
+                (WorkGraphStopFlags.Terminate, "C_terminate"),
+            )[1],
         )
         node_d = WorkGraphNode(
             name="D",
@@ -189,21 +213,27 @@ class TestTerminateDiamond:
         node_a = WorkGraphNode(
             name="A",
             value=lambda x: (execution_order.append("A"), x)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_b = WorkGraphNode(
             name="B",
-            value=lambda x: (execution_order.append("B"), (WorkGraphStopFlags.Terminate, "B_terminate"))[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            value=lambda x: (
+                execution_order.append("B"),
+                (WorkGraphStopFlags.Terminate, "B_terminate"),
+            )[1],
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_c = WorkGraphNode(
             name="C",
             value=lambda x: (execution_order.append("C"), "C_result")[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_d = WorkGraphNode(
             name="D",
-            value=lambda *args: (execution_order.append("D"), sum(len(str(a)) for a in args))[1],
+            value=lambda *args: (
+                execution_order.append("D"),
+                sum(len(str(a)) for a in args),
+            )[1],
         )
 
         node_a.add_next(node_b)
@@ -228,22 +258,25 @@ class TestTerminateDiamond:
         node_a = WorkGraphNode(
             name="A",
             value=lambda x: (execution_order.append("A"), x)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_b = WorkGraphNode(
             name="B",
             value=lambda x: (execution_order.append("B"), x + 1)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_c = WorkGraphNode(
             name="C",
             value=lambda x: (execution_order.append("C"), x + 2)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_d = WorkGraphNode(
             name="D",
-            value=lambda *args: (execution_order.append("D"), (WorkGraphStopFlags.Terminate, sum(args)))[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            value=lambda *args: (
+                execution_order.append("D"),
+                (WorkGraphStopFlags.Terminate, sum(args)),
+            )[1],
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_e = WorkGraphNode(
             name="E",
@@ -280,7 +313,10 @@ class TestTerminateMultipleStartNodes:
 
         node_a = WorkGraphNode(
             name="A",
-            value=lambda x: (execution_order.append("A"), (WorkGraphStopFlags.Terminate, "A_terminate"))[1],
+            value=lambda x: (
+                execution_order.append("A"),
+                (WorkGraphStopFlags.Terminate, "A_terminate"),
+            )[1],
         )
         node_b = WorkGraphNode(
             name="B",
@@ -308,7 +344,10 @@ class TestTerminateMultipleStartNodes:
         )
         node_b = WorkGraphNode(
             name="B",
-            value=lambda x: (execution_order.append("B"), (WorkGraphStopFlags.Terminate, "B_terminate"))[1],
+            value=lambda x: (
+                execution_order.append("B"),
+                (WorkGraphStopFlags.Terminate, "B_terminate"),
+            )[1],
         )
         node_c = WorkGraphNode(
             name="C",
@@ -354,17 +393,17 @@ class TestTerminateGraphReuse:
         node_a = WorkGraphNode(
             name="A",
             value=run_a,
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_b = WorkGraphNode(
             name="B",
             value=run_b,
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_c = WorkGraphNode(
             name="C",
             value=run_c,
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_d = WorkGraphNode(
             name="D",
@@ -410,17 +449,17 @@ class TestTerminateGraphReuse:
         node_a = WorkGraphNode(
             name="A",
             value=lambda x: (execution_order.append("A"), x)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_b = WorkGraphNode(
             name="B",
             value=run_b,
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_c = WorkGraphNode(
             name="C",
             value=lambda x: (execution_order.append("C"), x + 2)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_d = WorkGraphNode(
             name="D",
@@ -467,17 +506,17 @@ class TestTerminateNestedStructure:
         node_a = WorkGraphNode(
             name="A",
             value=lambda x: (execution_order.append("A"), x)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_b = WorkGraphNode(
             name="B",
             value=lambda x: (execution_order.append("B"), x)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_c = WorkGraphNode(
             name="C",
             value=lambda x: (execution_order.append("C"), x)[1],
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_d = WorkGraphNode(
             name="D",
@@ -485,7 +524,10 @@ class TestTerminateNestedStructure:
         )
         node_e = WorkGraphNode(
             name="E",
-            value=lambda x: (execution_order.append("E"), (WorkGraphStopFlags.Terminate, "E_terminate"))[1],
+            value=lambda x: (
+                execution_order.append("E"),
+                (WorkGraphStopFlags.Terminate, "E_terminate"),
+            )[1],
         )
         node_f = WorkGraphNode(
             name="F",
@@ -545,7 +587,7 @@ class TestTerminateReturnValue:
         node_a = WorkGraphNode(
             name="A",
             value=lambda x: x * 2,
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_b = WorkGraphNode(
             name="B",
@@ -559,5 +601,5 @@ class TestTerminateReturnValue:
         assert result == (WorkGraphStopFlags.Terminate, "terminated_with_10")
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v', '--tb=short'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v", "--tb=short"])

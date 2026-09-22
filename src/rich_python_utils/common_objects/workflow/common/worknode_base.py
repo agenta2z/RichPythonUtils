@@ -1,17 +1,22 @@
 import logging
 from abc import ABC
 from enum import IntEnum
-from typing import Union, Any, Optional, Callable, Sequence, Mapping, Tuple, Set
+from typing import Any, Callable, Mapping, Optional, Sequence, Set, Tuple, Union
 
-from attr import attrs, attrib
-
-from rich_python_utils.common_utils import is_class_or_type_, TypeOrGenericAlias
+from attr import attrib, attrs
 from rich_python_utils.common_objects.debuggable import Debuggable
-from rich_python_utils.common_objects.serializable import Serializable, SerializationMode
-from rich_python_utils.common_objects.workflow.common.post_processable import PostProcessable
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
-
+from rich_python_utils.common_objects.serializable import (
+    Serializable,
+    SerializationMode,
+)
+from rich_python_utils.common_objects.workflow.common.post_processable import (
+    PostProcessable,
+)
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
+)
 from rich_python_utils.common_objects.workflow.common.resumable import Resumable
+from rich_python_utils.common_utils import is_class_or_type_, TypeOrGenericAlias
 from rich_python_utils.console_utils import hprint_message
 
 
@@ -22,11 +27,19 @@ class WorkGraphStopFlags(IntEnum):
 
     @staticmethod
     def is_input_single_stop_flag(*args, **kwargs) -> bool:
-        return (not kwargs) and (len(args) == 1) and isinstance(args[0], WorkGraphStopFlags)
+        return (
+            (not kwargs)
+            and (len(args) == 1)
+            and isinstance(args[0], WorkGraphStopFlags)
+        )
 
     @staticmethod
     def result_has_stop_flag(result) -> bool:
-        return isinstance(result, tuple) and len(result) >= 2 and isinstance(result[0], WorkGraphStopFlags)
+        return (
+            isinstance(result, tuple)
+            and len(result) >= 2
+            and isinstance(result[0], WorkGraphStopFlags)
+        )
 
     @staticmethod
     def remove_stop_flag_from_result(result):
@@ -41,10 +54,9 @@ class WorkGraphStopFlags(IntEnum):
         return result
 
     @staticmethod
-    def separate_stop_flag_from_result(result) -> Union[
-        Tuple['WorkGraphStopFlags', None],
-        Tuple['WorkGraphStopFlags', ...]
-    ]:
+    def separate_stop_flag_from_result(
+        result,
+    ) -> Union[Tuple["WorkGraphStopFlags", None], Tuple["WorkGraphStopFlags", ...]]:
         if WorkGraphStopFlags.result_has_stop_flag(result):
             # assuming the result is (stop_flag, ...)
             stop_flag = result[0]
@@ -95,12 +107,18 @@ class NextNodesSelector:
         >>> # Run self only, skip all other downstream nodes
         >>> NextNodesSelector(include_self=True, include_others=False, result=status)
     """
+
     include_self: bool = attrib(default=False)
     include_others: Union[bool, Set[str]] = attrib(default=True)
     result: Any = attrib(default=None)
 
 
-def get_args_for_downstream(result, mode: Union[str, ResultPassDownMode, Callable], args: Sequence, kwargs: Mapping):
+def get_args_for_downstream(
+    result,
+    mode: Union[str, ResultPassDownMode, Callable],
+    args: Sequence,
+    kwargs: Mapping,
+):
     """
     Prepare arguments for downstream steps based on the result pass-down mode.
 
@@ -176,7 +194,9 @@ def get_args_for_downstream(result, mode: Union[str, ResultPassDownMode, Callabl
             return (result, *args), kwargs
     else:
         valid_modes = [m for m in ResultPassDownMode]
-        raise ValueError(f"Invalid mode: {mode}. Expected one of {valid_modes}, a string key, or a callable.")
+        raise ValueError(
+            f"Invalid mode: {mode}. Expected one of {valid_modes}, a string key, or a callable."
+        )
 
 
 @attrs(slots=False)
@@ -197,11 +217,15 @@ class WorkNodeBase(Serializable, Debuggable, Resumable, PostProcessable, ABC):
         logger (Optional[Union[Callable[[dict], Any], logging.Logger]]):
             Logger for debugging or workflow messages. Defaults to `hprint_message`.
     """
+
     # Set default serialization mode to prefer clear text (JSON/YAML)
     auto_mode: SerializationMode = SerializationMode.PREFER_CLEAR_TEXT
-    
+
     name = attrib(type=str, default=None)
-    result_pass_down_mode = attrib(type=Union[str, ResultPassDownMode, Callable, Any], default=ResultPassDownMode.NoPassDown)
+    result_pass_down_mode = attrib(
+        type=Union[str, ResultPassDownMode, Callable, Any],
+        default=ResultPassDownMode.NoPassDown,
+    )
     unpack_single_result = attrib(type=Union[bool, TypeOrGenericAlias], default=True)
     ignore_stop_flag_from_saved_results = attrib(type=bool, default=True)
 
@@ -230,7 +254,9 @@ class WorkNodeBase(Serializable, Debuggable, Resumable, PostProcessable, ABC):
         raise NotImplementedError
 
     def load_result(self, *args, **kwargs) -> Tuple[bool, Any]:
-        from rich_python_utils.common_objects.workflow.common.step_result_save_options import ResumeMode
+        from rich_python_utils.common_objects.workflow.common.step_result_save_options import (
+            ResumeMode,
+        )
 
         resume = self.resume_with_saved_results
         # Backward compat: bool → ResumeMode
@@ -265,18 +291,12 @@ class WorkNodeBase(Serializable, Debuggable, Resumable, PostProcessable, ABC):
 
         # region try unpacking singleton result
         if (
-                (
-                        (
-                                self.unpack_single_result is True
-                                and isinstance(result, (list, tuple))
-                        ) or
-                        (
-                                is_class_or_type_(self.unpack_single_result)
-                                and isinstance(result, self.unpack_single_result)
-                        )
-                ) and len(result) == 1
-
-        ):
+            (self.unpack_single_result is True and isinstance(result, (list, tuple)))
+            or (
+                is_class_or_type_(self.unpack_single_result)
+                and isinstance(result, self.unpack_single_result)
+            )
+        ) and len(result) == 1:
             result = result[0]
         # endregion
 
@@ -293,25 +313,21 @@ class WorkNodeBase(Serializable, Debuggable, Resumable, PostProcessable, ABC):
         """Async implementation — override in subclasses."""
         raise NotImplementedError
 
-    async def arun(self, *args, _output: list = None, _output_idx: tuple = None, **kwargs):
+    async def arun(
+        self, *args, _output: list = None, _output_idx: tuple = None, **kwargs
+    ):
         """Async entry point. Mirrors run() but calls await self._arun()."""
         result = await self._arun(*args, **kwargs)
         stop_flag, result = WorkGraphStopFlags.separate_stop_flag_from_result(result)
 
         # region try unpacking singleton result
         if (
-                (
-                        (
-                                self.unpack_single_result is True
-                                and isinstance(result, (list, tuple))
-                        ) or
-                        (
-                                is_class_or_type_(self.unpack_single_result)
-                                and isinstance(result, self.unpack_single_result)
-                        )
-                ) and len(result) == 1
-
-        ):
+            (self.unpack_single_result is True and isinstance(result, (list, tuple)))
+            or (
+                is_class_or_type_(self.unpack_single_result)
+                and isinstance(result, self.unpack_single_result)
+            )
+        ) and len(result) == 1:
             result = result[0]
         # endregion
 
@@ -328,4 +344,3 @@ class WorkNodeBase(Serializable, Debuggable, Resumable, PostProcessable, ABC):
                 return result
             else:
                 return stop_flag, result
-

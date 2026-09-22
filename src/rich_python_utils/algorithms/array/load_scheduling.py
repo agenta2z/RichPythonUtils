@@ -1,10 +1,9 @@
-from bisect import insort_left, bisect_left
+from bisect import bisect_left, insort_left
 from heapq import heappop, heappush
 from typing import List
 
 
 class Scheduler:
-
     def __init__(self, num_servers):
         self.num_servers = num_servers
         # free servers, kept sorted for binary search
@@ -63,9 +62,7 @@ class Scheduler:
 
 
 def busiest_servers(
-        scheduler: Scheduler,
-        arrival: List[int],
-        workload: List[int]
+    scheduler: Scheduler, arrival: List[int], workload: List[int]
 ) -> List[int]:
     """
     Determine which server(s) handled the most requests.

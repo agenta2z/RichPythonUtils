@@ -18,19 +18,20 @@ Usage:
 """
 
 from resolve_path import resolve_path
+
 resolve_path()
 
+from rich_python_utils.service_utils.retrieval_service.document import Document
 from rich_python_utils.service_utils.retrieval_service.memory_retrieval_service import (
     MemoryRetrievalService,
 )
-from rich_python_utils.service_utils.retrieval_service.document import Document
 
 
 PAPERS = [
     Document(
         doc_id="paper:quantum_ml",
         content="Quantum machine learning algorithm for molecular property prediction "
-                "using variational quantum circuits.",
+        "using variational quantum circuits.",
         metadata={
             "authors": ["Alice Chen", "Bob Patel"],
             "journal": "Nature Physics",
@@ -43,7 +44,7 @@ PAPERS = [
     Document(
         doc_id="paper:crispr_delivery",
         content="Lipid nanoparticle delivery system for CRISPR-Cas9 gene editing "
-                "demonstrates efficient genome editing in liver cells.",
+        "demonstrates efficient genome editing in liver cells.",
         metadata={
             "authors": ["Diana Lee", "Bob Patel"],
             "journal": "Nature Biotechnology",
@@ -56,7 +57,7 @@ PAPERS = [
     Document(
         doc_id="paper:climate_model",
         content="Improved climate model incorporating ocean-atmosphere coupling at "
-                "unprecedented resolution reproduces observed temperature trends.",
+        "unprecedented resolution reproduces observed temperature trends.",
         metadata={
             "authors": ["Carol Kim", "Eve Zhang"],
             "journal": "Science",
@@ -69,7 +70,7 @@ PAPERS = [
     Document(
         doc_id="paper:topological_insulator",
         content="New class of topological insulators exhibiting robust surface states "
-                "at room temperature for quantum computing devices.",
+        "at room temperature for quantum computing devices.",
         metadata={
             "authors": ["Alice Chen", "Frank Wu"],
             "journal": "Physical Review Letters",
@@ -82,7 +83,7 @@ PAPERS = [
     Document(
         doc_id="paper:protein_structure",
         content="Deep learning methods predict protein tertiary structures with "
-                "near-experimental accuracy using transformer architectures.",
+        "near-experimental accuracy using transformer architectures.",
         metadata={
             "authors": ["Bob Patel", "Diana Lee"],
             "journal": "Nature Methods",
@@ -95,7 +96,7 @@ PAPERS = [
     Document(
         doc_id="paper:battery_materials",
         content="Computational screening identifies novel solid-state electrolyte "
-                "materials for next-generation lithium batteries.",
+        "materials for next-generation lithium batteries.",
         metadata={
             "authors": ["Eve Zhang", "Frank Wu"],
             "journal": "Advanced Energy Materials",
@@ -120,32 +121,66 @@ def main():
     total_loaded = svc.size()
 
     # 1. Scalar exact match
-    results_year2024 = svc.search("novel quantum algorithm prediction learning materials", filters={"year": 2024})
-    results_year2023 = svc.search("novel quantum algorithm prediction learning materials", filters={"year": 2023})
+    results_year2024 = svc.search(
+        "novel quantum algorithm prediction learning materials", filters={"year": 2024}
+    )
+    results_year2023 = svc.search(
+        "novel quantum algorithm prediction learning materials", filters={"year": 2023}
+    )
 
     # 2. String exact match
-    results_nature_physics = svc.search("novel quantum algorithm prediction learning materials", filters={"journal": "Nature Physics"})
-    results_science = svc.search("novel quantum algorithm prediction learning materials", filters={"journal": "Science"})
+    results_nature_physics = svc.search(
+        "novel quantum algorithm prediction learning materials",
+        filters={"journal": "Nature Physics"},
+    )
+    results_science = svc.search(
+        "novel quantum algorithm prediction learning materials",
+        filters={"journal": "Science"},
+    )
 
     # 3. Boolean match
-    results_open_true = svc.search("novel quantum algorithm prediction learning materials", filters={"open_access": True})
-    results_open_false = svc.search("novel quantum algorithm prediction learning materials", filters={"open_access": False})
+    results_open_true = svc.search(
+        "novel quantum algorithm prediction learning materials",
+        filters={"open_access": True},
+    )
+    results_open_false = svc.search(
+        "novel quantum algorithm prediction learning materials",
+        filters={"open_access": False},
+    )
 
     # 4. List AND containment
-    results_ml = svc.search("novel quantum algorithm prediction learning materials", filters={"topics": ["machine_learning"]})
-    results_qc = svc.search("novel quantum algorithm prediction learning materials", filters={"topics": ["quantum_computing"]})
-    results_both = svc.search("novel quantum algorithm prediction learning materials", filters={"topics": ["quantum_computing", "machine_learning"]})
+    results_ml = svc.search(
+        "novel quantum algorithm prediction learning materials",
+        filters={"topics": ["machine_learning"]},
+    )
+    results_qc = svc.search(
+        "novel quantum algorithm prediction learning materials",
+        filters={"topics": ["quantum_computing"]},
+    )
+    results_both = svc.search(
+        "novel quantum algorithm prediction learning materials",
+        filters={"topics": ["quantum_computing", "machine_learning"]},
+    )
 
     # 5. Combined filters
-    results_2024_open = svc.search("novel quantum algorithm prediction learning materials", filters={"year": 2024, "open_access": True})
-    results_2024_nbt = svc.search("novel quantum algorithm prediction learning materials", filters={"year": 2024, "journal": "Nature Biotechnology"})
+    results_2024_open = svc.search(
+        "novel quantum algorithm prediction learning materials",
+        filters={"year": 2024, "open_access": True},
+    )
+    results_2024_nbt = svc.search(
+        "novel quantum algorithm prediction learning materials",
+        filters={"year": 2024, "journal": "Nature Biotechnology"},
+    )
 
     # 6. Filters on list_all
     docs_open = svc.list_all(filters={"open_access": True})
     docs_2024_closed = svc.list_all(filters={"year": 2024, "open_access": False})
 
     # 7. Edge cases
-    results_nonexistent = svc.search("novel quantum algorithm prediction learning materials", filters={"nonexistent_key": "value"})
+    results_nonexistent = svc.search(
+        "novel quantum algorithm prediction learning materials",
+        filters={"nonexistent_key": "value"},
+    )
     results_empty_query = svc.search("")
 
     # Duplicate add test
@@ -167,7 +202,7 @@ def main():
 
     print(f"\nLoaded {total_loaded} papers into MemoryRetrievalService.")
 
-    print("\n[1] Scalar exact match: {\"year\": 2024}")
+    print('\n[1] Scalar exact match: {"year": 2024}')
     print("-" * 50)
     print(f"    year=2024 -> {len(results_year2024)} match(es)")
     for doc, score in results_year2024:
@@ -176,16 +211,16 @@ def main():
     for doc, score in results_year2023:
         print(f"        {doc.doc_id:35s} score={score:.4f}")
 
-    print("\n[2] String exact match: {\"journal\": \"Nature Physics\"}")
+    print('\n[2] String exact match: {"journal": "Nature Physics"}')
     print("-" * 50)
-    print(f"    journal=\"Nature Physics\" -> {len(results_nature_physics)} match(es)")
+    print(f'    journal="Nature Physics" -> {len(results_nature_physics)} match(es)')
     for doc, score in results_nature_physics:
         print(f"        {doc.doc_id:35s} score={score:.4f}")
-    print(f"    journal=\"Science\" -> {len(results_science)} match(es)")
+    print(f'    journal="Science" -> {len(results_science)} match(es)')
     for doc, score in results_science:
         print(f"        {doc.doc_id:35s} score={score:.4f}")
 
-    print("\n[3] Boolean match: {\"open_access\": True}")
+    print('\n[3] Boolean match: {"open_access": True}')
     print("-" * 50)
     print(f"    open_access=True -> {len(results_open_true)} match(es)")
     for doc, score in results_open_true:
@@ -194,16 +229,22 @@ def main():
     for doc, score in results_open_false:
         print(f"        {doc.doc_id:35s} score={score:.4f}")
 
-    print("\n[4] List AND containment: all items must be present in the document's list")
+    print(
+        "\n[4] List AND containment: all items must be present in the document's list"
+    )
     print("-" * 50)
-    print('    Rule: {"topics": ["a", "b"]} matches when BOTH "a" AND "b" are in doc.topics')
-    print(f"    topics contains \"machine_learning\" -> {len(results_ml)} match(es)")
+    print(
+        '    Rule: {"topics": ["a", "b"]} matches when BOTH "a" AND "b" are in doc.topics'
+    )
+    print(f'    topics contains "machine_learning" -> {len(results_ml)} match(es)')
     for doc, score in results_ml:
         print(f"        {doc.doc_id:35s} score={score:.4f}")
-    print(f"    topics contains \"quantum_computing\" -> {len(results_qc)} match(es)")
+    print(f'    topics contains "quantum_computing" -> {len(results_qc)} match(es)')
     for doc, score in results_qc:
         print(f"        {doc.doc_id:35s} score={score:.4f}")
-    print(f"    topics contains BOTH \"quantum_computing\" AND \"machine_learning\" -> {len(results_both)} match(es)")
+    print(
+        f'    topics contains BOTH "quantum_computing" AND "machine_learning" -> {len(results_both)} match(es)'
+    )
     for doc, score in results_both:
         print(f"        {doc.doc_id:35s} score={score:.4f}")
     print("    (Only paper:quantum_ml has both topics)")
@@ -213,7 +254,9 @@ def main():
     print(f"    year=2024 AND open_access=True -> {len(results_2024_open)} match(es)")
     for doc, score in results_2024_open:
         print(f"        {doc.doc_id:35s} score={score:.4f}")
-    print(f"    year=2024 AND journal=\"Nature Biotechnology\" -> {len(results_2024_nbt)} match(es)")
+    print(
+        f'    year=2024 AND journal="Nature Biotechnology" -> {len(results_2024_nbt)} match(es)'
+    )
     for doc, score in results_2024_nbt:
         print(f"        {doc.doc_id:35s} score={score:.4f}")
 
@@ -222,15 +265,19 @@ def main():
     print(f"    list_all: open_access=True -> {len(docs_open)} match(es)")
     for doc in docs_open:
         print(f"        {doc.doc_id}")
-    print(f"    list_all: year=2024 AND open_access=False -> {len(docs_2024_closed)} match(es)")
+    print(
+        f"    list_all: year=2024 AND open_access=False -> {len(docs_2024_closed)} match(es)"
+    )
     for doc in docs_2024_closed:
         print(f"        {doc.doc_id}")
 
     print("\n[7] Edge cases")
     print("-" * 50)
-    print(f"    filter on key \"nonexistent_key\" (not in any metadata) -> {len(results_nonexistent)} match(es)")
+    print(
+        f'    filter on key "nonexistent_key" (not in any metadata) -> {len(results_nonexistent)} match(es)'
+    )
     print("    (No matches -- missing filter key means filter not satisfied)")
-    print(f"    empty search query \"\" -> {len(results_empty_query)} match(es)")
+    print(f'    empty search query "" -> {len(results_empty_query)} match(es)')
     print("    (Returns empty -- empty query matches nothing)")
     if duplicate_error_msg:
         print(f"    Duplicate add -> ValueError: {duplicate_error_msg}")
@@ -248,4 +295,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n[X] Error: {e}")
         import traceback
+
         traceback.print_exc()

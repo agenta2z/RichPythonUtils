@@ -21,14 +21,20 @@ Usage:
 """
 
 from resolve_path import resolve_path
+
 resolve_path()
 
+from rich_python_utils.algorithms.graph.traversal import bfs_traversal, dfs_traversal
+from rich_python_utils.service_utils.graph_service.graph_node import (
+    GraphEdge,
+    GraphNode,
+)
+from rich_python_utils.service_utils.graph_service.materialize import (
+    materialize_subgraph,
+)
 from rich_python_utils.service_utils.graph_service.memory_graph_service import (
     MemoryGraphService,
 )
-from rich_python_utils.service_utils.graph_service.graph_node import GraphNode, GraphEdge
-from rich_python_utils.service_utils.graph_service.materialize import materialize_subgraph
-from rich_python_utils.algorithms.graph.traversal import bfs_traversal, dfs_traversal
 
 
 def _build_network(svc):
@@ -50,40 +56,59 @@ def _build_network(svc):
     # Researchers
     for nid, label, props in [
         ("alice", "Dr. Alice Chen", {"department": "Physics", "h_index": 42}),
-        ("bob",   "Dr. Bob Patel",  {"department": "Bioinformatics", "h_index": 35}),
-        ("carol", "Dr. Carol Kim",  {"department": "Climate", "h_index": 28}),
-        ("diana", "Dr. Diana Lee",  {"department": "Genetics", "h_index": 51}),
-        ("eve",   "Dr. Eve Zhang",  {"department": "Materials", "h_index": 33}),
-        ("frank", "Dr. Frank Wu",   {"department": "Chemistry", "h_index": 22}),
+        ("bob", "Dr. Bob Patel", {"department": "Bioinformatics", "h_index": 35}),
+        ("carol", "Dr. Carol Kim", {"department": "Climate", "h_index": 28}),
+        ("diana", "Dr. Diana Lee", {"department": "Genetics", "h_index": 51}),
+        ("eve", "Dr. Eve Zhang", {"department": "Materials", "h_index": 33}),
+        ("frank", "Dr. Frank Wu", {"department": "Chemistry", "h_index": 22}),
     ]:
-        svc.add_node(GraphNode(node_id=nid, node_type="researcher",
-                               label=label, properties=props))
+        svc.add_node(
+            GraphNode(
+                node_id=nid, node_type="researcher", label=label, properties=props
+            )
+        )
 
     # Institutions
     for nid, label in [
-        ("mit", "MIT"), ("stanford", "Stanford"),
-        ("harvard", "Harvard"), ("caltech", "Caltech"),
+        ("mit", "MIT"),
+        ("stanford", "Stanford"),
+        ("harvard", "Harvard"),
+        ("caltech", "Caltech"),
     ]:
-        svc.add_node(GraphNode(node_id=nid, node_type="institution",
-                               label=label, properties={}))
+        svc.add_node(
+            GraphNode(node_id=nid, node_type="institution", label=label, properties={})
+        )
 
     # Co-authored edges (directed: source co-authored with target)
     for src, tgt, papers in [
-        ("alice", "bob", 3), ("alice", "carol", 5),
-        ("bob", "diana", 2), ("carol", "eve", 1),
-        ("diana", "eve", 4), ("diana", "frank", 2),
+        ("alice", "bob", 3),
+        ("alice", "carol", 5),
+        ("bob", "diana", 2),
+        ("carol", "eve", 1),
+        ("diana", "eve", 4),
+        ("diana", "frank", 2),
     ]:
-        svc.add_edge(GraphEdge(source_id=src, target_id=tgt,
-                               edge_type="co_authored",
-                               properties={"paper_count": papers}))
+        svc.add_edge(
+            GraphEdge(
+                source_id=src,
+                target_id=tgt,
+                edge_type="co_authored",
+                properties={"paper_count": papers},
+            )
+        )
 
     # Affiliated_with edges
     for src, tgt in [
-        ("alice", "mit"), ("bob", "stanford"), ("carol", "mit"),
-        ("diana", "harvard"), ("eve", "caltech"), ("frank", "stanford"),
+        ("alice", "mit"),
+        ("bob", "stanford"),
+        ("carol", "mit"),
+        ("diana", "harvard"),
+        ("eve", "caltech"),
+        ("frank", "stanford"),
     ]:
-        svc.add_edge(GraphEdge(source_id=src, target_id=tgt,
-                               edge_type="affiliated_with"))
+        svc.add_edge(
+            GraphEdge(source_id=src, target_id=tgt, edge_type="affiliated_with")
+        )
 
 
 def main():
@@ -100,14 +125,23 @@ def main():
     start = materialize_subgraph(svc, "alice", edge_type="co_authored", depth=2)
     start_id = start.node_id
     start_label = start.label
-    direct_links = [n.node_id for n in (start.next if isinstance(start.next, list) else [start.next] if start.next else [])]
+    direct_links = [
+        n.node_id
+        for n in (
+            start.next
+            if isinstance(start.next, list)
+            else [start.next]
+            if start.next
+            else []
+        )
+    ]
 
     # 3. BFS traversal
-    bfs_nodes = list(bfs_traversal(start, {GraphNode: 'next'}))
+    bfs_nodes = list(bfs_traversal(start, {GraphNode: "next"}))
 
     # 4. DFS traversal
-    dfs_nodes = list(dfs_traversal(start, {GraphNode: 'next'}))
-    dfs_post = list(dfs_traversal(start, {GraphNode: 'next'}, preorder=False))
+    dfs_nodes = list(dfs_traversal(start, {GraphNode: "next"}))
+    dfs_post = list(dfs_traversal(start, {GraphNode: "next"}, preorder=False))
 
     # 5. Materialized nodes are copies
     start.properties["modified"] = True
@@ -116,16 +150,18 @@ def main():
     orig_has_modified = "modified" in original.properties
 
     # 6. Materialize with different edge type
-    start_affil = materialize_subgraph(svc, "alice", edge_type="affiliated_with", depth=1)
-    affil_nodes = list(bfs_traversal(start_affil, {GraphNode: 'next'}))
+    start_affil = materialize_subgraph(
+        svc, "alice", edge_type="affiliated_with", depth=1
+    )
+    affil_nodes = list(bfs_traversal(start_affil, {GraphNode: "next"}))
 
     # 7. Materialize with deeper depth
     start_deep = materialize_subgraph(svc, "alice", edge_type="co_authored", depth=3)
-    deep_nodes = list(bfs_traversal(start_deep, {GraphNode: 'next'}))
+    deep_nodes = list(bfs_traversal(start_deep, {GraphNode: "next"}))
 
     # 8. Materialize all edge types
     start_all = materialize_subgraph(svc, "alice", edge_type=None, depth=1)
-    all_nodes = list(bfs_traversal(start_all, {GraphNode: 'next'}))
+    all_nodes = list(bfs_traversal(start_all, {GraphNode: "next"}))
 
     svc.close()
 
@@ -203,4 +239,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n[X] Error: {e}")
         import traceback
+
         traceback.print_exc()

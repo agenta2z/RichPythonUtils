@@ -2,30 +2,33 @@
 
 Validates: Requirements 27.1, 27.2, 30.1, 30.2
 """
+
 import os
 import shutil
 import tempfile
 
 import pytest
-from attr import attrs, attrib
-
-from rich_python_utils.common_objects.workflow.workflow import Workflow
-from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode, WorkGraph
+from attr import attrib, attrs
+from rich_python_utils.common_objects.workflow.common.exceptions import (
+    ExpansionConfigError,
+)
 from rich_python_utils.common_objects.workflow.common.expansion import (
     ExpansionResult,
     GraphExpansionResult,
     SubgraphSpec,
 )
-from rich_python_utils.common_objects.workflow.common.exceptions import (
-    ExpansionConfigError,
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
 )
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
 from rich_python_utils.common_objects.workflow.common.step_wrapper import StepWrapper
+from rich_python_utils.common_objects.workflow.workflow import Workflow
+from rich_python_utils.common_objects.workflow.workgraph import WorkGraph, WorkGraphNode
 
 
 # ---------------------------------------------------------------------------
 # Concrete Workflow subclass for testing
 # ---------------------------------------------------------------------------
+
 
 @attrs(slots=False)
 class _TestWorkflow(Workflow):
@@ -44,6 +47,7 @@ class _TestWorkflow(Workflow):
 # ---------------------------------------------------------------------------
 # Concrete WorkGraphNode subclass for testing
 # ---------------------------------------------------------------------------
+
 
 class _TestNode(WorkGraphNode):
     def __init__(self, save_dir=None, **kwargs):
@@ -77,6 +81,7 @@ class TestLoopBackToWithExpansion:
 
     def test_loop_back_to_plus_expansion_raises_config_error(self, save_dir):
         """A step with loop_back_to that returns ExpansionResult raises ExpansionConfigError."""
+
         def expanding_step(x):
             return ExpansionResult(
                 result=x,
@@ -104,6 +109,7 @@ class TestLoopBackToWithExpansion:
 
     def test_step_without_loop_back_to_can_expand(self, save_dir):
         """A step without loop_back_to can return ExpansionResult normally."""
+
         def expanding_step(x):
             return ExpansionResult(
                 result=x * 2,

@@ -4,7 +4,7 @@ Exceptions for variable management.
 This module provides exception classes for variable resolution errors.
 """
 
-from typing import List
+from typing import List, Optional
 
 
 class AmbiguousVariableError(Exception):
@@ -35,8 +35,25 @@ class MaxDepthExceededError(Exception):
     def __init__(self, resolution_stack: List[str], max_depth: int):
         self.resolution_stack = resolution_stack
         self.max_depth = max_depth
-        recent = resolution_stack[-5:] if len(resolution_stack) > 5 else resolution_stack
-        chain = " -> ".join(recent)
-        super().__init__(
-            f"Max recursion depth ({max_depth}) exceeded. Recent: {chain}"
+        recent = (
+            resolution_stack[-5:] if len(resolution_stack) > 5 else resolution_stack
         )
+        chain = " -> ".join(recent)
+        super().__init__(f"Max recursion depth ({max_depth}) exceeded. Recent: {chain}")
+
+
+class SuperRefError(ValueError):
+    """Raised when a ``{{ __super__ }}`` super-reference is malformed.
+
+    A decorated super-ref -- ``^{{ __super__ }}``, ``.{{ __super__ }}``,
+    ``..{{ __super__ }}`` or ``{{ __super__ }}?`` -- is rejected loudly: a
+    scope or optional modifier on the reserved token is almost always an
+    authoring mistake that a silent fallback would hide. Missing-base and
+    top-level super-refs are NOT errors (they resolve to an empty string).
+    """
+
+    def __init__(self, detail: str, file_path: Optional[str] = None):
+        self.detail = detail
+        self.file_path = file_path
+        location = f" (in {file_path})" if file_path else ""
+        super().__init__(f"Invalid {{{{ __super__ }}}} reference{location}: {detail}")

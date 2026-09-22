@@ -12,5 +12,60 @@ python_library(
     visibility = ["PUBLIC"],
     deps = [
         "fbsource//third-party/pypi/attrs:attrs",
+        "fbsource//third-party/pypi/chromadb:chromadb",
+        "fbsource//third-party/pypi/colorama:colorama",
+        "fbsource//third-party/pypi/dash:dash",
+        # elasticsearch removed 2026-07-01: the third-party target
+        # //third-party/pypi/elasticsearch:elasticsearch is broken repo-wide
+        # (missing `ovr_config//third-party/pypi/elasticsearch/constraints:7.9.1`,
+        # fails standalone), and RPU imports elasticsearch ONLY lazily
+        # (function-local, 0 top-level) for an optional search integration. A
+        # consumer that actually needs it should add the dep to its own target.
+        "fbsource//third-party/pypi/elasticsearch:elasticsearch",
+        "fbsource//third-party/pypi/flask:flask",
+        "fbsource//third-party/pypi/google-api-python-client:google-api-python-client",
+        "fbsource//third-party/pypi/google-auth:google-auth",
+        "fbsource//third-party/pypi/google-auth-oauthlib:google-auth-oauthlib",
+        "fbsource//third-party/pypi/hydra-core:hydra-core",
+        "fbsource//third-party/pypi/ipython:ipython",
+        "fbsource//third-party/pypi/ipywidgets:ipywidgets",
+        "fbsource//third-party/pypi/jinja2:jinja2",
+        "fbsource//third-party/pypi/lancedb:lancedb",
+        "fbsource//third-party/pypi/levenshtein:levenshtein",
+        "fbsource//third-party/pypi/lxml:lxml",
+        "fbsource//third-party/pypi/neo4j:neo4j",
+        "fbsource//third-party/pypi/networkx:networkx",
+        "fbsource//third-party/pypi/nltk:nltk",
+        "fbsource//third-party/pypi/numpy:numpy",
+        "fbsource//third-party/pypi/omegaconf:omegaconf",
+        "fbsource//third-party/pypi/pandas:pandas",
+        "fbsource//third-party/pypi/pyyaml:pyyaml",
+        "fbsource//third-party/pypi/questionary:questionary",
+        "fbsource//third-party/pypi/rank-bm25:rank-bm25",
+        "fbsource//third-party/pypi/redis:redis",
+        "fbsource//third-party/pypi/rich:rich",
+        "fbsource//third-party/pypi/scikit-learn:scikit-learn",
+        "fbsource//third-party/pypi/textual:textual",
+        "fbsource//third-party/pypi/tomli:tomli",
+        "fbsource//third-party/pypi/tqdm:tqdm",
+        "fbsource//third-party/pypi/typing-extensions:typing-extensions",
+        "fbsource//third-party/pypi/unidecode:unidecode",
+        "fbsource//third-party/pypi/wordfreq:wordfreq",
+        "fbsource//third-party/pypi/xmltodict:xmltodict",
+        # NOTE: agent_foundation is imported ONLY lazily (function-local) in
+        # common_objects/workflow/workgraph.py (NodeStatusEvent/NodeStatus for
+        # optional status emission, guarded by try/except). A STATIC dep here
+        # creates an agent_foundation <-> rich_python_utils Buck target CYCLE
+        # that blocks every build/pyre/test of both libs. Buck does not
+        # static-analyze imports, so the build does not need this edge; consumers
+        # that actually run those workgraph paths already pull agent_foundation
+        # transitively, so the lazy import resolves at runtime. Do NOT re-add
+        # (reintroduces the cycle) — if a runtime import genuinely fails, add the
+        # dep to the *consumer/test* target, not to this utils library.
+        # (Re-removed 2026-07-01: the edge had been re-added, recreating the
+        # cycle and blocking the metamate SDK example build under Buck.)
+        # (Re-removed 2026-09-20: `arc lint -a` autodeps was the re-adder. The
+        # five lazy imports in workgraph.py now carry `# @manual`, so autodeps
+        # no longer proposes this edge and the removal is stable.)
     ],
 )

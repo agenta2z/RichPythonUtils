@@ -1,5 +1,3 @@
-
-
 """Abstract base for queue-based clients that connect to a SessionAwareServer.
 
 Handles session registration/deregistration, heartbeat sending, server
@@ -74,21 +72,27 @@ class QueueClientBase(ABC):
 
     def _register(self) -> None:
         """Send a register_session message to the server control queue."""
-        self._queue_service.put("server_control", {
-            "type": "register_session",
-            "session_id": self._session_id,
-            "session_type": self._session_type,
-        })
+        self._queue_service.put(
+            "server_control",
+            {
+                "type": "register_session",
+                "session_id": self._session_id,
+                "session_type": self._session_type,
+            },
+        )
         logger.info(
             "Registered session %s (type=%s)", self._session_id, self._session_type
         )
 
     def _deregister(self) -> None:
         """Send a deregister_session message so the server cleans up immediately."""
-        self._queue_service.put("server_control", {
-            "type": "deregister_session",
-            "session_id": self._session_id,
-        })
+        self._queue_service.put(
+            "server_control",
+            {
+                "type": "deregister_session",
+                "session_id": self._session_id,
+            },
+        )
         logger.info("Deregistered session %s", self._session_id)
 
     # ── Messaging ─────────────────────────────────────────────────────
@@ -106,12 +110,15 @@ class QueueClientBase(ABC):
             content: Message body.
             **extra: Additional fields merged into the message dict.
         """
-        self._queue_service.put(self._input_queue_id, {
-            "type": msg_type,
-            "content": content,
-            "session_id": self._session_id,
-            **extra,
-        })
+        self._queue_service.put(
+            self._input_queue_id,
+            {
+                "type": msg_type,
+                "content": content,
+                "session_id": self._session_id,
+                **extra,
+            },
+        )
 
     async def poll_one_response(self) -> dict[str, Any] | None:
         """Poll the response queue for one message (non-blocking).
@@ -142,10 +149,13 @@ class QueueClientBase(ABC):
         """
         now = time.time()
         if now - self._last_heartbeat_sent >= self._heartbeat_interval:
-            self._queue_service.put(self._input_queue_id, {
-                "type": "ping",
-                "session_id": self._session_id,
-            })
+            self._queue_service.put(
+                self._input_queue_id,
+                {
+                    "type": "ping",
+                    "session_id": self._session_id,
+                },
+            )
             self._last_heartbeat_sent = now
 
     def is_server_alive(self) -> bool:

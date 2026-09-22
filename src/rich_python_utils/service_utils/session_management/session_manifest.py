@@ -15,11 +15,11 @@ from typing import List, Optional
 class ArtifactEntry:
     """A single artifact's metadata in the manifest."""
 
-    path: str              # relative path from session dir
-    type: str              # log type (e.g., ReasonerInput, Screenshot)
-    producer: str          # class/component that produced it
+    path: str  # relative path from session dir
+    type: str  # log type (e.g., ReasonerInput, Screenshot)
+    producer: str  # class/component that produced it
     timestamp: str
-    step: int              # step counter within the turn
+    step: int  # step counter within the turn
 
     def to_dict(self) -> dict:
         """Serialize to a JSON-compatible dictionary."""
@@ -52,7 +52,7 @@ class TurnEntry:
 
     turn_number: int
     start_timestamp: str
-    log_file: str          # relative path from session dir
+    log_file: str  # relative path from session dir
     artifacts: List[ArtifactEntry] = field(default_factory=list)
     end_timestamp: Optional[str] = None
 
@@ -86,9 +86,9 @@ class SessionManifest:
     session_id: str
     creation_timestamp: str
     session_type: str
-    status: str                    # "running", "completed", "error"
-    session_dir: str               # absolute path
-    session_log_file: str          # relative path to session.jsonl
+    status: str  # "running", "completed", "error"
+    session_dir: str  # absolute path
+    session_log_file: str  # relative path to session.jsonl
     turns: List[TurnEntry] = field(default_factory=list)
     end_timestamp: Optional[str] = None
 

@@ -22,12 +22,16 @@ Usage:
 """
 
 from resolve_path import resolve_path
+
 resolve_path()
 
+from rich_python_utils.service_utils.graph_service.graph_node import (
+    GraphEdge,
+    GraphNode,
+)
 from rich_python_utils.service_utils.graph_service.memory_graph_service import (
     MemoryGraphService,
 )
-from rich_python_utils.service_utils.graph_service.graph_node import GraphNode, GraphEdge
 
 
 def main():
@@ -42,16 +46,52 @@ def main():
 
     # 2. Add researcher nodes
     researchers = [
-        GraphNode(node_id="alice", node_type="researcher", label="Dr. Alice Chen",
-                  properties={"institution": "MIT", "department": "Physics", "h_index": 42}),
-        GraphNode(node_id="bob", node_type="researcher", label="Dr. Bob Patel",
-                  properties={"institution": "Stanford", "department": "Bioinformatics", "h_index": 35}),
-        GraphNode(node_id="carol", node_type="researcher", label="Dr. Carol Kim",
-                  properties={"institution": "MIT", "department": "Climate Science", "h_index": 28}),
-        GraphNode(node_id="diana", node_type="researcher", label="Dr. Diana Lee",
-                  properties={"institution": "Harvard", "department": "Genetics", "h_index": 51}),
-        GraphNode(node_id="eve", node_type="researcher", label="Dr. Eve Zhang",
-                  properties={"institution": "Caltech", "department": "Materials", "h_index": 33}),
+        GraphNode(
+            node_id="alice",
+            node_type="researcher",
+            label="Dr. Alice Chen",
+            properties={"institution": "MIT", "department": "Physics", "h_index": 42},
+        ),
+        GraphNode(
+            node_id="bob",
+            node_type="researcher",
+            label="Dr. Bob Patel",
+            properties={
+                "institution": "Stanford",
+                "department": "Bioinformatics",
+                "h_index": 35,
+            },
+        ),
+        GraphNode(
+            node_id="carol",
+            node_type="researcher",
+            label="Dr. Carol Kim",
+            properties={
+                "institution": "MIT",
+                "department": "Climate Science",
+                "h_index": 28,
+            },
+        ),
+        GraphNode(
+            node_id="diana",
+            node_type="researcher",
+            label="Dr. Diana Lee",
+            properties={
+                "institution": "Harvard",
+                "department": "Genetics",
+                "h_index": 51,
+            },
+        ),
+        GraphNode(
+            node_id="eve",
+            node_type="researcher",
+            label="Dr. Eve Zhang",
+            properties={
+                "institution": "Caltech",
+                "department": "Materials",
+                "h_index": 33,
+            },
+        ),
     ]
     for node in researchers:
         svc.add_node(node)
@@ -64,28 +104,60 @@ def main():
 
     # 4. Add institution nodes
     institutions = [
-        GraphNode(node_id="mit", node_type="institution", label="MIT",
-                  properties={"location": "Cambridge, MA", "ranking": 1}),
-        GraphNode(node_id="stanford", node_type="institution", label="Stanford University",
-                  properties={"location": "Stanford, CA", "ranking": 2}),
-        GraphNode(node_id="harvard", node_type="institution", label="Harvard University",
-                  properties={"location": "Cambridge, MA", "ranking": 3}),
+        GraphNode(
+            node_id="mit",
+            node_type="institution",
+            label="MIT",
+            properties={"location": "Cambridge, MA", "ranking": 1},
+        ),
+        GraphNode(
+            node_id="stanford",
+            node_type="institution",
+            label="Stanford University",
+            properties={"location": "Stanford, CA", "ranking": 2},
+        ),
+        GraphNode(
+            node_id="harvard",
+            node_type="institution",
+            label="Harvard University",
+            properties={"location": "Cambridge, MA", "ranking": 3},
+        ),
     ]
     for node in institutions:
         svc.add_node(node)
 
     # 5. Add collaboration edges
     collaborations = [
-        GraphEdge(source_id="alice", target_id="bob", edge_type="co_authored",
-                  properties={"paper_count": 3, "since": 2020}),
-        GraphEdge(source_id="alice", target_id="carol", edge_type="co_authored",
-                  properties={"paper_count": 5, "since": 2018}),
-        GraphEdge(source_id="bob", target_id="diana", edge_type="co_authored",
-                  properties={"paper_count": 2, "since": 2022}),
-        GraphEdge(source_id="carol", target_id="eve", edge_type="co_authored",
-                  properties={"paper_count": 1, "since": 2023}),
-        GraphEdge(source_id="diana", target_id="eve", edge_type="co_authored",
-                  properties={"paper_count": 4, "since": 2019}),
+        GraphEdge(
+            source_id="alice",
+            target_id="bob",
+            edge_type="co_authored",
+            properties={"paper_count": 3, "since": 2020},
+        ),
+        GraphEdge(
+            source_id="alice",
+            target_id="carol",
+            edge_type="co_authored",
+            properties={"paper_count": 5, "since": 2018},
+        ),
+        GraphEdge(
+            source_id="bob",
+            target_id="diana",
+            edge_type="co_authored",
+            properties={"paper_count": 2, "since": 2022},
+        ),
+        GraphEdge(
+            source_id="carol",
+            target_id="eve",
+            edge_type="co_authored",
+            properties={"paper_count": 1, "since": 2023},
+        ),
+        GraphEdge(
+            source_id="diana",
+            target_id="eve",
+            edge_type="co_authored",
+            properties={"paper_count": 4, "since": 2019},
+        ),
     ]
     for edge in collaborations:
         svc.add_edge(edge)
@@ -93,18 +165,23 @@ def main():
     # 6. Error handling: edge to nonexistent node
     error_msg = None
     try:
-        svc.add_edge(GraphEdge(source_id="alice", target_id="frank", edge_type="co_authored"))
+        svc.add_edge(
+            GraphEdge(source_id="alice", target_id="frank", edge_type="co_authored")
+        )
     except ValueError as e:
         error_msg = str(e)
 
     # 7. Add affiliation edges
     affiliations = [
-        ("alice", "mit"), ("carol", "mit"),
+        ("alice", "mit"),
+        ("carol", "mit"),
         ("bob", "stanford"),
         ("diana", "harvard"),
     ]
     for src, tgt in affiliations:
-        svc.add_edge(GraphEdge(source_id=src, target_id=tgt, edge_type="affiliated_with"))
+        svc.add_edge(
+            GraphEdge(source_id=src, target_id=tgt, edge_type="affiliated_with")
+        )
 
     # 8. Get edges
     out_edges = svc.get_edges("alice", direction="outgoing")
@@ -123,10 +200,24 @@ def main():
     just_institutions = svc.list_nodes(node_type="institution")
 
     # 11. Namespaces
-    svc.add_node(GraphNode(node_id="alice", node_type="researcher", label="Alice (Quantum Project)",
-                           properties={"project": "quantum"}), namespace="project_quantum")
-    svc.add_node(GraphNode(node_id="alice", node_type="researcher", label="Alice (Climate Project)",
-                           properties={"project": "climate"}), namespace="project_climate")
+    svc.add_node(
+        GraphNode(
+            node_id="alice",
+            node_type="researcher",
+            label="Alice (Quantum Project)",
+            properties={"project": "quantum"},
+        ),
+        namespace="project_quantum",
+    )
+    svc.add_node(
+        GraphNode(
+            node_id="alice",
+            node_type="researcher",
+            label="Alice (Climate Project)",
+            properties={"project": "climate"},
+        ),
+        namespace="project_climate",
+    )
 
     q = svc.get_node("alice", namespace="project_quantum")
     c = svc.get_node("alice", namespace="project_climate")
@@ -184,8 +275,10 @@ def main():
     print("\n[5] Add collaboration edges (co_authored)")
     print("-" * 50)
     for edge in collaborations:
-        print(f"    {edge.source_id} --co_authored--> {edge.target_id} "
-              f"({edge.properties['paper_count']} papers)")
+        print(
+            f"    {edge.source_id} --co_authored--> {edge.target_id} "
+            f"({edge.properties['paper_count']} papers)"
+        )
 
     print("\n[6] Error handling: edge to nonexistent node")
     print("-" * 50)
@@ -270,4 +363,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n[X] Error: {e}")
         import traceback
+
         traceback.print_exc()

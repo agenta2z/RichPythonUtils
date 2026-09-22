@@ -10,7 +10,6 @@ import textwrap
 
 import pytest
 from omegaconf import OmegaConf
-
 from rich_python_utils.config_utils import load_config
 from rich_python_utils.config_utils._instantiate import (
     _resolve_import_,
@@ -31,7 +30,8 @@ def parameterized_topology(tmp_path):
     Models the task tool's breakdown-multiflow-plan.yaml: flow_inferencers
     defaults to repeated default_inferencer, num_flows controls _repeat_.
     """
-    (tmp_path / "topology.yaml").write_text(textwrap.dedent("""\
+    (tmp_path / "topology.yaml").write_text(
+        textwrap.dedent("""\
         _params:
           default_inferencer: DefaultInf
           num_flows: 2
@@ -59,14 +59,16 @@ def parameterized_topology(tmp_path):
             _target_: ${_params.default_inferencer}
         review_inferencer:
           _target_: ${_params.default_inferencer}
-    """))
+    """)
+    )
     return tmp_path
 
 
 @pytest.fixture
 def env_topology(tmp_path):
     """Topology using ${oc.env:...} in _params (no hardcoded defaults)."""
-    (tmp_path / "topology.yaml").write_text(textwrap.dedent("""\
+    (tmp_path / "topology.yaml").write_text(
+        textwrap.dedent("""\
         _params:
           default_inferencer: ParentDefault
           num_flows: 2
@@ -77,7 +79,8 @@ def env_topology(tmp_path):
           - _repeat_: ${_params.num_flows}
             worker:
               _target_: ${_params.flow_inferencers}
-    """))
+    """)
+    )
     return tmp_path
 
 
@@ -154,9 +157,14 @@ class TestConfigOverrides:
         d = OmegaConf.to_container(cfg, resolve=True)
         flows = d["base_inferencer"]["worker_factory"]["flow_configs"]
         for flow in flows:
-            assert flow["initial_inferencer"]["_target_"] == flow["followup_inferencer"]["_target_"]
+            assert (
+                flow["initial_inferencer"]["_target_"]
+                == flow["followup_inferencer"]["_target_"]
+            )
 
-    def test_override_default_inferencer_affects_non_flow_slots(self, parameterized_topology):
+    def test_override_default_inferencer_affects_non_flow_slots(
+        self, parameterized_topology
+    ):
         """Overriding default_inferencer changes breakdown/aggregator/review."""
         cfg = load_config(
             str(parameterized_topology / "topology.yaml"),
@@ -181,7 +189,9 @@ class TestConfigOverrides:
             },
         )
         d = OmegaConf.to_container(cfg, resolve=True)
-        assert d["base_inferencer"]["breakdown_inferencer"]["_target_"] == "CustomDefault"
+        assert (
+            d["base_inferencer"]["breakdown_inferencer"]["_target_"] == "CustomDefault"
+        )
         assert d["review_inferencer"]["_target_"] == "CustomDefault"
         flows = d["base_inferencer"]["worker_factory"]["flow_configs"]
         assert flows[0]["initial_inferencer"]["_target_"] == "Research"
@@ -222,7 +232,9 @@ class TestConfigOverrides:
 
 
 class TestEnvVarOverrides:
-    def test_env_var_interpolation_in_overrides(self, parameterized_topology, monkeypatch):
+    def test_env_var_interpolation_in_overrides(
+        self, parameterized_topology, monkeypatch
+    ):
         """${oc.env:VAR} in override values resolves from environment."""
         monkeypatch.setenv("TEST_RESEARCH_INF", "EnvResearch")
         monkeypatch.setenv("TEST_MAIN_INF", "EnvMain")
@@ -259,7 +271,8 @@ class TestEnvVarOverrides:
 
     def test_env_var_with_default_fallback(self, env_topology, monkeypatch):
         """${oc.env:VAR,default} uses fallback when var missing."""
-        (env_topology / "topology.yaml").write_text(textwrap.dedent("""\
+        (env_topology / "topology.yaml").write_text(
+            textwrap.dedent("""\
             _params:
               default_inferencer: Fallback
               num_flows: 2
@@ -270,7 +283,8 @@ class TestEnvVarOverrides:
               - _repeat_: ${_params.num_flows}
                 worker:
                   _target_: ${_params.flow_inferencers}
-        """))
+        """)
+        )
         cfg = load_config(str(env_topology / "topology.yaml"))
         d = OmegaConf.to_container(cfg, resolve=True)
         assert d["items"][0]["worker"]["_target_"] == "FallbackA"
@@ -285,7 +299,8 @@ class TestEnvVarOverrides:
 class TestRepeatWithRef:
     def test_ref_after_distribution(self, tmp_path):
         """$ref resolves AFTER distribution — sees per-copy value."""
-        (tmp_path / "main.yaml").write_text(textwrap.dedent("""\
+        (tmp_path / "main.yaml").write_text(
+            textwrap.dedent("""\
             _params:
               diverse:
                 - A
@@ -296,7 +311,8 @@ class TestRepeatWithRef:
                   _target_: ${_params.diverse}
                 followup:
                   _target_: $initial
-        """))
+        """)
+        )
         cfg = load_config(str(tmp_path / "main.yaml"))
         d = OmegaConf.to_container(cfg, resolve=True)
         assert d["flows"][0]["initial"]["_target_"] == "A"
@@ -306,7 +322,8 @@ class TestRepeatWithRef:
 
     def test_ref_without_distribution_uses_scalar(self, tmp_path):
         """$ref on scalar (non-distributed) field works normally."""
-        (tmp_path / "main.yaml").write_text(textwrap.dedent("""\
+        (tmp_path / "main.yaml").write_text(
+            textwrap.dedent("""\
             _params:
               inf: Scalar
             flows:
@@ -315,7 +332,8 @@ class TestRepeatWithRef:
                   _target_: ${_params.inf}
                 followup:
                   _target_: $initial
-        """))
+        """)
+        )
         cfg = load_config(str(tmp_path / "main.yaml"))
         d = OmegaConf.to_container(cfg, resolve=True)
         for flow in d["flows"]:
@@ -331,21 +349,25 @@ class TestRepeatWithRef:
 class TestDeepNestedOverride:
     def test_three_level_deep_override(self, tmp_path):
         """Override at level.sublevel.subsublevel merges correctly."""
-        (tmp_path / "base.yaml").write_text(textwrap.dedent("""\
+        (tmp_path / "base.yaml").write_text(
+            textwrap.dedent("""\
             level1:
               level2:
                 level3:
                   value: original
                   kept: preserved
                 other: untouched
-        """))
-        (tmp_path / "child.yaml").write_text(textwrap.dedent("""\
+        """)
+        )
+        (tmp_path / "child.yaml").write_text(
+            textwrap.dedent("""\
             _import_: base.yaml
             level1:
               level2:
                 level3:
                   value: overridden
-        """))
+        """)
+        )
         cfg = load_config(str(tmp_path / "child.yaml"))
         d = OmegaConf.to_container(cfg, resolve=True)
         assert d["level1"]["level2"]["level3"]["value"] == "overridden"
@@ -354,18 +376,22 @@ class TestDeepNestedOverride:
 
     def test_override_list_replaces_wholesale(self, tmp_path):
         """Lists in overrides replace the parent's list, not merge."""
-        (tmp_path / "base.yaml").write_text(textwrap.dedent("""\
+        (tmp_path / "base.yaml").write_text(
+            textwrap.dedent("""\
             parent:
               items:
                 - a: 1
                 - b: 2
-        """))
-        (tmp_path / "child.yaml").write_text(textwrap.dedent("""\
+        """)
+        )
+        (tmp_path / "child.yaml").write_text(
+            textwrap.dedent("""\
             _import_: base.yaml
             parent:
               items:
                 - c: 3
-        """))
+        """)
+        )
         cfg = load_config(str(tmp_path / "child.yaml"))
         d = OmegaConf.to_container(cfg, resolve=True)
         assert len(d["parent"]["items"]) == 1
@@ -380,13 +406,15 @@ class TestDeepNestedOverride:
 class TestDictDistribution:
     def test_dict_count_distribution(self, tmp_path):
         """Dict-with-counts distributes values proportionally."""
-        (tmp_path / "main.yaml").write_text(textwrap.dedent("""\
+        (tmp_path / "main.yaml").write_text(
+            textwrap.dedent("""\
             items:
               - _repeat_: 3
                 worker:
                   Research: 1
                   Main: 2
-        """))
+        """)
+        )
         cfg = load_config(str(tmp_path / "main.yaml"))
         d = OmegaConf.to_container(cfg, resolve=True)
         workers = [item["worker"] for item in d["items"]]
@@ -402,7 +430,8 @@ class TestDictDistribution:
 class TestFactoryRepeat:
     def test_factory_with_repeat_inside(self, tmp_path):
         """_factory_ field containing _repeat_ works correctly."""
-        (tmp_path / "main.yaml").write_text(textwrap.dedent("""\
+        (tmp_path / "main.yaml").write_text(
+            textwrap.dedent("""\
             _target_: Parent
             worker_factory:
               _factory_: MultiFlow
@@ -411,7 +440,8 @@ class TestFactoryRepeat:
                   inf:
                     - A
                     - B
-        """))
+        """)
+        )
         cfg = load_config(str(tmp_path / "main.yaml"))
         d = OmegaConf.to_container(cfg, resolve=True)
         flows = d["worker_factory"]["flow_configs"]
@@ -428,47 +458,59 @@ class TestFactoryRepeat:
 class TestEdgeCases:
     def test_repeat_distribution_shorter_list_pads(self, tmp_path):
         """A distribution list shorter than _repeat_ is padded with its first element."""
-        (tmp_path / "short.yaml").write_text(textwrap.dedent("""\
+        (tmp_path / "short.yaml").write_text(
+            textwrap.dedent("""\
             items:
               - _repeat_: 3
                 val:
                   - only_two
                   - elements
-        """))
-        d = OmegaConf.to_container(load_config(str(tmp_path / "short.yaml")), resolve=True)
+        """)
+        )
+        d = OmegaConf.to_container(
+            load_config(str(tmp_path / "short.yaml")), resolve=True
+        )
         assert [it["val"] for it in d["items"]] == ["only_two", "elements", "only_two"]
 
     def test_import_chain_with_params(self, tmp_path):
         """Grandchild → child → parent chain with params override at each level."""
-        (tmp_path / "grandparent.yaml").write_text(textwrap.dedent("""\
+        (tmp_path / "grandparent.yaml").write_text(
+            textwrap.dedent("""\
             _params:
               inf: GP
             worker:
               _target_: ${_params.inf}
-        """))
-        (tmp_path / "parent.yaml").write_text(textwrap.dedent("""\
+        """)
+        )
+        (tmp_path / "parent.yaml").write_text(
+            textwrap.dedent("""\
             _import_: grandparent.yaml
             _params:
               inf: P
-        """))
-        (tmp_path / "child.yaml").write_text(textwrap.dedent("""\
+        """)
+        )
+        (tmp_path / "child.yaml").write_text(
+            textwrap.dedent("""\
             _import_: parent.yaml
             _params:
               inf: C
-        """))
+        """)
+        )
         cfg = load_config(str(tmp_path / "child.yaml"))
         d = OmegaConf.to_container(cfg, resolve=True)
         assert d["worker"]["_target_"] == "C"
 
     def test_interpolated_repeat_count(self, tmp_path):
         """_repeat_: ${_params.num} resolves correctly."""
-        (tmp_path / "main.yaml").write_text(textwrap.dedent("""\
+        (tmp_path / "main.yaml").write_text(
+            textwrap.dedent("""\
             _params:
               num: 3
             items:
               - _repeat_: ${_params.num}
                 value: same
-        """))
+        """)
+        )
         cfg = load_config(str(tmp_path / "main.yaml"))
         d = OmegaConf.to_container(cfg, resolve=True)
         assert len(d["items"]) == 3
@@ -476,7 +518,8 @@ class TestEdgeCases:
 
     def test_interpolated_repeat_count_with_distribution(self, tmp_path):
         """_repeat_: ${_params.num} + list distribution of matching length."""
-        (tmp_path / "main.yaml").write_text(textwrap.dedent("""\
+        (tmp_path / "main.yaml").write_text(
+            textwrap.dedent("""\
             _params:
               num: 3
               types:
@@ -486,7 +529,8 @@ class TestEdgeCases:
             items:
               - _repeat_: ${_params.num}
                 type: ${_params.types}
-        """))
+        """)
+        )
         cfg = load_config(str(tmp_path / "main.yaml"))
         d = OmegaConf.to_container(cfg, resolve=True)
         assert len(d["items"]) == 3

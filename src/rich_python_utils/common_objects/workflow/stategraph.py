@@ -1,5 +1,3 @@
-
-
 """StateGraph — a DAG state machine for workflow tracking.
 
 Unlike WorkGraph/Workflow (which are DAG executors that own the execution loop),
@@ -23,7 +21,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from attr import attrib, attrs
-
 from rich_python_utils.algorithms.graph.node import Node
 
 logger = logging.getLogger(__name__)
@@ -32,6 +29,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ThreadSpawnRequest:
     """A deferred thread spawn from a __goto__ ... __afterwards__ directive."""
+
     target_phase: str
     source_phase: str
     wait_duration: str | None = None
@@ -160,7 +158,8 @@ class StateGraphTracker:
         self.state_outputs.update(outputs)
         logger.debug(
             "StateGraphTracker: completed %s, outputs=%s",
-            state_id, list(outputs.keys()),
+            state_id,
+            list(outputs.keys()),
         )
 
     def fail(self, state_id: str, error: str = "") -> None:
@@ -185,7 +184,8 @@ class StateGraphTracker:
             if getattr(node, "goto_afterwards", False):
                 continue
             if not self._check_condition(
-                node.goto_condition_var, node.goto_condition_value,
+                node.goto_condition_var,
+                node.goto_condition_value,
                 negate=getattr(node, "goto_condition_negate", False),
             ):
                 continue
@@ -204,7 +204,8 @@ class StateGraphTracker:
             if not all(d in truly_completed for d in node.depends_on):
                 continue
             if node.gate_var and not self._check_condition(
-                node.gate_var, node.gate_value,
+                node.gate_var,
+                node.gate_value,
                 negate=getattr(node, "gate_negate", False),
             ):
                 continue
@@ -240,18 +241,21 @@ class StateGraphTracker:
             if not node.goto_target:
                 continue
             if not self._check_condition(
-                node.goto_condition_var, node.goto_condition_value,
+                node.goto_condition_var,
+                node.goto_condition_value,
                 negate=getattr(node, "goto_condition_negate", False),
             ):
                 continue
             goto_key = f"{node.id}->{node.goto_target}"
             if self.goto_counts.get(goto_key, 0) >= self.max_goto_iterations:
                 continue
-            spawns.append(ThreadSpawnRequest(
-                target_phase=node.goto_target,
-                source_phase=node.id,
-                wait_duration=getattr(node, "goto_wait_duration", None),
-            ))
+            spawns.append(
+                ThreadSpawnRequest(
+                    target_phase=node.goto_target,
+                    source_phase=node.id,
+                    wait_duration=getattr(node, "goto_wait_duration", None),
+                )
+            )
         return spawns
 
     def get_branch_items(self, node_id: str) -> list[Any] | None:
@@ -302,9 +306,7 @@ class StateGraphTracker:
         }
 
     @classmethod
-    def from_dict(
-        cls, data: dict[str, Any], graph: StateGraph
-    ) -> StateGraphTracker:
+    def from_dict(cls, data: dict[str, Any], graph: StateGraph) -> StateGraphTracker:
         return cls(
             graph=graph,
             current_state=data.get("current_state"),
@@ -330,7 +332,10 @@ class StateGraphTracker:
         return truly
 
     def _check_condition(
-        self, var: str | None, value: str | None, negate: bool = False,
+        self,
+        var: str | None,
+        value: str | None,
+        negate: bool = False,
     ) -> bool:
         """Check a gate/goto condition against state_outputs."""
         if not var:

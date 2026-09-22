@@ -24,16 +24,16 @@ Examples (10 total):
 10. Double newline separators (spaced layout)
 """
 
-import time
-import sys
 import os
+import sys
+import time
 from pathlib import Path
 
 # Find and add src directory to path (find 'examples' folder and replace with 'src')
 current = Path(__file__).resolve()
 while current != current.parent:  # Stop at filesystem root
-    if current.name == 'examples':
-        src_path = current.parent / 'src'
+    if current.name == "examples":
+        src_path = current.parent / "src"
         if src_path.is_dir():
             sys.path.insert(0, str(src_path))
             break
@@ -49,6 +49,7 @@ print("=" * 70)
 # Check what's available (try importing rich)
 try:
     import rich
+
     has_rich = True
     print("\n[+] Rich library is installed")
 except ImportError:
@@ -65,7 +66,7 @@ print("  2. Colorama (basic colors, always available)")
 if has_rich:
     choice = input("\nChoose backend (1/2) or press Enter for Rich: ").strip()
     if choice == "2":
-        os.environ['CONSOLE_UTILS_BACKEND'] = 'colorama'
+        os.environ["CONSOLE_UTILS_BACKEND"] = "colorama"
         print("-> Using Colorama backend")
     else:
         print("-> Using Rich backend")
@@ -75,12 +76,18 @@ else:
 print("=" * 70 + "\n")
 
 # NOW import console_utils (will use the selected backend)
-from rich_python_utils.console_utils import hprint_pairs, eprint_pairs, wprint_pairs, get_current_backend
+from rich_python_utils.console_utils import (
+    eprint_pairs,
+    get_current_backend,
+    hprint_pairs,
+    wprint_pairs,
+)
 
 # Enable ANSI escape codes on Windows for cursor control
-if sys.platform == 'win32':
+if sys.platform == "win32":
     try:
         import ctypes
+
         kernel32 = ctypes.windll.kernel32
         kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
     except Exception:
@@ -98,16 +105,20 @@ def example_1_training_metrics():
         # Simulate training metrics
         loss = 1.0 / epoch
         accuracy = min(0.95, epoch * 0.15 + 0.2)
-        learning_rate = 0.001 * (0.9 ** epoch)
+        learning_rate = 0.001 * (0.9**epoch)
 
         hprint_pairs(
-            'epoch', epoch,
-            'loss', f'{loss:.4f}',
-            'accuracy', f'{accuracy:.2%}',
-            'lr', f'{learning_rate:.6f}',
-            title='Training Progress',
-            message_id='training',
-            update_previous=True
+            "epoch",
+            epoch,
+            "loss",
+            f"{loss:.4f}",
+            "accuracy",
+            f"{accuracy:.2%}",
+            "lr",
+            f"{learning_rate:.6f}",
+            title="Training Progress",
+            message_id="training",
+            update_previous=True,
         )
         time.sleep(0.8)
 
@@ -126,12 +137,15 @@ def example_2_system_metrics():
         disk_io = 100 + (i * 10)
 
         hprint_pairs(
-            'CPU', f'{cpu_usage}%',
-            'Memory', f'{memory_usage}%',
-            'Disk I/O', f'{disk_io} MB/s',
-            title='System Resources',
-            message_id='system',
-            update_previous=True
+            "CPU",
+            f"{cpu_usage}%",
+            "Memory",
+            f"{memory_usage}%",
+            "Disk I/O",
+            f"{disk_io} MB/s",
+            title="System Resources",
+            message_id="system",
+            update_previous=True,
         )
         time.sleep(0.5)
 
@@ -147,24 +161,30 @@ def example_3_multiple_pair_sets():
     for step in range(5):
         # Model A metrics
         hprint_pairs(
-            'step', step,
-            'loss', f'{1.0/(step+1):.3f}',
-            'acc', f'{0.7 + step*0.05:.2f}',
-            title='Model A',
-            message_id='model_a',
-            update_previous=True
+            "step",
+            step,
+            "loss",
+            f"{1.0 / (step + 1):.3f}",
+            "acc",
+            f"{0.7 + step * 0.05:.2f}",
+            title="Model A",
+            message_id="model_a",
+            update_previous=True,
         )
 
         time.sleep(0.3)
 
         # Model B metrics
         hprint_pairs(
-            'step', step,
-            'loss', f'{1.2/(step+1):.3f}',
-            'acc', f'{0.65 + step*0.06:.2f}',
-            title='Model B',
-            message_id='model_b',
-            update_previous=True
+            "step",
+            step,
+            "loss",
+            f"{1.2 / (step + 1):.3f}",
+            "acc",
+            f"{0.65 + step * 0.06:.2f}",
+            title="Model B",
+            message_id="model_b",
+            update_previous=True,
         )
 
         time.sleep(0.5)
@@ -185,12 +205,15 @@ def example_4_error_warnings():
         warnings = i * 2
 
         eprint_pairs(
-            'errors', errors,
-            'warnings', warnings,
-            'retries', i,
-            title='Error Summary',
-            message_id='errors',
-            update_previous=True
+            "errors",
+            errors,
+            "warnings",
+            warnings,
+            "retries",
+            i,
+            title="Error Summary",
+            message_id="errors",
+            update_previous=True,
         )
         time.sleep(0.6)
 
@@ -205,17 +228,25 @@ def example_5_many_pairs():
 
     for iteration in range(1, 6):
         hprint_pairs(
-            'iteration', iteration,
-            'train_loss', f'{1.0/iteration:.3f}',
-            'val_loss', f'{1.2/iteration:.3f}',
-            'train_acc', f'{0.5 + iteration*0.08:.2%}',
-            'val_acc', f'{0.48 + iteration*0.07:.2%}',
-            'precision', f'{0.6 + iteration*0.05:.2%}',
-            'recall', f'{0.55 + iteration*0.06:.2%}',
-            'f1_score', f'{0.57 + iteration*0.055:.2%}',
-            title='Comprehensive Metrics',
-            message_id='comprehensive',
-            update_previous=True
+            "iteration",
+            iteration,
+            "train_loss",
+            f"{1.0 / iteration:.3f}",
+            "val_loss",
+            f"{1.2 / iteration:.3f}",
+            "train_acc",
+            f"{0.5 + iteration * 0.08:.2%}",
+            "val_acc",
+            f"{0.48 + iteration * 0.07:.2%}",
+            "precision",
+            f"{0.6 + iteration * 0.05:.2%}",
+            "recall",
+            f"{0.55 + iteration * 0.06:.2%}",
+            "f1_score",
+            f"{0.57 + iteration * 0.055:.2%}",
+            title="Comprehensive Metrics",
+            message_id="comprehensive",
+            update_previous=True,
         )
         time.sleep(0.7)
 
@@ -232,17 +263,20 @@ def example_6_custom_separators():
 
     for i in range(1, 6):
         # Different separator for each iteration
-        separators = ['----', '='*40, '***', '-='*20, '']
-        sep_names = ['Default', 'Equals', 'Asterisks', 'Pattern', 'None']
+        separators = ["----", "=" * 40, "***", "-=" * 20, ""]
+        sep_names = ["Default", "Equals", "Asterisks", "Pattern", "None"]
 
         hprint_pairs(
-            'iteration', i,
-            'separator', sep_names[i-1],
-            'progress', f'{i*20}%',
-            title='Custom Separator Demo',
-            message_id='custom_sep',
+            "iteration",
+            i,
+            "separator",
+            sep_names[i - 1],
+            "progress",
+            f"{i * 20}%",
+            title="Custom Separator Demo",
+            message_id="custom_sep",
             update_previous=True,
-            section_separator=separators[i-1]
+            section_separator=separators[i - 1],
         )
         time.sleep(0.8)
 
@@ -259,14 +293,18 @@ def example_7_newline_separators():
 
     for i in range(1, 6):
         hprint_pairs(
-            'batch', i,
-            'samples_processed', i * 32,
-            'current_loss', f'{1.0/(i+1):.4f}',
-            'throughput', f'{i * 128} samples/sec',
-            title='Batch Processing',
-            sep='\n',  # Newline separator - each pair on own line
-            message_id='vertical',
-            update_previous=True
+            "batch",
+            i,
+            "samples_processed",
+            i * 32,
+            "current_loss",
+            f"{1.0 / (i + 1):.4f}",
+            "throughput",
+            f"{i * 128} samples/sec",
+            title="Batch Processing",
+            sep="\n",  # Newline separator - each pair on own line
+            message_id="vertical",
+            update_previous=True,
         )
         time.sleep(0.7)
 
@@ -283,21 +321,27 @@ def example_8_no_title_pairs():
 
     for i in range(1, 11):
         hprint_pairs(
-            'Status', 'Processing',
-            'File', f'data_{i:03d}.csv',
-            'Progress', f'{i*10}%',
-            message_id='inline',
-            update_previous=True
+            "Status",
+            "Processing",
+            "File",
+            f"data_{i:03d}.csv",
+            "Progress",
+            f"{i * 10}%",
+            message_id="inline",
+            update_previous=True,
         )
         time.sleep(0.4)
 
     # Final update
     hprint_pairs(
-        'Status', 'Complete',
-        'File', 'All files',
-        'Progress', '100%',
-        message_id='inline',
-        update_previous=True
+        "Status",
+        "Complete",
+        "File",
+        "All files",
+        "Progress",
+        "100%",
+        message_id="inline",
+        update_previous=True,
     )
 
     print("\n[+] Inline updates complete!\n")
@@ -311,61 +355,73 @@ def example_9_mixed_print_types():
 
     # Start with info
     hprint_pairs(
-        'status', 'Starting',
-        'phase', 'Initialization',
-        title='Process Status',
-        message_id='status',
-        update_previous=False
+        "status",
+        "Starting",
+        "phase",
+        "Initialization",
+        title="Process Status",
+        message_id="status",
+        update_previous=False,
     )
     time.sleep(1)
 
     # Update to running
     hprint_pairs(
-        'status', 'Running',
-        'phase', 'Processing',
-        title='Process Status',
-        message_id='status',
-        update_previous=True
+        "status",
+        "Running",
+        "phase",
+        "Processing",
+        title="Process Status",
+        message_id="status",
+        update_previous=True,
     )
     time.sleep(1)
 
     # Warning state
     wprint_pairs(
-        'status', 'Warning',
-        'phase', 'Retry needed',
-        title='Process Status',
-        message_id='status',
-        update_previous=True
+        "status",
+        "Warning",
+        "phase",
+        "Retry needed",
+        title="Process Status",
+        message_id="status",
+        update_previous=True,
     )
     time.sleep(1)
 
     # Error state
     eprint_pairs(
-        'status', 'Error',
-        'phase', 'Failed',
-        title='Process Status',
-        message_id='status',
-        update_previous=True
+        "status",
+        "Error",
+        "phase",
+        "Failed",
+        title="Process Status",
+        message_id="status",
+        update_previous=True,
     )
     time.sleep(1)
 
     # Recovery
     hprint_pairs(
-        'status', 'Recovered',
-        'phase', 'Resuming',
-        title='Process Status',
-        message_id='status',
-        update_previous=True
+        "status",
+        "Recovered",
+        "phase",
+        "Resuming",
+        title="Process Status",
+        message_id="status",
+        update_previous=True,
     )
     time.sleep(1)
 
     # Success
     hprint_pairs(
-        'status', 'Complete',
-        'phase', 'Finished',
-        title='Process Status',
-        message_id='status',
-        update_previous=True
+        "status",
+        "Complete",
+        "phase",
+        "Finished",
+        title="Process Status",
+        message_id="status",
+        update_previous=True,
     )
 
     print("\n[+] Status change demo complete!\n")
@@ -381,14 +437,18 @@ def example_10_double_newline_separator():
 
     for i in range(1, 5):
         hprint_pairs(
-            'checkpoint', i,
-            'model_saved', f'model_v{i}.pt',
-            'accuracy', f'{0.8 + i*0.03:.2%}',
-            'size', f'{150 + i*25} MB',
-            title='Model Checkpoints',
-            sep='\n\n',  # Double newline - blank line between pairs
-            message_id='spaced',
-            update_previous=True
+            "checkpoint",
+            i,
+            "model_saved",
+            f"model_v{i}.pt",
+            "accuracy",
+            f"{0.8 + i * 0.03:.2%}",
+            "size",
+            f"{150 + i * 25} MB",
+            title="Model Checkpoints",
+            sep="\n\n",  # Double newline - blank line between pairs
+            message_id="spaced",
+            update_previous=True,
         )
         time.sleep(0.9)
 

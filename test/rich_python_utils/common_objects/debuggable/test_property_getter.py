@@ -4,6 +4,7 @@ Test the full_log_group_id property getter.
 This test verifies that the property getter provides a clean, read-only
 interface to the hierarchical log group ID.
 """
+
 import pytest
 from rich_python_utils.common_objects.debuggable import Debuggable
 
@@ -13,19 +14,25 @@ class TestFullLogGroupIdProperty:
 
     def test_simple_property_access(self):
         """Test simple property access."""
-        obj = Debuggable(log_group_id="TestObject", log_time=False, log_group_hierarchy_separator=' > ')
+        obj = Debuggable(
+            log_group_id="TestObject",
+            log_time=False,
+            log_group_hierarchy_separator=" > ",
+        )
 
         assert obj.full_log_group_id == "TestObject"
         assert isinstance(obj.full_log_group_id, str)
 
     def test_property_with_parent_hierarchy(self):
         """Test property with parent hierarchy."""
-        parent = Debuggable(log_group_id="Parent", log_time=False, log_group_hierarchy_separator=' > ')
+        parent = Debuggable(
+            log_group_id="Parent", log_time=False, log_group_hierarchy_separator=" > "
+        )
         child = Debuggable(
             parent_log_group_id="Parent",
             log_group_id="Child",
             log_time=False,
-            log_group_hierarchy_separator=' > '
+            log_group_hierarchy_separator=" > ",
         )
 
         assert parent.full_log_group_id == "Parent"
@@ -33,7 +40,9 @@ class TestFullLogGroupIdProperty:
 
     def test_deep_hierarchy_property(self):
         """Test property in deep hierarchy (3 levels)."""
-        l1 = Debuggable(log_group_id="L1", log_time=False, log_group_hierarchy_separator=' > ')
+        l1 = Debuggable(
+            log_group_id="L1", log_time=False, log_group_hierarchy_separator=" > "
+        )
         l2 = l1.create_child_debuggable(Debuggable, log_group_id="L2")
         l3 = l2.create_child_debuggable(Debuggable, log_group_id="L3")
 
@@ -43,7 +52,9 @@ class TestFullLogGroupIdProperty:
 
     def test_property_in_string_formatting(self):
         """Test using property in string formatting."""
-        obj = Debuggable(log_group_id="Agent", log_time=False, log_group_hierarchy_separator=' > ')
+        obj = Debuggable(
+            log_group_id="Agent", log_time=False, log_group_hierarchy_separator=" > "
+        )
         child = obj.create_child_debuggable(Debuggable, log_group_id="Node")
 
         message = f"Logging from {child.full_log_group_id}"
@@ -66,15 +77,11 @@ class TestFullLogGroupIdProperty:
     def test_property_with_custom_separator(self):
         """Test property with custom hierarchy separator."""
         parent = Debuggable(
-            log_group_id="Root",
-            log_group_hierarchy_separator=" :: ",
-            log_time=False
+            log_group_id="Root", log_group_hierarchy_separator=" :: ", log_time=False
         )
         # Child needs explicit separator (not auto-inherited by create_child_debuggable)
         child = parent.create_child_debuggable(
-            Debuggable,
-            log_group_id="Child",
-            log_group_hierarchy_separator=" :: "
+            Debuggable, log_group_id="Child", log_group_hierarchy_separator=" :: "
         )
 
         assert child.full_log_group_id == "Root :: Child"
@@ -85,7 +92,7 @@ class TestFullLogGroupIdProperty:
             parent_log_group_id="Parent",
             log_group_id="Child",
             full_log_group_id_include_hierarchy=False,
-            log_time=False
+            log_time=False,
         )
 
         # When hierarchy is disabled, should just be log_group_id
@@ -101,7 +108,9 @@ class TestFullLogGroupIdProperty:
 
     def test_property_used_in_create_child_debuggable(self):
         """Test that create_child_debuggable uses the property internally."""
-        parent = Debuggable(log_group_id="Parent", log_time=False, log_group_hierarchy_separator=' > ')
+        parent = Debuggable(
+            log_group_id="Parent", log_time=False, log_group_hierarchy_separator=" > "
+        )
         child = parent.create_child_debuggable(Debuggable, log_group_id="Child")
 
         # The child should have parent's full_log_group_id as parent_log_group_id
@@ -110,7 +119,9 @@ class TestFullLogGroupIdProperty:
 
     def test_property_consistency_across_hierarchy(self):
         """Test property consistency in complex hierarchy."""
-        root = Debuggable(log_group_id="Root", log_time=False, log_group_hierarchy_separator=' > ')
+        root = Debuggable(
+            log_group_id="Root", log_time=False, log_group_hierarchy_separator=" > "
+        )
         middle = root.create_child_debuggable(Debuggable, log_group_id="Middle")
         leaf = middle.create_child_debuggable(Debuggable, log_group_id="Leaf")
 

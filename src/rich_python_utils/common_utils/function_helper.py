@@ -4,13 +4,24 @@ import logging
 import warnings
 from functools import reduce
 from time import monotonic, sleep
-from typing import Callable, List, Any, Union, Optional
-from typing import Iterable
-from typing import Mapping, Tuple, Sequence, Dict
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
-from rich_python_utils.common_objects.search_fallback_options import SearchFallbackOptions
+from rich_python_utils.common_objects.search_fallback_options import (
+    SearchFallbackOptions,
+)
 from rich_python_utils.common_utils.array_helper import index__
-from rich_python_utils.common_utils.map_helper import split_dict, merge_mappings
+from rich_python_utils.common_utils.map_helper import merge_mappings, split_dict
 from rich_python_utils.common_utils.typing_helper import iterable
 from rich_python_utils.datetime_utils.common import random_sleep
 
@@ -49,9 +60,9 @@ class FuncArgs:
             >>> print(func_args)
             5
         """
-        pos_args_str = ', '.join(map(str, self.positional_args))
-        named_args_str = ', '.join(f"{k}={v}" for k, v in self.named_args.items())
-        return ', '.join(filter(None, [pos_args_str, named_args_str]))
+        pos_args_str = ", ".join(map(str, self.positional_args))
+        named_args_str = ", ".join(f"{k}={v}" for k, v in self.named_args.items())
+        return ", ".join(filter(None, [pos_args_str, named_args_str]))
 
 
 def solve_args(args_names: Sequence[str], *args, **kwargs) -> Tuple:
@@ -133,7 +144,9 @@ def solve_args(args_names: Sequence[str], *args, **kwargs) -> Tuple:
     #         fill the rest from kwargs or raise ValueError if missing.
     if len_arg_names > len_args:
         missing_count = len_arg_names - len_args
-        additional_args = [None] * missing_count  # placeholders for the missing positions
+        additional_args = [
+            None
+        ] * missing_count  # placeholders for the missing positions
 
         for i in range(len_args, len_arg_names):
             arg_name = args_names[i]
@@ -233,7 +246,7 @@ def solve_as_single_input(*args, **kwargs):
     )
 
 
-def get_full_func_name(namespace, func_name: str, sep='.') -> str:
+def get_full_func_name(namespace, func_name: str, sep=".") -> str:
     """
     Constructs the full function name from the namespace and function name using the specified separator.
 
@@ -259,12 +272,18 @@ def get_full_func_name(namespace, func_name: str, sep='.') -> str:
         return func_name
     if isinstance(namespace, list):
         return sep.join((*namespace, func_name))
-    return f'{namespace}{sep}{func_name}'
+    return f"{namespace}{sep}{func_name}"
 
 
 class FuncInvocation:
-    def __init__(self, name: str, namespace=None, full_name: str = None, args: FuncArgs = None,
-                 namespace_sep: str = '.'):
+    def __init__(
+        self,
+        name: str,
+        namespace=None,
+        full_name: str = None,
+        args: FuncArgs = None,
+        namespace_sep: str = ".",
+    ):
         """
         Initializes a FuncInvocation instance to represent a function invocation.
 
@@ -278,13 +297,19 @@ class FuncInvocation:
         self.name = name
         self.namespace = namespace
         self.namespace_sep = namespace_sep
-        self.full_name = full_name if full_name else get_full_func_name(namespace, name, namespace_sep)
+        self.full_name = (
+            full_name
+            if full_name
+            else get_full_func_name(namespace, name, namespace_sep)
+        )
         self.args = args
 
     def __repr__(self):
-        return (f"FuncInvocation(name={self.name}, "
-                f"full_name={self.full_name}, namespace={self.namespace}, "
-                f"args={self.args})")
+        return (
+            f"FuncInvocation(name={self.name}, "
+            f"full_name={self.full_name}, namespace={self.namespace}, "
+            f"args={self.args})"
+        )
 
     def __str__(self):
         """
@@ -312,12 +337,43 @@ class FuncInvocation:
             another_module::sub_module::another_function(10, 20, x=30)
         """
         if not self.args:
-            return f'{self.full_name}()'
+            return f"{self.full_name}()"
 
-        pos_args_str = ', '.join(map(str, self.args.positional_args))
-        named_args_str = ', '.join(f"{k}={v}" for k, v in self.args.named_args.items())
-        args_str = ', '.join(filter(None, [pos_args_str, named_args_str]))
+        pos_args_str = ", ".join(map(str, self.args.positional_args))
+        named_args_str = ", ".join(f"{k}={v}" for k, v in self.args.named_args.items())
+        args_str = ", ".join(filter(None, [pos_args_str, named_args_str]))
         return f"{self.full_name}({args_str})"
+
+
+class OutputValidationExhaustedError(ValueError):
+    """Terminal signal that an inferencer's OUTPUT-VALIDATION (guardrail) retries
+    have been spent — a DETERMINISTIC failure that enclosing orchestration must
+    NOT re-run.
+
+    Constructed at the ``output_validator`` rejection sites in
+    :func:`execute_with_retry` / ``async_execute_with_retry`` in place of a bare
+    ``ValueError``. It subclasses ``ValueError`` and preserves
+    ``args == ("Output validation failed", <verdict>)`` so every existing consumer
+    that reads the recovery verdict from ``exc.args[1]`` keeps working unchanged.
+
+    Why a distinct type: a guardrail rejection is retried *within the originating
+    inferencer's own* validation loop (that path never consults
+    ``non_retryable_exceptions``), bounded by that inferencer's ``max_retry``.
+    Once the budget is spent, the exception PROPAGATES to enclosing retry
+    wrappers, which list this type in ``non_retryable_exceptions`` and therefore
+    re-raise it immediately instead of re-running their whole subtree. Net: a
+    leaf's guardrail RESTART re-runs ONLY that leaf, never the entire propose /
+    MultiFlow fan-out above it.
+
+    Recognizing a regression: if this is ever reverted to a bare ``ValueError``
+    (or dropped from a wrapper's ``non_retryable_exceptions``), a single failing
+    leaf makes every ENCLOSING retry wrapper re-run its whole subtree, so the
+    SAME leaf is invoked ``leaf_max_retry × flow_max_retry × worker_max_retry``
+    times. Tell-tale on disk: one flow leaf's
+    ``.../guardrail/.../InferenceResponse/`` holds dozens of RESTART verdicts
+    (far exceeding its ``max_retry``) with 0 PASS, while the worker's inner
+    MultiFlow ``InferenceInput`` count is > 1 (the whole fan-out re-ran).
+    """
 
 
 class FallbackMode(enum.Enum):
@@ -329,30 +385,32 @@ class FallbackMode(enum.Enum):
 
     See also: FallbackInferMode in agent_foundation.common.inferencers.streaming_inferencer_base
     """
-    NEVER = "never"           # No fallback — retry same func (today's behavior)
+
+    NEVER = "never"  # No fallback — retry same func (today's behavior)
     ON_EXHAUSTED = "exhausted"  # Switch after max_retry attempts of current callable
     ON_FIRST_FAILURE = "first"  # Switch immediately on any failure of current callable
 
 
 def execute_with_retry(
-        func: Callable,
-        max_retry: int = 1,
-        min_retry_wait: float = 0,
-        max_retry_wait: float = 0,
-        retry_on_exceptions: List[type] = None,
-        output_validator: Callable = None,
-        pre_condition: Callable[..., bool] = None,
-        on_retry_callback: Callable = None,
-        args: List = None,
-        kwargs: Dict[str, Any] = None,
-        default_return_or_raise: Union[Any, Exception] = None,
-        *,
-        total_timeout: Union[float, None] = None,
-        attempt_timeout: Union[float, None] = None,
-        fallback_func: Union[Callable, List[Callable], None] = None,
-        fallback_mode: 'FallbackMode' = FallbackMode.NEVER,
-        fallback_on_exceptions: Union[tuple, None] = None,
-        on_fallback_callback: Union[Callable, None] = None,
+    func: Callable,
+    max_retry: int = 1,
+    min_retry_wait: float = 0,
+    max_retry_wait: float = 0,
+    retry_on_exceptions: List[type] = None,
+    output_validator: Callable = None,
+    pre_condition: Callable[..., bool] = None,
+    on_retry_callback: Callable = None,
+    args: List = None,
+    kwargs: Dict[str, Any] = None,
+    default_return_or_raise: Union[Any, Exception] = None,
+    *,
+    total_timeout: Union[float, None] = None,
+    attempt_timeout: Union[float, None] = None,
+    fallback_func: Union[Callable, List[Callable], None] = None,
+    fallback_mode: "FallbackMode" = FallbackMode.NEVER,
+    fallback_on_exceptions: Union[tuple, None] = None,
+    on_fallback_callback: Union[Callable, None] = None,
+    non_retryable_exceptions: Tuple[type, ...] = (),
 ) -> Any:
     """
     Executes a function with retry logic and optional pre-condition guard.
@@ -460,7 +518,9 @@ def execute_with_retry(
     if fallback_func is not None:
         for fb in fallback_func:
             if inspect.iscoroutinefunction(fb):
-                raise ValueError("Async fallback callable passed to sync execute_with_retry")
+                raise ValueError(
+                    "Async fallback callable passed to sync execute_with_retry"
+                )
 
     if args is None:
         args = []
@@ -515,7 +575,9 @@ def execute_with_retry(
             if has_fallback:
                 raise last_exception
             else:
-                raise Exception("All retries failed and no default return value provided") from last_exception
+                raise Exception(
+                    "All retries failed and no default return value provided"
+                ) from last_exception
         elif isinstance(default_return_or_raise, Exception):
             raise default_return_or_raise from last_exception
         else:
@@ -545,11 +607,15 @@ def execute_with_retry(
             return default_return_or_raise
 
     for chain_idx, current_func in enumerate(callable_chain):
-        is_last_in_chain = (chain_idx == len(callable_chain) - 1)
-        is_primary = (chain_idx == 0)
+        is_last_in_chain = chain_idx == len(callable_chain) - 1
+        is_primary = chain_idx == 0
 
         # Determine max attempts for this callable in the chain
-        if is_primary and has_fallback and fallback_mode == FallbackMode.ON_FIRST_FAILURE:
+        if (
+            is_primary
+            and has_fallback
+            and fallback_mode == FallbackMode.ON_FIRST_FAILURE
+        ):
             # ON_FIRST_FAILURE: primary gets exactly 1 attempt (no retries)
             current_max_retry = 0  # 0 retries = 1 attempt (initial + 0)
         else:
@@ -576,18 +642,43 @@ def execute_with_retry(
                 if _verdict is True or _verdict is None:
                     return result
                 else:
+                    # Sync twin of async_execute_with_retry's validation path:
+                    # emit the dedicated terminal type (retried HERE without
+                    # consulting non_retryable; terminal once it escapes to the
+                    # `except` gate below). See OutputValidationExhaustedError.
                     execution_failed = True
                     if isinstance(_verdict, str):
-                        last_exception = ValueError("Output validation failed", _verdict)
+                        last_exception = OutputValidationExhaustedError(
+                            "Output validation failed", _verdict
+                        )
                     else:
-                        last_exception = ValueError("Output validation failed")
+                        last_exception = OutputValidationExhaustedError(
+                            "Output validation failed"
+                        )
                     transition_exception = last_exception
                     # ON_FIRST_FAILURE for primary: validator failure triggers immediate transition
-                    if is_primary and has_fallback and fallback_mode == FallbackMode.ON_FIRST_FAILURE:
+                    if (
+                        is_primary
+                        and has_fallback
+                        and fallback_mode == FallbackMode.ON_FIRST_FAILURE
+                    ):
                         total_attempts_across_chain += 1
                         break  # break inner while to transition
 
             except Exception as e:
+                # Non-retryable take precedence: re-raise immediately without
+                # consuming retry budget or triggering fallback transition.
+                # Mirrors async_execute_with_retry semantics so behavior is
+                # consistent across the sync/async helpers. Used by callers
+                # that need terminal short-circuiting (e.g. HopelessOutputError
+                # from the empty-loop fail-fast, and OutputValidationExhaustedError
+                # that escaped a NESTED callable's guardrail loop — re-raising it
+                # here is what stops one bad leaf re-running the whole subtree).
+                if non_retryable_exceptions and isinstance(
+                    e, tuple(non_retryable_exceptions)
+                ):
+                    raise
+
                 if retry_on_exceptions:
                     if not any(isinstance(e, ex) for ex in retry_on_exceptions):
                         raise e
@@ -606,7 +697,8 @@ def execute_with_retry(
                     on_retry_callback(attempts, last_exception)
 
                 warnings.warn(
-                    f"Attempts {attempts} of '{current_func}' failed due to error '{last_exception}'. Retry in {min_retry_wait} to {max_retry_wait} seconds.")
+                    f"Attempts {attempts} of '{current_func}' failed due to error '{last_exception}'. Retry in {min_retry_wait} to {max_retry_wait} seconds."
+                )
                 attempts += 1
 
                 # Compute sleep time and truncate to remaining budget if deadline is set
@@ -614,6 +706,7 @@ def execute_with_retry(
                     sleep_time = min_retry_wait if min_retry_wait else 0
                 else:
                     import random
+
                     sleep_time = random.uniform(min_retry_wait, max_retry_wait)
 
                 if deadline is not None and sleep_time > 0:
@@ -642,18 +735,23 @@ def execute_with_retry(
         # Fire on_fallback_callback before transitioning to next callable
         if on_fallback_callback is not None:
             next_func = callable_chain[chain_idx + 1]
-            on_fallback_callback(current_func, next_func, transition_exception, total_attempts_across_chain)
+            on_fallback_callback(
+                current_func,
+                next_func,
+                transition_exception,
+                total_attempts_across_chain,
+            )
 
     # Should not reach here, but just in case
     return _default_return_or_raise_terminal()
 
 
 def apply_arg(
-        func: Callable,
-        arg: Any = None,
-        map_type: Union[type, Tuple[type]] = Mapping,
-        seq_type: Union[type, Tuple[type]] = (list, tuple),
-        allows_mixed_positional_and_named_arg: bool = False
+    func: Callable,
+    arg: Any = None,
+    map_type: Union[type, Tuple[type]] = Mapping,
+    seq_type: Union[type, Tuple[type]] = (list, tuple),
+    allows_mixed_positional_and_named_arg: bool = False,
 ) -> Any:
     """
     Applies a function `func` to `arg`.
@@ -714,13 +812,13 @@ def apply_arg(
 
 
 def apply_func(
-        func: Callable,
-        input,
-        seq_type=(list, tuple),
-        mapping_type=Mapping,
-        skip_if_neither_seq_or_mapping: bool = False,
-        pass_seq_index: bool = False,
-        pass_mapping_key: bool = False
+    func: Callable,
+    input,
+    seq_type=(list, tuple),
+    mapping_type=Mapping,
+    skip_if_neither_seq_or_mapping: bool = False,
+    pass_seq_index: bool = False,
+    pass_mapping_key: bool = False,
 ):
     """
     Applies a function `func` to the input object.
@@ -755,13 +853,9 @@ def apply_func(
             return type(input)(func(x) for x in input)
     elif isinstance(input, mapping_type):
         if pass_mapping_key:
-            return {
-                k: func(k, v) for k, v in input.items()
-            }
+            return {k: func(k, v) for k, v in input.items()}
         else:
-            return {
-                k: func(v) for k, v in input.items()
-            }
+            return {k: func(v) for k, v in input.items()}
     elif not skip_if_neither_seq_or_mapping:
         if pass_seq_index:
             return func(None, input)
@@ -881,16 +975,16 @@ def is_first_parameter_varpos(func: Callable) -> bool:
         False
     """
     return (
-            next(iter(inspect.signature(func).parameters.values())).kind
-            == inspect.Parameter.VAR_POSITIONAL
+        next(iter(inspect.signature(func).parameters.values())).kind
+        == inspect.Parameter.VAR_POSITIONAL
     )
 
 
 def get_arg_names(
-        func: Callable,
-        include_varargs: bool = False,
-        include_varkw: bool = False,
-        return_varargs_and_varkw_names: bool = False,
+    func: Callable,
+    include_varargs: bool = False,
+    include_varkw: bool = False,
+    return_varargs_and_varkw_names: bool = False,
 ) -> Union[
     List[str],
     Tuple[List[str], Optional[str], Optional[str]],
@@ -970,13 +1064,13 @@ def get_arg_names(
 
 
 def get_relevant_named_args(
-        func: Union[Callable, Iterable[Callable]],
-        include_varargs: bool = False,
-        include_varkw: bool = False,
-        return_other_args: bool = False,
-        exclusion: Sequence[str] = None,
-        all_named_args_relevant_if_func_support_named_args: bool = False,
-        **kwargs
+    func: Union[Callable, Iterable[Callable]],
+    include_varargs: bool = False,
+    include_varkw: bool = False,
+    return_other_args: bool = False,
+    exclusion: Sequence[str] = None,
+    all_named_args_relevant_if_func_support_named_args: bool = False,
+    **kwargs,
 ) -> Union[Mapping, Tuple[Mapping, Mapping]]:
     """
     Extracts named arguments from `kwargs` that are relevant to the callable `func`.
@@ -1050,7 +1144,7 @@ def get_relevant_named_args(
             func,
             include_varargs=include_varargs,
             include_varkw=include_varkw,
-            return_varargs_and_varkw_names=True
+            return_varargs_and_varkw_names=True,
         )
         if not varkw_name:
             all_has_varkw_name = False
@@ -1058,9 +1152,7 @@ def get_relevant_named_args(
         arg_names = []
         for _func in func:
             _arg_names, _, varkw_name = get_arg_names(
-                _func,
-                include_varargs=include_varargs,
-                include_varkw=include_varkw
+                _func, include_varargs=include_varargs, include_varkw=include_varkw
             )
             arg_names.extend(_arg_names)
             if not varkw_name:
@@ -1090,19 +1182,16 @@ def get_relevant_named_args(
 
 
 def get_relevant_args(
-        func: Union[Callable, Iterable[Callable]],
-        include_varargs: bool = False,
-        include_varkw: bool = False,
-        return_other_args: bool = False,
-        named_args_exclusion: Sequence[str] = None,
-        all_var_args_relevant_if_func_support_var_args: bool = False,
-        all_named_args_relevant_if_func_support_named_args: bool = False,
-        args=None,
-        **kwargs
-) -> Union[
-    Tuple[Tuple, Mapping],
-    Tuple[Tuple[Tuple, Mapping], Tuple[Tuple, Mapping]]
-]:
+    func: Union[Callable, Iterable[Callable]],
+    include_varargs: bool = False,
+    include_varkw: bool = False,
+    return_other_args: bool = False,
+    named_args_exclusion: Sequence[str] = None,
+    all_var_args_relevant_if_func_support_var_args: bool = False,
+    all_named_args_relevant_if_func_support_named_args: bool = False,
+    args=None,
+    **kwargs,
+) -> Union[Tuple[Tuple, Mapping], Tuple[Tuple[Tuple, Mapping], Tuple[Tuple, Mapping]]]:
     """
     Return a tuple of (positional_args, named_args) relevant to the given function(s),
     optionally along with leftover/unmatched arguments.
@@ -1213,7 +1302,7 @@ def get_relevant_args(
             include_varkw=include_varkw,
             return_other_args=return_other_args,
             exclusion=named_args_exclusion,
-            all_named_args_relevant_if_func_support_named_args=all_named_args_relevant_if_func_support_named_args
+            all_named_args_relevant_if_func_support_named_args=all_named_args_relevant_if_func_support_named_args,
         )
         if return_other_args:
             return ((), ()), get_relevant_named_args_results
@@ -1227,7 +1316,7 @@ def get_relevant_args(
             func,
             include_varargs=include_varargs,
             include_varkw=include_varkw,
-            return_varargs_and_varkw_names=True
+            return_varargs_and_varkw_names=True,
         )
         if not vararg_name:
             all_has_vararg_name = False
@@ -1238,9 +1327,7 @@ def get_relevant_args(
         arg_names = []
         for _func in func:
             _arg_names, _vararg_name, _varkw_name = get_arg_names(
-                _func,
-                include_varargs=include_varargs,
-                include_varkw=include_varkw
+                _func, include_varargs=include_varargs, include_varkw=include_varkw
             )
             arg_names.extend(_arg_names)
             if not _vararg_name:
@@ -1269,29 +1356,36 @@ def get_relevant_args(
                 seq=arg_names,
                 search=kwargs_names,
                 return_at_first_match=True,
-                search_fallback_option=SearchFallbackOptions.Empty
+                search_fallback_option=SearchFallbackOptions.Empty,
             )
 
             relevant_pos_args = args[:earliest_named_index]
             leftover_pos_args = args[earliest_named_index:]
 
     if all_has_varkw_name and all_named_args_relevant_if_func_support_named_args:
-        relevant_named_args, other_named_args = split_dict(kwargs, named_args_exclusion, reverse=True)
+        relevant_named_args, other_named_args = split_dict(
+            kwargs, named_args_exclusion, reverse=True
+        )
     else:
         relevant_named_args = {
             k: v
             for k, v in kwargs.items()
-            if k in arg_names and (not named_args_exclusion or k not in named_args_exclusion)
+            if k in arg_names
+            and (not named_args_exclusion or k not in named_args_exclusion)
         }
         if return_other_args:
             other_named_args = {
                 k: v
                 for k, v in kwargs.items()
-                if k not in arg_names and (not named_args_exclusion or k not in named_args_exclusion)
+                if k not in arg_names
+                and (not named_args_exclusion or k not in named_args_exclusion)
             }
 
     if return_other_args:
-        return (relevant_pos_args, relevant_named_args), (leftover_pos_args, other_named_args)
+        return (relevant_pos_args, relevant_named_args), (
+            leftover_pos_args,
+            other_named_args,
+        )
     else:
         return relevant_pos_args, relevant_named_args
 
@@ -1417,7 +1511,10 @@ def is_bounded_callable(f: Callable) -> bool:
 
 # region apply processors
 
-def get_processor(processor_name: str, modules: Iterable[Any] = None, processors: Mapping = None) -> Callable:
+
+def get_processor(
+    processor_name: str, modules: Iterable[Any] = None, processors: Mapping = None
+) -> Callable:
     """
     Get a processor function based on its name.
 
@@ -1441,7 +1538,7 @@ def get_processor(processor_name: str, modules: Iterable[Any] = None, processors
         if callable(processor):
             return processor
     else:
-        buildins = globals()['__builtins__']
+        buildins = globals()["__builtins__"]
         if processor_name in buildins:
             processor = buildins[processor_name]
             if callable(processor):
@@ -1455,8 +1552,13 @@ def get_processor(processor_name: str, modules: Iterable[Any] = None, processors
     raise ValueError(f"processor '{processor_name}' not found")
 
 
-def process(obj: Any, modules: Iterable[Any] = None, processors: Mapping = None,
-            output_as_arg_place_holder: str = '#output', **kwargs) -> Any:
+def process(
+    obj: Any,
+    modules: Iterable[Any] = None,
+    processors: Mapping = None,
+    output_as_arg_place_holder: str = "#output",
+    **kwargs,
+) -> Any:
     """
     Apply processing functions to the input object.
 
@@ -1494,9 +1596,7 @@ def process(obj: Any, modules: Iterable[Any] = None, processors: Mapping = None,
         modules = [type(obj), obj]
     for processor_name, processor_args in kwargs.items():
         processor = get_processor(
-            processor_name=processor_name,
-            modules=modules,
-            processors=processors
+            processor_name=processor_name, modules=modules, processors=processors
         )
         _obj = None
         if processor_args is True:
@@ -1536,5 +1636,6 @@ def process(obj: Any, modules: Iterable[Any] = None, processors: Mapping = None,
         if _obj is not None:
             obj = _obj
     return obj
+
 
 # endregion

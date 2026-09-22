@@ -3,8 +3,11 @@ Unit tests for shared text search utilities (tokenize, term_overlap_search).
 """
 
 import pytest
-
-from rich_python_utils.nlp_utils.semantic_search import tokenize, term_overlap_search, _stem_word
+from rich_python_utils.nlp_utils.semantic_search import (
+    _stem_word,
+    term_overlap_search,
+    tokenize,
+)
 
 
 # ── tokenize tests ──────────────────────────────────────────────────────
@@ -71,11 +74,13 @@ class TestTermOverlapSearch:
         assert results[0][1] == 1.0  # 1/1 terms match
 
     def test_multi_term_scoring(self):
-        items = self._make_items([
-            "alice likes cats",       # 2/3 match (alice, likes)
-            "alice likes dogs",       # 3/3 match (alice, likes, dogs)
-            "bob likes dogs",         # 2/3 match (likes, dogs)
-        ])
+        items = self._make_items(
+            [
+                "alice likes cats",  # 2/3 match (alice, likes)
+                "alice likes dogs",  # 3/3 match (alice, likes, dogs)
+                "bob likes dogs",  # 2/3 match (likes, dogs)
+            ]
+        )
         results = term_overlap_search(
             items, ["alice", "likes", "dogs"], self._text_fn, self._id_fn, top_k=5
         )
@@ -103,9 +108,7 @@ class TestTermOverlapSearch:
 
     def test_empty_query_tokens(self):
         items = self._make_items(["alice"])
-        results = term_overlap_search(
-            items, [], self._text_fn, self._id_fn, top_k=5
-        )
+        results = term_overlap_search(items, [], self._text_fn, self._id_fn, top_k=5)
         assert results == []
 
     def test_top_k_limits_results(self):
@@ -200,8 +203,12 @@ class TestTermOverlapWithStemming:
         items = self._make_items(["price comparison tool", "color picker"])
         query_tokens = tokenize("best prices", stem=True)
         results = term_overlap_search(
-            items, query_tokens, self._text_fn, self._id_fn,
-            top_k=5, stem=True,
+            items,
+            query_tokens,
+            self._text_fn,
+            self._id_fn,
+            top_k=5,
+            stem=True,
         )
         assert len(results) == 1
         assert results[0][0][0] == "item_0"
@@ -211,7 +218,11 @@ class TestTermOverlapWithStemming:
         items = self._make_items(["price comparison tool", "color picker"])
         query_tokens = tokenize("best prices", stem=False)
         results = term_overlap_search(
-            items, query_tokens, self._text_fn, self._id_fn,
-            top_k=5, stem=False,
+            items,
+            query_tokens,
+            self._text_fn,
+            self._id_fn,
+            top_k=5,
+            stem=False,
         )
         assert len(results) == 0

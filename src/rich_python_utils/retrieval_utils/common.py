@@ -1,8 +1,15 @@
-from typing import Iterable, Callable, Mapping
 import heapq
+from typing import Callable, Iterable, Mapping
 
 
-def top_k_similar(query, values: Iterable, key: Callable = None, top: int = 1, scorer: Callable = None, score_threshold=None):
+def top_k_similar(
+    query,
+    values: Iterable,
+    key: Callable = None,
+    top: int = 1,
+    scorer: Callable = None,
+    score_threshold=None,
+):
     """
     Finds the top-k similar values to a query from a given iterable of values.
 
@@ -26,6 +33,7 @@ def top_k_similar(query, values: Iterable, key: Callable = None, top: int = 1, s
     """
     if scorer is None:
         from Levenshtein import ratio
+
         scorer = lambda x, y: ratio(str(x), str(y))
     if key is None:
         scored_x = []
@@ -43,13 +51,13 @@ def top_k_similar(query, values: Iterable, key: Callable = None, top: int = 1, s
 
 
 def retrieve(
-        key,
-        d: Mapping,
-        top: int = 1,
-        scorer: Callable = None,
-        only_run_retriever_if_key_not_exist: bool = True,
-        score_threshold=None,
-        return_key: bool = False
+    key,
+    d: Mapping,
+    top: int = 1,
+    scorer: Callable = None,
+    only_run_retriever_if_key_not_exist: bool = True,
+    score_threshold=None,
+    return_key: bool = False,
 ):
     """
     Retrieves values from a mapping based on a query key, optionally finding similar keys.
@@ -84,6 +92,7 @@ def retrieve(
     """
     if scorer is None:
         from Levenshtein import ratio
+
         scorer = ratio
 
     if only_run_retriever_if_key_not_exist and key in d and top == 1:
@@ -102,12 +111,14 @@ def retrieve(
             if return_key:
                 return [
                     (_key, d[_key])
-                    for _key
-                    in top_k_similar(key, d, top=top, scorer=scorer, score_threshold=score_threshold)
+                    for _key in top_k_similar(
+                        key, d, top=top, scorer=scorer, score_threshold=score_threshold
+                    )
                 ]
             else:
                 return [
                     d[_key]
-                    for _key
-                    in top_k_similar(key, d, top=top, scorer=scorer, score_threshold=score_threshold)
+                    for _key in top_k_similar(
+                        key, d, top=top, scorer=scorer, score_threshold=score_threshold
+                    )
                 ]

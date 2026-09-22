@@ -28,10 +28,7 @@ def get_items_with_multiple_occurrences(arr: Iterable) -> set:
 
 
 def compare_sets(
-        set1: Set,
-        set2: Set,
-        allows_add: bool = False,
-        allows_drop: bool = False
+    set1: Set, set2: Set, allows_add: bool = False, allows_drop: bool = False
 ) -> bool:
     """
     Compares two sets `set1` and `set2`.
@@ -98,14 +95,16 @@ def compare_sets(
         return set1 != set2
     else:
         overlap = set1 & set2
-        overlap_same_as_set1 = (len(overlap) == len_set1)
-        overlap_same_as_set2 = (len(overlap) == len_set2)
+        overlap_same_as_set1 = len(overlap) == len_set1
+        overlap_same_as_set2 = len(overlap) == len_set2
         return not (  # one set must be a subset of the other
-                (overlap_same_as_set1 or overlap_same_as_set2) and
-                # either we allow addition, or there is no addition
-                (allows_add or not (overlap_same_as_set1 and len_set2 > len_set1)) and
-                # either we allow drop, or there is no drop
-                (allows_drop or not (overlap_same_as_set2 and len_set2 < len_set1))
+            (overlap_same_as_set1 or overlap_same_as_set2)
+            and
+            # either we allow addition, or there is no addition
+            (allows_add or not (overlap_same_as_set1 and len_set2 > len_set1))
+            and
+            # either we allow drop, or there is no drop
+            (allows_drop or not (overlap_same_as_set2 and len_set2 < len_set1))
         )
 
 
@@ -114,7 +113,6 @@ def set_one_contains_the_other(set1: Set, set2: Set) -> bool:
     Returns True if `set1` is a proper subset or superset of `set2`.
     """
     overlap = set1 & set2
-    return (
-            (len(overlap) == len(set2) and len(set2) < len(set1)) or
-            (len(overlap) == len(set1) and len(set2) > len(set1))
+    return (len(overlap) == len(set2) and len(set2) < len(set1)) or (
+        len(overlap) == len(set1) and len(set2) > len(set1)
     )

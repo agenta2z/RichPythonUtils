@@ -1,0 +1,16 @@
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
+load("@fbcode_macros//build_defs:python_unittest.bzl", "python_unittest")
+load("@fbsource//tools/build_defs/testinfra:network_access_utils.bzl", "network_access_utils")
+
+oncall("ml_oncall")
+
+python_unittest(
+    name = "test_with_variable_extensions",
+    srcs = ["test_with_variable_extensions.py"],
+    network_access = network_access_utils.none(),
+    typing = False,
+    deps = [
+        "//_tony_dev/CoreProjects/RichPythonUtils/src:rich_python_utils",
+    ],
+)

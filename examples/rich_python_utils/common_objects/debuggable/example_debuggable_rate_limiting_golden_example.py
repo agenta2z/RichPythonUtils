@@ -17,6 +17,7 @@ This is the recommended way to use Debuggable for training loops and progress tr
 import time
 
 from resolve_path import resolve_path
+
 resolve_path()  # Add project src to sys.path
 
 from rich_python_utils.common_objects.debuggable import Debuggable
@@ -32,6 +33,7 @@ def select_backend():
     # Check what's available
     try:
         import rich
+
         has_rich = True
         print("\n[+] Rich library is installed")
     except ImportError:
@@ -48,7 +50,7 @@ def select_backend():
     if has_rich:
         choice = input("\nChoose backend (1/2) or press Enter for Rich: ").strip()
         if choice == "2":
-            os.environ['CONSOLE_UTILS_BACKEND'] = 'colorama'
+            os.environ["CONSOLE_UTILS_BACKEND"] = "colorama"
             print("-> Using Colorama backend")
         else:
             print("-> Using Rich backend")
@@ -78,7 +80,7 @@ def select_mode():
                 "1": "Rate Limit Only",
                 "2": "Console Update Only",
                 "3": "Both Combined",
-                "4": "No Features (baseline)"
+                "4": "No Features (baseline)",
             }
             print(f"-> Selected: {mode_names[choice]}")
             return int(choice)
@@ -96,7 +98,9 @@ def select_rate_limit():
     print("  - 1.0 = Display at most 1 message per second")
 
     while True:
-        choice = input("\nEnter rate limit in seconds (0.0-5.0) or press Enter for 0.5: ").strip()
+        choice = input(
+            "\nEnter rate limit in seconds (0.0-5.0) or press Enter for 0.5: "
+        ).strip()
         if choice == "":
             rate_limit = 0.5
             break
@@ -128,7 +132,7 @@ def check_cursor_control_support():
     import os
 
     # PyCharm and some IDEs don't support cursor control
-    if os.getenv('PYCHARM_HOSTED') or 'PYCHARM' in os.getenv('TERMINAL_EMULATOR', ''):
+    if os.getenv("PYCHARM_HOSTED") or "PYCHARM" in os.getenv("TERMINAL_EMULATOR", ""):
         return False, "PyCharm terminal detected"
 
     # Check if stdout is a tty
@@ -136,9 +140,10 @@ def check_cursor_control_support():
         return False, "stdout is not a tty"
 
     # On Windows, try to enable ANSI escape codes
-    if sys.platform == 'win32':
+    if sys.platform == "win32":
         try:
             import ctypes
+
             kernel32 = ctypes.windll.kernel32
             kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
             return True, "Windows ANSI enabled"
@@ -153,9 +158,10 @@ def run_demo(mode, rate_limit):
     # Check cursor control support
     cursor_supported, cursor_reason = check_cursor_control_support()
 
-    # Import after backend selection
-    from rich_python_utils.console_utils import hprint_message, get_current_backend
     from rich_python_utils.common_objects.debuggable import Debuggable
+
+    # Import after backend selection
+    from rich_python_utils.console_utils import get_current_backend, hprint_message
 
     # Demo parameters
     total_iterations = 20
@@ -169,7 +175,9 @@ def run_demo(mode, rate_limit):
 
     # Calculate expectations
     if enable_rate_limit:
-        expected_messages = calculate_expected_messages(total_iterations, iteration_delay, actual_rate_limit)
+        expected_messages = calculate_expected_messages(
+            total_iterations, iteration_delay, actual_rate_limit
+        )
     else:
         expected_messages = total_iterations
 
@@ -178,7 +186,9 @@ def run_demo(mode, rate_limit):
     print("Demo Configuration")
     print("=" * 70)
     print(f"\nBackend: {get_current_backend()}")
-    print(f"Mode: {['', 'Rate Limit Only', 'Console Update Only', 'Both Combined', 'No Features'][mode]}")
+    print(
+        f"Mode: {['', 'Rate Limit Only', 'Console Update Only', 'Both Combined', 'No Features'][mode]}"
+    )
     print(f"\nIterations: {total_iterations}")
     print(f"Delay per iteration: {iteration_delay}s")
     print(f"Total runtime: {total_time}s")
@@ -187,17 +197,23 @@ def run_demo(mode, rate_limit):
         print(f"  Rate limit: {actual_rate_limit}s")
     print(f"Console update: {'ENABLED' if enable_console_update else 'DISABLED'}")
     if enable_console_update:
-        print(f"  Cursor control: {'SUPPORTED' if cursor_supported else 'NOT SUPPORTED'} ({cursor_reason})")
+        print(
+            f"  Cursor control: {'SUPPORTED' if cursor_supported else 'NOT SUPPORTED'} ({cursor_reason})"
+        )
         if not cursor_supported:
             print("  WARNING: In-place updates will NOT work - messages will scroll")
     print("-" * 70)
     print(f"Without rate limiting: {total_iterations} messages would display")
     if enable_rate_limit:
-        print(f"With {actual_rate_limit}s rate limit: expect ~{expected_messages} messages")
+        print(
+            f"With {actual_rate_limit}s rate limit: expect ~{expected_messages} messages"
+        )
     if enable_console_update and cursor_supported:
         print("With console update: messages update in place (no scrolling)")
     elif enable_console_update and not cursor_supported:
-        print("With console update: [UPD] shown but lines will scroll (terminal limitation)")
+        print(
+            "With console update: [UPD] shown but lines will scroll (terminal limitation)"
+        )
     print("=" * 70)
 
     input("\nPress Enter to start the demo...")
@@ -208,7 +224,7 @@ def run_demo(mode, rate_limit):
     def hprint_logger(log_data, message_id=None, update_previous=False, **kwargs):
         """Logger wrapper that uses hprint_message."""
         displayed_count[0] += 1
-        item = log_data['item']
+        item = log_data["item"]
 
         # Format the content with [NEW]/[UPD] indicator
         mode_indicator = "[UPD]" if update_previous else "[NEW]"
@@ -218,7 +234,7 @@ def run_demo(mode, rate_limit):
             title="Training Progress",
             content=content,
             message_id=message_id,
-            update_previous=update_previous
+            update_previous=update_previous,
         )
 
     # Define the training loop class
@@ -230,12 +246,8 @@ def run_demo(mode, rate_limit):
                 accuracy = min(99.9, 50 + epoch * 2.5)
 
                 self.log_info(
-                    {
-                        'epoch': epoch,
-                        'loss': loss,
-                        'accuracy': accuracy
-                    },
-                    log_type='Training'
+                    {"epoch": epoch, "loss": loss, "accuracy": accuracy},
+                    log_type="Training",
                 )
                 time.sleep(iteration_delay)
 
@@ -250,7 +262,7 @@ def run_demo(mode, rate_limit):
         log_time=False,
         console_display_rate_limit=actual_rate_limit,
         enable_console_update=enable_console_update,
-        console_loggers_or_logger_types=(hprint_logger,)  # Mark as console logger
+        console_loggers_or_logger_types=(hprint_logger,),  # Mark as console logger
     )
 
     start_time = time.time()
@@ -283,9 +295,10 @@ def run_comparison_demo():
     # Check cursor control support
     cursor_supported, cursor_reason = check_cursor_control_support()
 
-    # Import after backend selection
-    from rich_python_utils.console_utils import hprint_message, get_current_backend
     from rich_python_utils.common_objects.debuggable import Debuggable
+
+    # Import after backend selection
+    from rich_python_utils.console_utils import get_current_backend, hprint_message
 
     rate_limit = 0.3
     total_iterations = 10
@@ -295,10 +308,14 @@ def run_comparison_demo():
     print("Comparison Demo - All Four Modes")
     print("=" * 70)
     print(f"\nBackend: {get_current_backend()}")
-    print(f"Cursor control: {'SUPPORTED' if cursor_supported else 'NOT SUPPORTED'} ({cursor_reason})")
+    print(
+        f"Cursor control: {'SUPPORTED' if cursor_supported else 'NOT SUPPORTED'} ({cursor_reason})"
+    )
     if not cursor_supported:
         print("WARNING: In-place updates will NOT work - all messages will scroll")
-    print(f"\nIterations: {total_iterations}, Delay: {iteration_delay}s, Rate limit: {rate_limit}s")
+    print(
+        f"\nIterations: {total_iterations}, Delay: {iteration_delay}s, Rate limit: {rate_limit}s"
+    )
     print("\nThis will run all 4 modes sequentially for comparison.")
 
     modes = [
@@ -317,7 +334,7 @@ def run_comparison_demo():
 
         def training_logger(log_data, message_id=None, update_previous=False, **kwargs):
             displayed_count[0] += 1
-            item = log_data['item']
+            item = log_data["item"]
             mode_indicator = "[UPD]" if update_previous else "[NEW]"
             content = f"{mode_indicator} Epoch {item['epoch']:2d} | Loss: {item['loss']:.4f} | Accuracy: {item['accuracy']:.1f}%"
             # Use hprint_message for actual in-place updates
@@ -325,7 +342,7 @@ def run_comparison_demo():
                 title="Training Progress",
                 content=content,
                 message_id=message_id,
-                update_previous=update_previous
+                update_previous=update_previous,
             )
 
         class TrainingSimulator(Debuggable):
@@ -334,8 +351,8 @@ def run_comparison_demo():
                     loss = 1.0 / (epoch + 1)
                     accuracy = min(99.9, 50 + epoch * 5.0)
                     self.log_info(
-                        {'epoch': epoch, 'loss': loss, 'accuracy': accuracy},
-                        log_type='Training'
+                        {"epoch": epoch, "loss": loss, "accuracy": accuracy},
+                        log_type="Training",
                     )
                     time.sleep(iteration_delay)
 
@@ -347,7 +364,7 @@ def run_comparison_demo():
             log_time=False,
             console_display_rate_limit=rl,
             enable_console_update=cu,
-            console_loggers_or_logger_types=(training_logger,)
+            console_loggers_or_logger_types=(training_logger,),
         )
         simulator.train()
 
@@ -398,13 +415,21 @@ def main():
 
         # Ask if user wants to continue
         print("\n" + "-" * 70)
-        continue_choice = input("Would you like to try another setup? (y/n) or press Enter for yes: ").strip().lower()
-        if continue_choice in ['n', 'no']:
+        continue_choice = (
+            input("Would you like to try another setup? (y/n) or press Enter for yes: ")
+            .strip()
+            .lower()
+        )
+        if continue_choice in ["n", "no"]:
             break
 
         # Ask if user wants to change backend
-        change_backend = input("Would you like to change the backend? (y/n) or press Enter for no: ").strip().lower()
-        if change_backend in ['y', 'yes']:
+        change_backend = (
+            input("Would you like to change the backend? (y/n) or press Enter for no: ")
+            .strip()
+            .lower()
+        )
+        if change_backend in ["y", "yes"]:
             select_backend()
 
     print("\n" + "=" * 70)

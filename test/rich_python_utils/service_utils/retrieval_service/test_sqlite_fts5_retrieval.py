@@ -9,7 +9,6 @@ Validates: Requirements 5.3
 """
 
 import pytest
-
 from rich_python_utils.service_utils.retrieval_service.document import Document
 from rich_python_utils.service_utils.retrieval_service.sqlite_fts5_retrieval_service import (
     SQLiteFTS5RetrievalService,
@@ -50,7 +49,9 @@ class TestSQLiteFTS5RetrievalServiceAdd:
 
     def test_add_preserves_metadata(self, tmp_path):
         svc = SQLiteFTS5RetrievalService(db_path=str(tmp_path / "test.db"))
-        doc = Document(doc_id="d1", content="hello", metadata={"key": "val", "tags": ["a", "b"]})
+        doc = Document(
+            doc_id="d1", content="hello", metadata={"key": "val", "tags": ["a", "b"]}
+        )
         svc.add(doc)
         result = svc.get_by_id("d1")
         assert result.metadata == {"key": "val", "tags": ["a", "b"]}
@@ -232,7 +233,9 @@ class TestSQLiteFTS5RetrievalServiceSearch:
     def test_search_respects_top_k(self, tmp_path):
         svc = SQLiteFTS5RetrievalService(db_path=str(tmp_path / "test.db"))
         for i in range(10):
-            svc.add(Document(doc_id=f"d{i}", content=f"common term document number {i}"))
+            svc.add(
+                Document(doc_id=f"d{i}", content=f"common term document number {i}")
+            )
         results = svc.search("common", top_k=3)
         assert len(results) == 3
 
@@ -255,31 +258,43 @@ class TestSQLiteFTS5RetrievalServiceSearch:
 
     def test_search_with_metadata_filters(self, tmp_path):
         svc = SQLiteFTS5RetrievalService(db_path=str(tmp_path / "test.db"))
-        svc.add(Document(doc_id="d1", content="python tutorial", metadata={"type": "article"}))
-        svc.add(Document(doc_id="d2", content="python guide", metadata={"type": "blog"}))
+        svc.add(
+            Document(
+                doc_id="d1", content="python tutorial", metadata={"type": "article"}
+            )
+        )
+        svc.add(
+            Document(doc_id="d2", content="python guide", metadata={"type": "blog"})
+        )
         results = svc.search("python", filters={"type": "article"})
         assert len(results) == 1
         assert results[0][0].doc_id == "d1"
 
     def test_search_with_list_filter(self, tmp_path):
         svc = SQLiteFTS5RetrievalService(db_path=str(tmp_path / "test.db"))
-        svc.add(Document(
-            doc_id="d1",
-            content="python tutorial",
-            metadata={"tags": ["python", "beginner"]},
-        ))
-        svc.add(Document(
-            doc_id="d2",
-            content="python advanced",
-            metadata={"tags": ["python", "advanced"]},
-        ))
+        svc.add(
+            Document(
+                doc_id="d1",
+                content="python tutorial",
+                metadata={"tags": ["python", "beginner"]},
+            )
+        )
+        svc.add(
+            Document(
+                doc_id="d2",
+                content="python advanced",
+                metadata={"tags": ["python", "advanced"]},
+            )
+        )
         results = svc.search("python", filters={"tags": ["python", "beginner"]})
         assert len(results) == 1
         assert results[0][0].doc_id == "d1"
 
     def test_search_filters_exclude_all(self, tmp_path):
         svc = SQLiteFTS5RetrievalService(db_path=str(tmp_path / "test.db"))
-        svc.add(Document(doc_id="d1", content="hello world", metadata={"type": "article"}))
+        svc.add(
+            Document(doc_id="d1", content="hello world", metadata={"type": "article"})
+        )
         results = svc.search("hello", filters={"type": "blog"})
         assert len(results) == 0
 

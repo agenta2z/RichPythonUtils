@@ -1,5 +1,5 @@
 from collections import deque
-from typing import Any, Iterable, Callable, Sequence
+from typing import Any, Callable, Iterable, Sequence
 
 from rich_python_utils.algorithms.graph.node import Node
 from rich_python_utils.common_utils import get_, get__
@@ -30,11 +30,11 @@ def _resolve_value(node, get_value):
 
 
 def bfs_traversal(
-        root,
-        get_children: Callable[[Any], Iterable] = None,
-        process_node: Callable = None,
-        get_value: Callable = None,
-        return_iterator: bool = True,
+    root,
+    get_children: Callable[[Any], Iterable] = None,
+    process_node: Callable = None,
+    get_value: Callable = None,
+    return_iterator: bool = True,
 ):
     """
     Performs a breadth-first (level-order) traversal of a generic tree or tree-like structure,
@@ -117,11 +117,12 @@ def bfs_traversal(
         ['A', 'B', 'C', 'D', 'F', 'G', 'H', 'I', 'J']
     """
     if get_children is None:
-        get_children = ('next', 'children')
+        get_children = ("next", "children")
 
     queue = deque([root])
 
     if return_iterator:
+
         def _iterator():
             while queue:
                 node = queue.popleft()
@@ -146,11 +147,11 @@ def bfs_traversal(
 
 
 def post_order_traversal(
-        root,
-        get_children: Callable[[Any], Iterable] = None,
-        process_node: Callable = None,
-        get_value: Callable = None,
-        return_iterator: bool = True,
+    root,
+    get_children: Callable[[Any], Iterable] = None,
+    process_node: Callable = None,
+    get_value: Callable = None,
+    return_iterator: bool = True,
 ):
     r"""
     Performs a post-order traversal of a generic tree (or tree-like structure) using a stack,
@@ -253,7 +254,7 @@ def post_order_traversal(
         ['F', 'B', 'G', 'H', 'I', 'C', 'J', 'D', 'A']
     """
     if get_children is None:
-        get_children = ('next', 'children')
+        get_children = ("next", "children")
 
     stack = [(root, False)]
 
@@ -276,6 +277,7 @@ def post_order_traversal(
                     stack.append((child, False))
 
     if return_iterator:
+
         def _iterator():
             while stack:
                 node, visited = stack.pop()

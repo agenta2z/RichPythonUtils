@@ -54,7 +54,7 @@ class _MISSING_TYPE:
         return cls._instance
 
     def __repr__(self):
-        return '<MISSING>'
+        return "<MISSING>"
 
     def __bool__(self):
         return False
@@ -267,7 +267,7 @@ def dict__(
     obj: Any,
     recursive: bool = True,
     fallback: Union[Callable, None, str] = str,
-    _obj_cache: Dict[int, Any] = None
+    _obj_cache: Dict[int, Any] = None,
 ) -> Any:
     """
     Recursively converts any Python object to a dictionary, handling various types and
@@ -284,7 +284,7 @@ def dict__(
 
     Returns:
         A dictionary representation of the object.
-    
+
     Raises:
         TypeError: If fallback=None and object cannot be converted to dict.
 
@@ -473,7 +473,8 @@ def dict__(
     if isinstance(obj, Sequence) or iterable__(obj):
         if recursive:
             result = [
-                dict__(item, recursive=True, fallback=fallback, _obj_cache=_obj_cache) for item in obj
+                dict__(item, recursive=True, fallback=fallback, _obj_cache=_obj_cache)
+                for item in obj
             ]
         else:
             result = list(obj)
@@ -497,7 +498,9 @@ def dict__(
                 # stale _obj_cache entries: the intermediate dict can be GC'd after
                 # reassignment, and Python may reuse its memory address for the next
                 # attr.asdict() call, causing id() collisions in the shared cache.
-                result = dict__(result, recursive=True, fallback=fallback, _obj_cache={})
+                result = dict__(
+                    result, recursive=True, fallback=fallback, _obj_cache={}
+                )
             _obj_cache[obj_id] = result
             return result
     except ImportError:
@@ -507,7 +510,9 @@ def dict__(
     if hasattr(obj, "__dict__"):
         result = vars(obj)
         if recursive:
-            result = dict__(result, recursive=True, fallback=fallback, _obj_cache=_obj_cache)
+            result = dict__(
+                result, recursive=True, fallback=fallback, _obj_cache=_obj_cache
+            )
         _obj_cache[obj_id] = result
         return result
 
@@ -526,7 +531,7 @@ def dict__(
     # Fallback for non-convertible objects
     if fallback is None:
         raise TypeError(f"Cannot convert {type(obj).__name__} to dict")
-    elif fallback == 'skip':
+    elif fallback == "skip":
         return None
     elif callable(fallback):
         return fallback(obj)
@@ -2650,11 +2655,23 @@ def _deep_merge_two(base: Dict, override: Dict, **kwargs) -> Dict:
             base_val = result[key]
             if isinstance(base_val, dict) and isinstance(override_val, dict):
                 result[key] = _deep_merge_two(base_val, override_val, **kwargs)
-            elif concatenate_lists and isinstance(base_val, list) and isinstance(override_val, list):
+            elif (
+                concatenate_lists
+                and isinstance(base_val, list)
+                and isinstance(override_val, list)
+            ):
                 result[key] = base_val + override_val
-            elif union_sets and isinstance(base_val, set) and isinstance(override_val, set):
+            elif (
+                union_sets
+                and isinstance(base_val, set)
+                and isinstance(override_val, set)
+            ):
                 result[key] = base_val | override_val
-            elif sum_counters and isinstance(base_val, (int, float)) and isinstance(override_val, (int, float)):
+            elif (
+                sum_counters
+                and isinstance(base_val, (int, float))
+                and isinstance(override_val, (int, float))
+            ):
                 result[key] = base_val + override_val
             else:
                 result[key] = override_val
@@ -3008,7 +3025,7 @@ def sum_dicts(count_dicts, in_place=False):
 # region nested path operations
 
 
-def parse_key_path(path, sep='.', escape_char='\\'):
+def parse_key_path(path, sep=".", escape_char="\\"):
     """
     Parses a dot-separated key path string into a list of keys.
     Supports escaped separators for keys that contain the separator character.
@@ -3050,13 +3067,13 @@ def parse_key_path(path, sep='.', escape_char='\\'):
             current.append(sep)
             i += 2
         elif path[i] == sep:
-            keys.append(''.join(current))
+            keys.append("".join(current))
             current = []
             i += 1
         else:
             current.append(path[i])
             i += 1
-    keys.append(''.join(current))
+    keys.append("".join(current))
     return keys
 
 
@@ -3128,9 +3145,13 @@ def _walk_to_parent(data, keys):
             if 0 <= idx < len(current):
                 current = current[idx]
             else:
-                raise KeyError(f"Index {idx} out of range for list of length {len(current)}")
+                raise KeyError(
+                    f"Index {idx} out of range for list of length {len(current)}"
+                )
         else:
-            raise KeyError(f"Cannot traverse into {type(current).__name__} with key {key!r}")
+            raise KeyError(
+                f"Cannot traverse into {type(current).__name__} with key {key!r}"
+            )
     final_key = keys[-1]
     if isinstance(current, (list, tuple)):
         try:
@@ -3222,13 +3243,17 @@ def set_at_path(data, path, value, create_intermediate=True):
                 if create_intermediate:
                     current[key] = {}
                 else:
-                    raise KeyError(f"Intermediate key {key!r} not found and create_intermediate is False")
+                    raise KeyError(
+                        f"Intermediate key {key!r} not found and create_intermediate is False"
+                    )
             current = current[key]
         elif isinstance(current, (list, tuple)):
             idx = int(key)
             current = current[idx]
         else:
-            raise KeyError(f"Cannot traverse into {type(current).__name__} with key {key!r}")
+            raise KeyError(
+                f"Cannot traverse into {type(current).__name__} with key {key!r}"
+            )
     final_key = keys[-1]
     if isinstance(current, dict):
         current[final_key] = value
@@ -3363,7 +3388,7 @@ def _resolve_annotation_type(annotation) -> Optional[Type]:
     Returns the base type if *annotation* is a concrete class or a simple
     ``Optional`` wrapper, otherwise ``None``.
     """
-    origin = getattr(annotation, '__origin__', None)
+    origin = getattr(annotation, "__origin__", None)
     if origin is Union:
         args = [a for a in annotation.__args__ if a is not type(None)]
         return args[0] if len(args) == 1 else None
@@ -3382,7 +3407,7 @@ def _iter_fields(obj) -> Iterator[Tuple[str, Any]]:
     - **object with __dict__**: yields ``(key, value)`` from ``vars()``.
     """
     if isinstance(obj, type):
-        annotations = getattr(obj, '__annotations__', {})
+        annotations = getattr(obj, "__annotations__", {})
         for name, annotation in annotations.items():
             resolved = _resolve_annotation_type(annotation)
             if resolved is not None:
@@ -3395,13 +3420,14 @@ def _iter_fields(obj) -> Iterator[Tuple[str, Any]]:
     else:
         try:
             import attr
+
             if attr.has(obj):
                 for a in attr.fields(type(obj)):
                     yield a.name, getattr(obj, a.name)
                 return
         except ImportError:
             pass
-        if hasattr(obj, '__dict__'):
+        if hasattr(obj, "__dict__"):
             yield from vars(obj).items()
 
 
@@ -3480,7 +3506,9 @@ def obj_walk_through(
         if not isinstance(child, (str, int, float, bool, type(None), bytes)):
             if should_recurse is not None and not should_recurse(child_path, child):
                 continue
-            yield from obj_walk_through(child, should_recurse, _prefix=child_path, _visited=_visited)
+            yield from obj_walk_through(
+                child, should_recurse, _prefix=child_path, _visited=_visited
+            )
 
 
 # endregion
@@ -3554,7 +3582,9 @@ def resolve_fuzzy_path(data, key, path_part_sep="_", longest_first=True):
     return None
 
 
-def get_at_path_fuzzy(data, path, default=MISSING, path_part_sep="_", match_mode="longest"):
+def get_at_path_fuzzy(
+    data, path, default=MISSING, path_part_sep="_", match_mode="longest"
+):
     """Get a value using fuzzy underscore-to-dot path resolution.
 
     Like get_at_path but tries all possible split points of an
@@ -3571,7 +3601,9 @@ def get_at_path_fuzzy(data, path, default=MISSING, path_part_sep="_", match_mode
         The value at the resolved path, or default.
     """
     resolved = resolve_fuzzy_path(
-        data, path, path_part_sep=path_part_sep,
+        data,
+        path,
+        path_part_sep=path_part_sep,
         longest_first=(match_mode == "longest"),
     )
     if resolved is not None:
@@ -3581,7 +3613,9 @@ def get_at_path_fuzzy(data, path, default=MISSING, path_part_sep="_", match_mode
     return default
 
 
-def set_at_path_fuzzy(data, path, value, path_part_sep="_", match_mode="longest", create_if_missing=True):
+def set_at_path_fuzzy(
+    data, path, value, path_part_sep="_", match_mode="longest", create_if_missing=True
+):
     """Set a value using fuzzy underscore-to-dot path resolution.
 
     Like set_at_path but resolves underscore-separated keys to nested paths.
@@ -3597,7 +3631,9 @@ def set_at_path_fuzzy(data, path, value, path_part_sep="_", match_mode="longest"
         create_if_missing: If True and no match found, create as top-level key.
     """
     resolved = resolve_fuzzy_path(
-        data, path, path_part_sep=path_part_sep,
+        data,
+        path,
+        path_part_sep=path_part_sep,
         longest_first=(match_mode == "longest"),
     )
     if resolved is not None:

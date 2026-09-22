@@ -5,9 +5,9 @@ Provides interactive prompts for setting argument values in both
 Jupyter notebooks (with widgets) and terminal environments.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
-from argparse import Namespace
 import sys
+from argparse import Namespace
+from typing import Any, Dict, List, Optional, Tuple
 
 
 def is_jupyter() -> bool:
@@ -20,12 +20,13 @@ def is_jupyter() -> bool:
     try:
         # Check if IPython is available and active
         from IPython import get_ipython
+
         ipython = get_ipython()
         if ipython is None:
             return False
 
         # Check if it's a Jupyter kernel
-        return 'IPKernelApp' in ipython.config
+        return "IPKernelApp" in ipython.config
     except (ImportError, AttributeError):
         return False
 
@@ -39,12 +40,13 @@ def is_ipython_terminal() -> bool:
     """
     try:
         from IPython import get_ipython
+
         ipython = get_ipython()
         if ipython is None:
             return False
 
         # IPython terminal, not Jupyter
-        return 'TerminalInteractiveShell' in str(type(ipython))
+        return "TerminalInteractiveShell" in str(type(ipython))
     except (ImportError, AttributeError):
         return False
 
@@ -123,40 +125,42 @@ class InteractiveCollector:
                 widget = widgets.Checkbox(
                     value=effective_default,
                     description=f"{name}:",
-                    style={'description_width': '150px'},
+                    style={"description_width": "150px"},
                 )
             elif isinstance(effective_default, (int, float)):
                 widget = widgets.FloatText(
                     value=float(effective_default),
                     description=f"{name}:",
-                    style={'description_width': '150px'},
+                    style={"description_width": "150px"},
                 )
             elif isinstance(effective_default, (list, tuple)):
                 widget = widgets.Text(
                     value=str(effective_default),
                     description=f"{name}:",
-                    style={'description_width': '150px'},
-                    placeholder="[item1, item2, ...]"
+                    style={"description_width": "150px"},
+                    placeholder="[item1, item2, ...]",
                 )
             elif isinstance(effective_default, dict):
                 widget = widgets.Text(
                     value=str(effective_default),
                     description=f"{name}:",
-                    style={'description_width': '150px'},
-                    placeholder="{'key': 'value', ...}"
+                    style={"description_width": "150px"},
+                    placeholder="{'key': 'value', ...}",
                 )
             else:
                 widget = widgets.Text(
-                    value=str(effective_default) if effective_default is not None else "",
+                    value=str(effective_default)
+                    if effective_default is not None
+                    else "",
                     description=f"{name}:",
-                    style={'description_width': '150px'},
+                    style={"description_width": "150px"},
                 )
 
             # Add description tooltip if available
             if description:
                 label = widgets.Label(
                     value=f"ℹ️  {description}",
-                    layout=widgets.Layout(margin='0 0 5px 20px')
+                    layout=widgets.Layout(margin="0 0 5px 20px"),
                 )
                 widget_list.append(widgets.VBox([widget, label]))
             else:
@@ -169,9 +173,7 @@ class InteractiveCollector:
 
         # Add a submit button
         submit_button = widgets.Button(
-            description='Apply Configuration',
-            button_style='success',
-            icon='check'
+            description="Apply Configuration", button_style="success", icon="check"
         )
 
         result_output = widgets.Output()
@@ -188,7 +190,9 @@ class InteractiveCollector:
         class WidgetProxy:
             def __init__(self, widgets_dict, arg_defs):
                 self._widgets = widgets_dict
-                self._arg_defs = {name: (default, desc) for name, default, desc in arg_defs}
+                self._arg_defs = {
+                    name: (default, desc) for name, default, desc in arg_defs
+                }
 
             def get_values(self) -> Dict[str, Any]:
                 result = {}
@@ -197,13 +201,20 @@ class InteractiveCollector:
                     value = widget.value
 
                     # Parse string values for collections
-                    if isinstance(default_value, (list, tuple, dict)) and isinstance(value, str):
+                    if isinstance(default_value, (list, tuple, dict)) and isinstance(
+                        value, str
+                    ):
                         try:
                             import ast
+
                             parsed = ast.literal_eval(value)
                             # Convert back to original type
                             if isinstance(default_value, tuple):
-                                value = tuple(parsed) if isinstance(parsed, (list, tuple)) else parsed
+                                value = (
+                                    tuple(parsed)
+                                    if isinstance(parsed, (list, tuple))
+                                    else parsed
+                                )
                             else:
                                 value = parsed
                         except (ValueError, SyntaxError):
@@ -237,6 +248,7 @@ class InteractiveCollector:
         # Try to use questionary for better UX
         try:
             import questionary
+
             return self._collect_with_questionary(arg_definitions, preset_values)
         except ImportError:
             # Fall back to basic input()
@@ -261,13 +273,15 @@ class InteractiveCollector:
         from questionary import Style
 
         # Custom style
-        custom_style = Style([
-            ('qmark', 'fg:#5f87ff bold'),
-            ('question', 'bold'),
-            ('answer', 'fg:#00ff00 bold'),
-            ('pointer', 'fg:#5f87ff bold'),
-            ('selected', 'fg:#00ff00'),
-        ])
+        custom_style = Style(
+            [
+                ("qmark", "fg:#5f87ff bold"),
+                ("question", "bold"),
+                ("answer", "fg:#00ff00 bold"),
+                ("pointer", "fg:#5f87ff bold"),
+                ("selected", "fg:#00ff00"),
+            ]
+        )
 
         collected = {}
 
@@ -288,13 +302,12 @@ class InteractiveCollector:
             # Create appropriate prompt based on type
             if isinstance(effective_default, bool):
                 answer = questionary.confirm(
-                    message,
-                    default=effective_default,
-                    style=custom_style
+                    message, default=effective_default, style=custom_style
                 ).ask()
                 collected[name] = answer
 
             elif isinstance(effective_default, (int, float)):
+
                 def validate_number(text):
                     if not text:
                         return True  # Allow empty for default
@@ -309,40 +322,55 @@ class InteractiveCollector:
 
                 answer = questionary.text(
                     message,
-                    default=str(effective_default) if effective_default is not None else "",
+                    default=str(effective_default)
+                    if effective_default is not None
+                    else "",
                     validate=validate_number,
-                    style=custom_style
+                    style=custom_style,
                 ).ask()
 
                 if answer:
-                    collected[name] = int(answer) if isinstance(effective_default, int) else float(answer)
+                    collected[name] = (
+                        int(answer)
+                        if isinstance(effective_default, int)
+                        else float(answer)
+                    )
                 else:
                     collected[name] = effective_default
 
             elif isinstance(effective_default, (list, tuple, dict)):
+
                 def validate_collection(text):
                     if not text:
                         return True  # Allow empty for default
                     try:
                         import ast
+
                         ast.literal_eval(text)
                         return True
                     except (ValueError, SyntaxError):
-                        return "Please enter a valid Python literal (list, tuple, or dict)"
+                        return (
+                            "Please enter a valid Python literal (list, tuple, or dict)"
+                        )
 
                 answer = questionary.text(
                     message,
                     default=str(effective_default),
                     validate=validate_collection,
-                    style=custom_style
+                    style=custom_style,
                 ).ask()
 
                 if answer:
                     import ast
+
                     parsed = ast.literal_eval(answer)
                     # Convert to original type
                     if isinstance(effective_default, tuple):
-                        collected[name] = tuple(parsed) if isinstance(parsed, (list, tuple)) else parsed
+                        collected[name] = (
+                            tuple(parsed)
+                            if isinstance(parsed, (list, tuple))
+                            else parsed
+                        )
                     else:
                         collected[name] = parsed
                 else:
@@ -352,8 +380,10 @@ class InteractiveCollector:
                 # String or other types
                 answer = questionary.text(
                     message,
-                    default=str(effective_default) if effective_default is not None else "",
-                    style=custom_style
+                    default=str(effective_default)
+                    if effective_default is not None
+                    else "",
+                    style=custom_style,
                 ).ask()
                 collected[name] = answer if answer else effective_default
 
@@ -411,7 +441,7 @@ class InteractiveCollector:
             # Parse input based on default type
             if isinstance(effective_default, bool):
                 # Parse boolean
-                collected[name] = user_input.lower() in ('true', 't', 'yes', 'y', '1')
+                collected[name] = user_input.lower() in ("true", "t", "yes", "y", "1")
             elif isinstance(effective_default, int):
                 try:
                     collected[name] = int(user_input)
@@ -428,10 +458,15 @@ class InteractiveCollector:
                 # Parse collection types
                 try:
                     import ast
+
                     parsed = ast.literal_eval(user_input)
                     # Convert to original type
                     if isinstance(effective_default, tuple):
-                        collected[name] = tuple(parsed) if isinstance(parsed, (list, tuple)) else parsed
+                        collected[name] = (
+                            tuple(parsed)
+                            if isinstance(parsed, (list, tuple))
+                            else parsed
+                        )
                     else:
                         collected[name] = parsed
                 except (ValueError, SyntaxError) as e:

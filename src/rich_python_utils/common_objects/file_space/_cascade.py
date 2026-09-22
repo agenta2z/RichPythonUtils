@@ -49,7 +49,11 @@ def build_cascade_folders(
             candidate = parent / f"{prefix}{subfolder_canonical}"
             if candidate.is_dir():
                 return candidate
-        return parent / f"{subfolder_prefixes[0]}{subfolder_canonical}" if subfolder_prefixes else parent / subfolder_canonical
+        return (
+            parent / f"{subfolder_prefixes[0]}{subfolder_canonical}"
+            if subfolder_prefixes
+            else parent / subfolder_canonical
+        )
 
     def _add(path: Path) -> None:
         key = str(path)

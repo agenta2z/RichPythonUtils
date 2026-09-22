@@ -23,24 +23,29 @@ Note: This example contains interactive components that require user input.
 """
 
 import time
+
+from rich_python_utils.console_utils.rich_console_utils import (
+    console,
+    cprint_panel,
+    hprint_section_title,
+)
 from rich_python_utils.console_utils.textual_console_utils import (
-    # Prompts
-    prompt_confirm, prompt_choice, prompt_input,
-    # Progress
-    ProgressDashboard,
-    # Data display
-    display_table,
-    # Log viewer
-    LogViewer,
-    # Notifications
-    show_notification,
     # Help
     display_help,
+    # Data display
+    display_table,
     # Metrics
     LiveMetrics,
-)
-from rich_python_utils.console_utils.rich_console_utils import (
-    console, hprint_section_title, cprint_panel
+    # Log viewer
+    LogViewer,
+    # Progress
+    ProgressDashboard,
+    prompt_choice,
+    # Prompts
+    prompt_confirm,
+    prompt_input,
+    # Notifications
+    show_notification,
 )
 
 
@@ -61,7 +66,9 @@ def demo_interactive_prompts():
 
     console.print("[cyan]2. Choice Prompt:[/cyan]")
     console.print("   [dim]# choices = ['Option A', 'Option B', 'Option C'][/dim]")
-    console.print("   [dim]# selected = prompt_choice('Select an option:', choices)[/dim]")
+    console.print(
+        "   [dim]# selected = prompt_choice('Select an option:', choices)[/dim]"
+    )
     console.print("   [dim]# print(f'You selected: {choices[selected]}')[/dim]\n")
 
     # UNCOMMENT TO TRY:
@@ -73,7 +80,9 @@ def demo_interactive_prompts():
     console.print("[cyan]3. Text Input Prompt with Validation:[/cyan]")
     console.print("   [dim]# def validate_email(value):[/dim]")
     console.print("   [dim]#     return '@' in value[/dim]")
-    console.print("   [dim]# email = prompt_input('Enter email:', validator=validate_email)[/dim]\n")
+    console.print(
+        "   [dim]# email = prompt_input('Enter email:', validator=validate_email)[/dim]\n"
+    )
 
     # UNCOMMENT TO TRY:
     # def validate_number(value):
@@ -91,7 +100,9 @@ def demo_interactive_prompts():
     # if number:
     #     console.print(f"You entered: {number}\n")
 
-    console.print("[green]✓ Uncomment the code above to try interactive prompts![/green]\n")
+    console.print(
+        "[green]✓ Uncomment the code above to try interactive prompts![/green]\n"
+    )
 
 
 def demo_notifications():
@@ -101,7 +112,9 @@ def demo_notifications():
     console.print("[bold]Notification examples:[/bold]\n")
 
     console.print("[cyan]Information notification:[/cyan]")
-    show_notification("Task completed successfully!", title="Information", severity="information")
+    show_notification(
+        "Task completed successfully!", title="Information", severity="information"
+    )
 
     console.print("\n[cyan]Warning notification:[/cyan]")
     show_notification("Low disk space detected", title="Warning", severity="warning")
@@ -157,17 +170,18 @@ def demo_data_table():
 
     # Sample data
     data = [
-        ['Alice', 30, 95.5, 'Engineering'],
-        ['Bob', 25, 87.3, 'Marketing'],
-        ['Charlie', 35, 92.1, 'Sales'],
-        ['Diana', 28, 88.9, 'Engineering'],
-        ['Eve', 32, 91.2, 'HR'],
-        ['Frank', 29, 85.7, 'Marketing'],
+        ["Alice", 30, 95.5, "Engineering"],
+        ["Bob", 25, 87.3, "Marketing"],
+        ["Charlie", 35, 92.1, "Sales"],
+        ["Diana", 28, 88.9, "Engineering"],
+        ["Eve", 32, 91.2, "HR"],
+        ["Frank", 29, 85.7, "Marketing"],
     ]
-    columns = ['Name', 'Age', 'Score', 'Department']
+    columns = ["Name", "Age", "Score", "Department"]
 
     console.print("[dim]Sample data (6 rows, 4 columns):[/dim]")
     from rich.table import Table
+
     preview_table = Table(title="Employee Data")
     for col in columns:
         preview_table.add_column(col, style="cyan")
@@ -181,7 +195,9 @@ def demo_data_table():
     # UNCOMMENT TO TRY:
     # display_table(data, columns, title='Employee Data')
 
-    console.print("\n[green]✓ Uncomment to launch interactive table with search & navigation[/green]\n")
+    console.print(
+        "\n[green]✓ Uncomment to launch interactive table with search & navigation[/green]\n"
+    )
 
 
 def demo_progress_dashboard_code():
@@ -190,7 +206,7 @@ def demo_progress_dashboard_code():
 
     console.print("[bold]Progress dashboard example code:[/bold]\n")
 
-    code = '''# Create progress dashboard
+    code = """# Create progress dashboard
 dashboard = ProgressDashboard()
 
 # Add tasks
@@ -205,12 +221,15 @@ dashboard.update_task(task3, completed=10)
 
 # Run the dashboard
 dashboard.run()
-'''
+"""
 
     from rich_python_utils.console_utils.rich_console_utils import print_syntax
-    print_syntax(code, language='python')
 
-    console.print("\n[green]✓ Dashboard tracks multiple concurrent tasks with live updates[/green]\n")
+    print_syntax(code, language="python")
+
+    console.print(
+        "\n[green]✓ Dashboard tracks multiple concurrent tasks with live updates[/green]\n"
+    )
 
 
 def demo_log_viewer_code():
@@ -219,7 +238,7 @@ def demo_log_viewer_code():
 
     console.print("[bold]Log viewer example code:[/bold]\n")
 
-    code = '''# Create log viewer
+    code = """# Create log viewer
 viewer = LogViewer()
 
 # Add log messages (can be called from anywhere)
@@ -231,12 +250,15 @@ viewer.add_log("Task completed successfully")
 
 # Run the viewer (displays logs in real-time)
 viewer.run()
-'''
+"""
 
     from rich_python_utils.console_utils.rich_console_utils import print_syntax
-    print_syntax(code, language='python')
 
-    console.print("\n[green]✓ Log viewer supports auto-scroll and clear operations[/green]\n")
+    print_syntax(code, language="python")
+
+    console.print(
+        "\n[green]✓ Log viewer supports auto-scroll and clear operations[/green]\n"
+    )
 
 
 def demo_live_metrics_code():
@@ -245,7 +267,7 @@ def demo_live_metrics_code():
 
     console.print("[bold]Live metrics example code:[/bold]\n")
 
-    code = '''# Create metrics dashboard
+    code = """# Create metrics dashboard
 metrics = LiveMetrics()
 
 # Update metrics (in your monitoring loop)
@@ -259,10 +281,11 @@ metrics.update_metric("Active Connections", "127")
 # Metrics auto-refresh on updates
 # Run the dashboard
 metrics.run()
-'''
+"""
 
     from rich_python_utils.console_utils.rich_console_utils import print_syntax
-    print_syntax(code, language='python')
+
+    print_syntax(code, language="python")
 
     console.print("\n[green]✓ Metrics update in real-time as values change[/green]\n")
 
@@ -330,7 +353,8 @@ if __name__ == "__main__":
 '''
 
     from rich_python_utils.console_utils.rich_console_utils import print_syntax
-    print_syntax(code, language='python')
+
+    print_syntax(code, language="python")
 
     console.print("\n[green]✓ Complete TUI apps can combine all components![/green]\n")
 
@@ -341,7 +365,7 @@ def demo_practical_workflows():
 
     console.print("[bold]1. Configuration Wizard Workflow:[/bold]\n")
 
-    workflow1 = '''# Interactive configuration wizard
+    workflow1 = """# Interactive configuration wizard
 print("Setting up application configuration...")
 
 # Step 1: Choose environment
@@ -365,10 +389,11 @@ if use_db:
 # Step 4: Confirm and save
 if prompt_confirm("Save configuration?"):
     print("Configuration saved!")
-'''
+"""
 
     from rich_python_utils.console_utils.rich_console_utils import print_syntax
-    print_syntax(workflow1, language='python')
+
+    print_syntax(workflow1, language="python")
 
     console.print("\n[bold]2. Monitoring Dashboard Workflow:[/bold]\n")
 
@@ -395,16 +420,19 @@ async def update_metrics():
 asyncio.run(update_metrics())
 '''
 
-    print_syntax(workflow2, language='python')
+    print_syntax(workflow2, language="python")
 
-    console.print("\n[green]✓ Workflows combine multiple components for complete UX[/green]\n")
+    console.print(
+        "\n[green]✓ Workflows combine multiple components for complete UX[/green]\n"
+    )
 
 
 def demo_best_practices():
     """Show best practices for TUI development."""
     hprint_section_title("Best Practices")
 
-    cprint_panel("""**TUI Development Best Practices:**
+    cprint_panel(
+        """**TUI Development Best Practices:**
 
 1. **User Feedback**
    - Always provide visual feedback for actions
@@ -430,7 +458,10 @@ def demo_best_practices():
    - Use high-contrast colors
    - Provide keyboard alternatives for all actions
    - Include helpful tooltips and labels
-""", title="Best Practices", border_style="cyan")
+""",
+        title="Best Practices",
+        border_style="cyan",
+    )
 
     console.print()
 
@@ -447,39 +478,25 @@ def demo_comparison_with_cli():
     comparison.add_column("CLI (argparse)", style="yellow", width=30)
 
     comparison.add_row(
-        "User Interaction",
-        "Interactive, real-time",
-        "Command-line arguments"
+        "User Interaction", "Interactive, real-time", "Command-line arguments"
     )
     comparison.add_row(
-        "Visual Feedback",
-        "Rich UI with colors/borders",
-        "Plain text output"
+        "Visual Feedback", "Rich UI with colors/borders", "Plain text output"
     )
     comparison.add_row(
-        "Data Display",
-        "Tables, panels, dashboards",
-        "Line-by-line text"
+        "Data Display", "Tables, panels, dashboards", "Line-by-line text"
     )
     comparison.add_row(
-        "User Guidance",
-        "Interactive prompts, help",
-        "Help text, man pages"
+        "User Guidance", "Interactive prompts, help", "Help text, man pages"
     )
     comparison.add_row(
-        "Progress Tracking",
-        "Live progress bars",
-        "Percentage text updates"
+        "Progress Tracking", "Live progress bars", "Percentage text updates"
     )
     comparison.add_row(
-        "Error Handling",
-        "In-place error messages",
-        "Error text to stderr"
+        "Error Handling", "In-place error messages", "Error text to stderr"
     )
     comparison.add_row(
-        "Best For",
-        "Interactive apps, dashboards",
-        "Automation, scripting"
+        "Best For", "Interactive apps, dashboards", "Automation, scripting"
     )
 
     console.print(comparison)
@@ -487,9 +504,15 @@ def demo_comparison_with_cli():
 
 
 if __name__ == "__main__":
-    console.print("\n[bold white on magenta]" + " "*80 + "[/]")
-    console.print("[bold white on magenta]" + " "*18 + "TEXTUAL CONSOLE UTILS USAGE EXAMPLES" + " "*26 + "[/]")
-    console.print("[bold white on magenta]" + " "*80 + "[/]")
+    console.print("\n[bold white on magenta]" + " " * 80 + "[/]")
+    console.print(
+        "[bold white on magenta]"
+        + " " * 18
+        + "TEXTUAL CONSOLE UTILS USAGE EXAMPLES"
+        + " " * 26
+        + "[/]"
+    )
+    console.print("[bold white on magenta]" + " " * 80 + "[/]")
 
     # Non-interactive demos
     demo_notifications()
@@ -505,7 +528,9 @@ if __name__ == "__main__":
     demo_comparison_with_cli()
 
     console.print("=" * 80, style="bold green")
-    console.print("[bold green]✓ ALL EXAMPLES COMPLETED![/bold green]", justify="center")
+    console.print(
+        "[bold green]✓ ALL EXAMPLES COMPLETED![/bold green]", justify="center"
+    )
     console.print("=" * 80 + "\n", style="bold green")
 
     console.print("[bold yellow]To try interactive features:[/bold yellow]")

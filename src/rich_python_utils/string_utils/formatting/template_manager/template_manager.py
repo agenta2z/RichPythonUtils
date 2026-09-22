@@ -7,10 +7,13 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Iterable,
     Iterator,
     List,
     Mapping,
     Optional,
+    Sequence,
+    Tuple,
     TYPE_CHECKING,
     Union,
 )
@@ -463,9 +466,7 @@ class TemplateManager:
         if self.templates and isinstance(self.templates, dict):
             if self.default_template_name in self.templates:
                 if not self.default_template:
-                    self.default_template = self.templates[
-                        self.default_template_name
-                    ]
+                    self.default_template = self.templates[self.default_template_name]
                 del self.templates[self.default_template_name]
 
         if not self.default_template and not self.templates:
@@ -476,17 +477,27 @@ class TemplateManager:
         # Only created when filesystem roots exist (not for in-memory dict templates).
         from rich_python_utils.common_objects.file_space import FileSpaceManager
 
-        self._file_space = FileSpaceManager(
-            roots=self._original_templates_paths,
-            reserved_subfolder_canonical="variables",
-            reserved_subfolder_prefixes=("_", "."),
-            file_extensions=_VARIABLE_FILE_EXTENSIONS,
-        ) if self._original_templates_paths else None
+        self._file_space = (
+            FileSpaceManager(
+                roots=self._original_templates_paths,
+                reserved_subfolder_canonical="variables",
+                reserved_subfolder_prefixes=("_", "."),
+                file_extensions=_VARIABLE_FILE_EXTENSIONS,
+            )
+            if self._original_templates_paths
+            else None
+        )
 
         # Initialize predefined_variables handling
         self._variable_loader = None
         self._variable_loaders_by_root: Dict = {}
         self._static_predefined_vars = None
+
+        # Per-inferencer variable-extension state. Empty on every base manager
+        # (so the extension-inactive path is byte-identical); populated only on
+        # the immutable fork returned by with_variable_extensions().
+        self._variable_extension_roots: List[Path] = []
+        self._variable_extension_disabled_keys: frozenset = frozenset()
 
         # Auto-init variable loaders whenever template roots contain _variables/
         # or .variables.yaml, regardless of predefined_variables flag.
@@ -641,6 +652,57 @@ class TemplateManager:
 
         return _copy
 
+    def with_variable_extensions(
+        self,
+        roots: Sequence[Union[str, Path]],
+        *,
+        disabled_keys: Iterable[str] = (),
+    ) -> "TemplateManager":
+        """Return an immutable fork that resolves variables from *roots* first.
+
+        Each path in *roots* is a per-inferencer directory whose ``_variables/``
+        tree shadows -- or, via ``{{ __super__ }}``, composes against -- the
+        shared base variables, but **only** on the returned manager. The source
+        manager is never mutated, so one inferencer's extensions cannot leak to
+        a sibling that shares this base manager.
+
+        Both variable-cascade subsystems are made extension-aware: the
+        multi-root file space (explicit ``load_variables`` and the Pass-2
+        re-read) is rebuilt with the extension roots first, and a per-root
+        loader is registered for each (the automatic ``__call__`` path). The
+        ordered roots are also threaded into the resolver so ``{{ __super__ }}``
+        can walk extension -> base.
+
+        Args:
+            roots: Extension roots, most-derived first (MRO order). Empty ->
+                the source manager is returned unchanged (identity fork).
+            disabled_keys: Variable keys (e.g. ``"notes.large_file_writing"``)
+                for which the extension roots are skipped (base-only).
+
+        Returns:
+            A copy-on-write fork, or ``self`` when *roots* is empty.
+        """
+        ext = [Path(r).resolve() for r in roots]
+        if not ext:
+            return self
+
+        from rich_python_utils.common_objects.file_space import FileSpaceManager
+
+        base_roots = list(self._original_templates_paths or [])
+        fork: "TemplateManager" = copy.copy(self)
+        fork._file_space = FileSpaceManager(
+            roots=[*(str(r) for r in ext), *base_roots],
+            reserved_subfolder_canonical="variables",
+            reserved_subfolder_prefixes=("_", "."),
+            file_extensions=_VARIABLE_FILE_EXTENSIONS,
+        )
+        fork._variable_loaders_by_root = dict(self._variable_loaders_by_root)
+        for root in ext:
+            fork._add_variable_loader_for_root(str(root))
+        fork._variable_extension_roots = ext
+        fork._variable_extension_disabled_keys = frozenset(disabled_keys)
+        return fork
+
     @property
     def template_roots(self) -> List[str]:
         """Return a copy of the original template source paths (read-only)."""
@@ -685,7 +747,11 @@ class TemplateManager:
             for cascade_path in cascade_paths:
                 for path_variant in possible_paths:
                     folder = cascade_path / path_variant
-                    hit = self._file_space.find_in_folder(folder, version) if self._file_space else None
+                    hit = (
+                        self._file_space.find_in_folder(folder, version)
+                        if self._file_space
+                        else None
+                    )
                     if hit is not None:
                         try:
                             return hit.read_text(encoding=self.template_encoding)
@@ -749,11 +815,38 @@ class TemplateManager:
         best_root = None
         for root in self._variable_loaders_by_root:
             rp = str(Path(root).resolve())
-            if fp.startswith(rp) and (
-                best_root is None or len(root) > len(best_root)
-            ):
+            if fp.startswith(rp) and (best_root is None or len(root) > len(best_root)):
                 best_root = root
         return self._variable_loaders_by_root.get(best_root) if best_root else None
+
+    def _compose_context(
+        self, var_dir: str, file_path: Path
+    ) -> Tuple[Optional[Any], List[str], Optional[List[Path]], Optional[frozenset]]:
+        """Pick the loader + resolver arguments for composing a found file.
+
+        Extension-inactive -> historical arguments (owning loader, empty
+        stack, no extra roots) so composition is byte-identical. Extension-
+        active -> seed the parent key so ``{{ __super__ }}`` has a key to
+        super, and supply the ordered extension roots; a file found *under* an
+        extension root is composed with the base loader so the ``[ext, base]``
+        cascade lets super reach the shadowed base value.
+        """
+        ext_roots = self._variable_extension_roots
+        if not ext_roots:
+            return (self._loader_for_path(file_path), [], None, None)
+        fp = file_path.resolve()
+        under_ext = any(fp.is_relative_to(root) for root in ext_roots)
+        loader = (
+            (self._variable_loader or self._loader_for_path(file_path))
+            if under_ext
+            else self._loader_for_path(file_path)
+        )
+        return (
+            loader,
+            [var_dir],
+            list(ext_roots),
+            self._variable_extension_disabled_keys or None,
+        )
 
     def load_variables(
         self,
@@ -822,7 +915,9 @@ class TemplateManager:
                 var_dir, version, root_space, tmpl_type, master_version
             )
             if content is not None and file_path is not None:
-                loader = self._loader_for_path(file_path)
+                loader, seed_stack, ext_roots, skip_keys = self._compose_context(
+                    var_dir, file_path
+                )
                 if loader is not None:
                     try:
                         content = loader._resolve_content(
@@ -830,8 +925,11 @@ class TemplateManager:
                             variable_root_space=root_space,
                             variable_type=tmpl_type,
                             version=version,
-                            resolution_stack=[],
+                            resolution_stack=seed_stack,
                             current_file_path=file_path,
+                            extra_roots=ext_roots,
+                            extra_roots_skip_keys=skip_keys,
+                            skip_file_paths=None,
                         )
                     except Exception:
                         pass  # degrade gracefully; return raw content
@@ -1065,7 +1163,11 @@ class TemplateManager:
                 main_space_key
             )
             if master_version:
-                mv_chain = master_version if isinstance(master_version, list) else [master_version]
+                mv_chain = (
+                    master_version
+                    if isinstance(master_version, list)
+                    else [master_version]
+                )
                 for mv in mv_chain:
                     mv_space_key = (
                         f"{resolved_space_key}{self.template_key_parts_sep}{mv}"
@@ -1421,7 +1523,11 @@ class TemplateManager:
                             raw_content = raw_path.read_text(
                                 encoding=self.template_encoding
                             )
-                            inner_vars = set(extractor(raw_content)) if extractor(raw_content) else set()
+                            inner_vars = (
+                                set(extractor(raw_content))
+                                if extractor(raw_content)
+                                else set()
+                            )
                             if inner_vars:
                                 if inner_vars <= set(resolved.keys()):
                                     try:
@@ -1432,9 +1538,7 @@ class TemplateManager:
                                         pass
                                 elif extractor(subval):
                                     try:
-                                        val[subkey] = formatter(
-                                            subval, feed=resolved
-                                        )
+                                        val[subkey] = formatter(subval, feed=resolved)
                                     except Exception:
                                         pass
                             break
@@ -1917,7 +2021,11 @@ class TemplateManager:
                 main_space_key
             )
             if master_version:
-                mv_chain = master_version if isinstance(master_version, list) else [master_version]
+                mv_chain = (
+                    master_version
+                    if isinstance(master_version, list)
+                    else [master_version]
+                )
                 for mv in mv_chain:
                     mv_space_key = (
                         f"{resolved_space_key}{self.template_key_parts_sep}{mv}"
@@ -2118,6 +2226,9 @@ class TemplateManager:
                         version=self.template_version,
                         master_version=master_version,
                         skip_vars=_skip,
+                        extra_roots=self._variable_extension_roots or None,
+                        extra_roots_skip_keys=self._variable_extension_disabled_keys
+                        or None,
                     )
                     # Also include YAML sidecar variables (loaded via load_yaml_sidecar).
                     # These have lower priority than file-based resolved vars.
@@ -2157,9 +2268,7 @@ class TemplateManager:
                         and self._variable_loaders_by_root
                     ):
                         try:
-                            extractor = loader._get_variable_extractor(
-                                file_path=None
-                            )
+                            extractor = loader._get_variable_extractor(file_path=None)
                         except Exception:  # pragma: no cover — defensive
                             extractor = None
                         var_names: set = set()
@@ -2178,17 +2287,17 @@ class TemplateManager:
                         # via the loader's internals. First version-match wins.
                         if self.template_version:
                             for var_name in var_names:
-                                priority_value = (
-                                    self._find_version_only_across_roots(
-                                        var_name=var_name,
-                                        version=self.template_version,
-                                        root_space=_orig_root_space or "",
-                                        type_=_orig_type or "main",
-                                    )
+                                priority_value = self._find_version_only_across_roots(
+                                    var_name=var_name,
+                                    version=self.template_version,
+                                    root_space=_orig_root_space or "",
+                                    type_=_orig_type or "main",
                                 )
                                 if priority_value is not None:
                                     _set_nested_key(
-                                        predefined_vars, var_name, priority_value,
+                                        predefined_vars,
+                                        var_name,
+                                        priority_value,
                                     )
 
                         # Mechanism (B): fill keys still missing via
@@ -2218,20 +2327,22 @@ class TemplateManager:
                                     if already_set:
                                         continue
                                 fallback = self._cascade_load_variable(
-                                    var_name, _fb_version,
-                                    _fb_space, _fb_type,
+                                    var_name,
+                                    _fb_version,
+                                    _fb_space,
+                                    _fb_type,
                                     master_version,
                                 )
                                 if fallback is not None:
                                     _set_nested_key(
-                                        predefined_vars, var_name, fallback,
+                                        predefined_vars,
+                                        var_name,
+                                        fallback,
                                     )
 
                         # Yaml sidecar variables from other roots fill gaps.
                         for tmpl_path in self._original_templates_paths:
-                            other_loader = self._variable_loaders_by_root.get(
-                                tmpl_path
-                            )
+                            other_loader = self._variable_loaders_by_root.get(tmpl_path)
                             if other_loader is None or other_loader is loader:
                                 continue
                             other_yaml_vars = other_loader.get_all_variables(
@@ -2240,7 +2351,10 @@ class TemplateManager:
                             )
                             for k, v in other_yaml_vars.items():
                                 _set_nested_key(
-                                    predefined_vars, k, v, overwrite=False,
+                                    predefined_vars,
+                                    k,
+                                    v,
+                                    overwrite=False,
                                 )
             elif self._static_predefined_vars is not None:
                 predefined_vars = dict(self._static_predefined_vars)

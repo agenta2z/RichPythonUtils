@@ -96,5 +96,3 @@ def args_to_data_class(args, data_class_type: Type, arg_prefix: str = None, **kw
         elif _field_name in kwargs:
             data_class_fields[_field_name] = kwargs[_field_name]
     return data_class_type(**data_class_fields)
-
-

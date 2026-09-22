@@ -6,7 +6,7 @@ and ``jsonfy``/``write_json`` to extract fields or typed objects into separate
 artifact files during serialization.
 """
 
-from typing import Type, Union, Sequence, Optional, Callable, List
+from typing import Callable, List, Optional, Sequence, Type, Union
 
 from rich_python_utils.common_utils.map_helper import obj_walk_through
 from rich_python_utils.path_utils.common import resolve_ext
@@ -21,9 +21,12 @@ class PartsKeyPath:
         alias: Name alias used in the output filename instead of the key path.
         subfolder: Per-entry subdirectory between parts_subfolder and file_stem.
     """
-    __slots__ = ('key', 'ext', 'alias', 'subfolder')
 
-    def __init__(self, key: str, ext: str = None, alias: str = None, subfolder: str = None):
+    __slots__ = ("key", "ext", "alias", "subfolder")
+
+    def __init__(
+        self, key: str, ext: str = None, alias: str = None, subfolder: str = None
+    ):
         self.key = key
         self.ext = ext
         self.alias = alias
@@ -32,12 +35,12 @@ class PartsKeyPath:
     def __repr__(self):
         fields = [repr(self.key)]
         if self.ext is not None:
-            fields.append(f'ext={self.ext!r}')
+            fields.append(f"ext={self.ext!r}")
         if self.alias is not None:
-            fields.append(f'alias={self.alias!r}')
+            fields.append(f"alias={self.alias!r}")
         if self.subfolder is not None:
-            fields.append(f'subfolder={self.subfolder!r}')
-        return f'PartsKeyPath({", ".join(fields)})'
+            fields.append(f"subfolder={self.subfolder!r}")
+        return f"PartsKeyPath({', '.join(fields)})"
 
 
 def artifact_field(
@@ -69,7 +72,7 @@ def artifact_field(
     """
 
     def decorator(cls):
-        if '__artifacts__' not in cls.__dict__:
+        if "__artifacts__" not in cls.__dict__:
             cls.__artifacts__ = []
         cls.__artifacts__.append(
             PartsKeyPath(key=key, ext=resolve_ext(type), alias=alias, subfolder=group)
@@ -113,12 +116,14 @@ def artifact_type(
     def decorator(cls):
         if "__artifact_types__" not in cls.__dict__:
             cls.__artifact_types__ = []
-        cls.__artifact_types__.append({
-            "target_type": target_type,
-            "ext": resolve_ext(type),
-            "alias": alias,
-            "subfolder": group,
-        })
+        cls.__artifact_types__.append(
+            {
+                "target_type": target_type,
+                "ext": resolve_ext(type),
+                "alias": alias,
+                "subfolder": group,
+            }
+        )
         return cls
 
     return decorator
@@ -167,7 +172,7 @@ def get_key_paths_for_artifacts(
             _collect_artifacts_recursive(cls, result)
     else:
         for cls in classes:
-            result.extend(cls.__dict__.get('__artifacts__', []))
+            result.extend(cls.__dict__.get("__artifacts__", []))
     if groups is not None:
         if isinstance(groups, str):
             groups = (groups,)
@@ -185,7 +190,7 @@ def _collect_artifacts_recursive(cls: Type, result: List[PartsKeyPath]) -> None:
     covers that subtree).
     """
     # Direct artifacts from the root class
-    direct = cls.__dict__.get('__artifacts__', [])
+    direct = cls.__dict__.get("__artifacts__", [])
     result.extend(direct)
 
     # Artifact keys discovered so far — used by should_recurse to prune
@@ -200,14 +205,16 @@ def _collect_artifacts_recursive(cls: Type, result: List[PartsKeyPath]) -> None:
         # Skip nodes that are themselves artifacts on their parent
         if path_tuple in artifact_keys:
             continue
-        if isinstance(field_type, type) and hasattr(field_type, '__artifacts__'):
-            prefix = '.'.join(path)
+        if isinstance(field_type, type) and hasattr(field_type, "__artifacts__"):
+            prefix = ".".join(path)
             for entry in field_type.__artifacts__:
-                result.append(PartsKeyPath(
-                    key=f'{prefix}.{entry.key}',
-                    ext=entry.ext,
-                    alias=entry.alias,
-                    subfolder=entry.subfolder,
-                ))
+                result.append(
+                    PartsKeyPath(
+                        key=f"{prefix}.{entry.key}",
+                        ext=entry.ext,
+                        alias=entry.alias,
+                        subfolder=entry.subfolder,
+                    )
+                )
                 # Mark child artifact so its subtree is pruned too
                 artifact_keys.add(path_tuple + (entry.key,))

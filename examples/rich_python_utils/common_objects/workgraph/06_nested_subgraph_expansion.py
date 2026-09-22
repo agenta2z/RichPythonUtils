@@ -18,6 +18,7 @@ graph's max_expansion_depth, or the nested expansion will be rejected.
 
 Run: python 06_nested_subgraph_expansion.py
 """
+
 from __future__ import annotations
 
 import os
@@ -30,20 +31,20 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from resolve_path import resolve_path
+
 resolve_path()
 
-from rich_python_utils.common_objects.workflow import (
-    GraphExpansionResult, SubgraphSpec,
-)
-from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode, WorkGraph
+from rich_python_utils.common_objects.workflow import GraphExpansionResult, SubgraphSpec
 from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
     ResultPassDownMode,
 )
+from rich_python_utils.common_objects.workflow.workgraph import WorkGraph, WorkGraphNode
 
 
 # =============================================================
 # CORE CODE
 # =============================================================
+
 
 class SavingNode(WorkGraphNode):
     def __init__(self, save_dir=None, **kwargs):
@@ -57,7 +58,9 @@ class SavingNode(WorkGraphNode):
 
 def _make(name, fn, save_dir):
     return SavingNode(
-        name=name, value=fn, save_dir=save_dir,
+        name=name,
+        value=fn,
+        save_dir=save_dir,
         result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
     )
 
@@ -81,7 +84,7 @@ def build_graph(save_dir):
     outer = _make("outer", outer_fn, save_dir)
     return WorkGraph(
         start_nodes=[outer],
-        max_expansion_depth=3,              # allows two levels of nesting
+        max_expansion_depth=3,  # allows two levels of nesting
         max_total_nodes=50,
     ), outer
 
@@ -89,6 +92,7 @@ def build_graph(save_dir):
 # =============================================================
 # DRIVER
 # =============================================================
+
 
 def main():
     tmp = Path(tempfile.mkdtemp(prefix="wg_example06_"))
@@ -113,6 +117,7 @@ def main():
 # =============================================================
 # NARRATION
 # =============================================================
+
 
 def banner(text):
     print(f"\n{'=' * 60}\n  {text}\n{'=' * 60}")

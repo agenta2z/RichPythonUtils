@@ -23,7 +23,14 @@ from rich_python_utils.common_objects.variable_manager.exceptions import (
     AmbiguousVariableError,
     CircularReferenceError,
     MaxDepthExceededError,
+    SuperRefError,
 )
+
+
+# Reserved variable name: inside a variable file, ``{{ __super__ }}`` resolves to
+# the same key one cascade level down (the value this file shadows), enabling
+# compose-on-override (append / prepend / wrap). Never a valid user variable.
+SUPER_REF_TOKEN = "__super__"
 
 
 class KeyDiscoveryMode(Enum):
@@ -243,6 +250,8 @@ class FileBasedVariableManager(VariableManager):
         version: str = "",
         master_version: Optional[str] = None,
         skip_vars: Optional[set] = None,
+        extra_roots: Optional[List[Path]] = None,
+        extra_roots_skip_keys: Optional[Set[str]] = None,
     ) -> Dict[str, Any]:
         """Auto-detect and resolve all variables from content.
 
@@ -260,6 +269,12 @@ class FileBasedVariableManager(VariableManager):
                 falling back to the flat path.
             skip_vars: Variable names to skip (already resolved with
                 correct per-variable versions by load_variables).
+            extra_roots: Extra variable roots (per-inferencer extensions),
+                highest-priority first; prepended to every cascade so an
+                extension file shadows the base and ``{{ __super__ }}`` can
+                reach the shadowed value. ``None`` -> no-op (base only).
+            extra_roots_skip_keys: Keys opted out of ``extra_roots``
+                (base-only resolution for those keys).
 
         Returns:
             Dictionary mapping variable names to resolved content.
@@ -311,6 +326,8 @@ class FileBasedVariableManager(VariableManager):
                     resolution_stack=[],
                     current_level_path=None,
                     master_version=master_version,
+                    extra_roots=extra_roots,
+                    extra_roots_skip_keys=extra_roots_skip_keys,
                 )
 
                 if resolved is not None:
@@ -335,6 +352,8 @@ class FileBasedVariableManager(VariableManager):
                     resolution_stack=[],
                     current_level_path=None,
                     master_version=master_version,
+                    extra_roots=extra_roots,
+                    extra_roots_skip_keys=extra_roots_skip_keys,
                 )
 
                 if resolved is not None:
@@ -524,6 +543,7 @@ class FileBasedVariableManager(VariableManager):
         variable_type: str,
         scope: Optional[str] = None,
         current_level_path: Optional[Path] = None,
+        extra_roots: Optional[List[Path]] = None,
     ) -> List[Path]:
         """Get the cascade paths for variable resolution.
 
@@ -532,6 +552,8 @@ class FileBasedVariableManager(VariableManager):
             variable_type: Variable type (e.g., "main")
             scope: Scope modifier (None for cascade, "^" for global, "." for current)
             current_level_path: Path of the file containing the reference (for "." scope)
+            extra_roots: Extra roots to prepend (per-inferencer extensions),
+                most-derived first. None -> base cascade only (unchanged).
 
         Returns:
             List of paths to check, in priority order
@@ -545,8 +567,10 @@ class FileBasedVariableManager(VariableManager):
             return parent
 
         if scope == "^":
-            # Global only
-            return [get_vars_path(self.base_path)]
+            # Global only (extension globals win first, then base)
+            return [
+                get_vars_path(root) for root in [*(extra_roots or []), self.base_path]
+            ]
 
         if scope == ".":
             # Current level only
@@ -567,15 +591,18 @@ class FileBasedVariableManager(VariableManager):
                 return [get_vars_path(self.base_path / variable_root_space)]
             return [get_vars_path(self.base_path)]
 
-        # Default: cascade (variable_type -> variable_root_space -> global -> cross-space)
+        # Default: cascade (variable_type -> variable_root_space -> global ->
+        # cross-space), with each extension root's FULL sub-cascade prepended
+        # ahead of the base root's, in extra_roots order (most-derived first).
+        # Prepending the full sub-cascade guarantees an extension's
+        # global-level file wins over a base file at a more-specific level.
         paths = []
-        if variable_type and variable_root_space:
-            paths.append(
-                get_vars_path(self.base_path / variable_root_space / variable_type)
-            )
-        if variable_root_space:
-            paths.append(get_vars_path(self.base_path / variable_root_space))
-        paths.append(get_vars_path(self.base_path))
+        for root in [*(extra_roots or []), self.base_path]:
+            if variable_type and variable_root_space:
+                paths.append(get_vars_path(root / variable_root_space / variable_type))
+            if variable_root_space:
+                paths.append(get_vars_path(root / variable_root_space))
+            paths.append(get_vars_path(root))
 
         # Cross-space fallback: check a parent/shared root directory
         cross_space = self.config.cross_space_root
@@ -631,14 +658,24 @@ class FileBasedVariableManager(VariableManager):
             return {}
         if not isinstance(config_data, dict):
             return {}
-        return {
-            str(k): str(v) for k, v in config_data.items() if v is not None
-        }
+        return {str(k): str(v) for k, v in config_data.items() if v is not None}
+
+    def _is_skipped(
+        self, candidate: Path, skip_file_paths: Optional[Set[Path]]
+    ) -> bool:
+        """Return True if ``candidate`` is in the super-ref skip set.
+
+        Comparison is on ``.resolve()``-canonicalized paths so a file
+        presented as a symlink (e.g. Buck runfiles) matches its realpath.
+        The ``.resolve()`` cost is paid only when a skip set is active.
+        """
+        return bool(skip_file_paths) and candidate.resolve() in skip_file_paths
 
     def _find_in_variable_folder(
         self,
         folder: Path,
         name: Optional[str],
+        skip_file_paths: Optional[Set[Path]] = None,
     ) -> Optional[Path]:
         """Find a file inside a single variable folder by name.
 
@@ -664,13 +701,17 @@ class FileBasedVariableManager(VariableManager):
         if self.config.enable_overrides:
             for ext in self.config.file_extensions:
                 override_path = folder / f"{name}{self.config.override_suffix}{ext}"
-                if override_path.is_file():
+                if override_path.is_file() and not self._is_skipped(
+                    override_path, skip_file_paths
+                ):
                     return override_path
 
         # 2. Direct file <name>.<ext>
         for ext in self.config.file_extensions:
             direct_path = folder / f"{name}{ext}"
-            if direct_path.is_file():
+            if direct_path.is_file() and not self._is_skipped(
+                direct_path, skip_file_paths
+            ):
                 return direct_path
 
         # 3. .config.yaml alias map (with path-traversal guard:
@@ -681,7 +722,9 @@ class FileBasedVariableManager(VariableManager):
             if "/" not in alias_value and "\\" not in alias_value:
                 for ext in self.config.file_extensions:
                     alias_path = folder / f"{alias_value}{ext}"
-                    if alias_path.is_file():
+                    if alias_path.is_file() and not self._is_skipped(
+                        alias_path, skip_file_paths
+                    ):
                         return alias_path
 
         return None
@@ -691,6 +734,7 @@ class FileBasedVariableManager(VariableManager):
         variable_name: str,
         cascade_paths: List[Path],
         version: str = "",
+        skip_file_paths: Optional[Set[Path]] = None,
     ) -> Tuple[Optional[Path], Optional[str]]:
         """Find the variable file for a given variable name.
 
@@ -723,7 +767,7 @@ class FileBasedVariableManager(VariableManager):
         """
         if "/" in variable_name:
             return self._find_variable_file_with_slash(
-                variable_name, cascade_paths, version
+                variable_name, cascade_paths, version, skip_file_paths
             )
 
         # Dot-to-slash: treat dots as directory separators
@@ -731,7 +775,7 @@ class FileBasedVariableManager(VariableManager):
         if "." in variable_name:
             slash_name = variable_name.replace(".", "/")
             result = self._find_variable_file_with_slash(
-                slash_name, cascade_paths, version
+                slash_name, cascade_paths, version, skip_file_paths
             )
             if result[0] is not None:
                 return (result[0], variable_name)
@@ -749,7 +793,9 @@ class FileBasedVariableManager(VariableManager):
                             dir_path,
                             self.config.directory_config_filename_patterns,
                         )
-                        if match is not None:
+                        if match is not None and not self._is_skipped(
+                            match, skip_file_paths
+                        ):
                             return (match, variable_name)
 
                 for path_variant in possible_paths:
@@ -763,12 +809,16 @@ class FileBasedVariableManager(VariableManager):
                     for file_variant in versioned_variants:
                         for ext in self.config.file_extensions:
                             file_path = cascade_path / f"{file_variant}{ext}"
-                            if file_path.is_file():
+                            if file_path.is_file() and not self._is_skipped(
+                                file_path, skip_file_paths
+                            ):
                                 return (file_path, variable_name)
 
                     # Phase 1.b (NEW): per-folder version file or .config.yaml alias
                     folder = cascade_path / path_variant
-                    in_folder = self._find_in_variable_folder(folder, version)
+                    in_folder = self._find_in_variable_folder(
+                        folder, version, skip_file_paths
+                    )
                     if in_folder is not None:
                         return (in_folder, variable_name)
 
@@ -776,7 +826,9 @@ class FileBasedVariableManager(VariableManager):
                     folder_subdir = folder / version
                     if folder_subdir.is_dir():
                         resolved = self._resolve_variable_folder(folder_subdir)
-                        if resolved is not None:
+                        if resolved is not None and not self._is_skipped(
+                            resolved, skip_file_paths
+                        ):
                             return (resolved, variable_name)
 
         # ----- PASS 2: default search across all cascade levels -----
@@ -784,7 +836,9 @@ class FileBasedVariableManager(VariableManager):
             for cascade_path in cascade_paths:
                 for path_variant in possible_paths:
                     folder = cascade_path / path_variant
-                    resolved = self._find_in_variable_folder(folder, "default")
+                    resolved = self._find_in_variable_folder(
+                        folder, "default", skip_file_paths
+                    )
                     if resolved is not None:
                         return (resolved, variable_name)
 
@@ -799,7 +853,9 @@ class FileBasedVariableManager(VariableManager):
                         dir_path,
                         self.config.directory_config_filename_patterns,
                     )
-                    if match is not None:
+                    if match is not None and not self._is_skipped(
+                        match, skip_file_paths
+                    ):
                         return (match, variable_name)
 
             for path_variant in possible_paths:
@@ -812,7 +868,9 @@ class FileBasedVariableManager(VariableManager):
                 for file_variant in unversioned_variants:
                     for ext in self.config.file_extensions:
                         file_path = cascade_path / f"{file_variant}{ext}"
-                        if file_path.is_file():
+                        if file_path.is_file() and not self._is_skipped(
+                            file_path, skip_file_paths
+                        ):
                             return (file_path, variable_name)
 
             # Folder-default fallback: if the variable name maps to a
@@ -823,7 +881,9 @@ class FileBasedVariableManager(VariableManager):
             for path_variant in possible_paths:
                 folder = cascade_path / path_variant
                 if folder.is_dir():
-                    resolved = self._find_in_variable_folder(folder, "default")
+                    resolved = self._find_in_variable_folder(
+                        folder, "default", skip_file_paths
+                    )
                     if resolved is not None:
                         return (resolved, variable_name)
 
@@ -834,6 +894,7 @@ class FileBasedVariableManager(VariableManager):
         variable_name: str,
         cascade_paths: List[Path],
         version: str,
+        skip_file_paths: Optional[Set[Path]] = None,
     ) -> Tuple[Optional[Path], Optional[str]]:
         """Two-pass search for variable names containing an explicit slash.
 
@@ -852,25 +913,35 @@ class FileBasedVariableManager(VariableManager):
                 for file_variant in versioned_variants:
                     for ext in self.config.file_extensions:
                         file_path = cascade_path / f"{file_variant}{ext}"
-                        if file_path.exists() and file_path.is_file():
+                        if (
+                            file_path.exists()
+                            and file_path.is_file()
+                            and not self._is_skipped(file_path, skip_file_paths)
+                        ):
                             return (file_path, variable_name)
 
                 folder = cascade_path / variable_name
-                in_folder = self._find_in_variable_folder(folder, version)
+                in_folder = self._find_in_variable_folder(
+                    folder, version, skip_file_paths
+                )
                 if in_folder is not None:
                     return (in_folder, variable_name)
 
                 folder_subdir = folder / version
                 if folder_subdir.is_dir():
                     resolved = self._resolve_variable_folder(folder_subdir)
-                    if resolved is not None:
+                    if resolved is not None and not self._is_skipped(
+                        resolved, skip_file_paths
+                    ):
                         return (resolved, variable_name)
 
         # Pass 2: default search across all cascade levels
         if version:
             for cascade_path in cascade_paths:
                 folder = cascade_path / variable_name
-                resolved = self._find_in_variable_folder(folder, "default")
+                resolved = self._find_in_variable_folder(
+                    folder, "default", skip_file_paths
+                )
                 if resolved is not None:
                     return (resolved, variable_name)
 
@@ -885,13 +956,19 @@ class FileBasedVariableManager(VariableManager):
             for file_variant in unversioned_variants:
                 for ext in self.config.file_extensions:
                     file_path = cascade_path / f"{file_variant}{ext}"
-                    if file_path.exists() and file_path.is_file():
+                    if (
+                        file_path.exists()
+                        and file_path.is_file()
+                        and not self._is_skipped(file_path, skip_file_paths)
+                    ):
                         return (file_path, variable_name)
 
             target_dir = cascade_path / variable_name
             if target_dir.is_dir():
                 resolved = self._resolve_variable_folder(target_dir)
-                if resolved is not None:
+                if resolved is not None and not self._is_skipped(
+                    resolved, skip_file_paths
+                ):
                     return (resolved, variable_name)
 
         return None, None
@@ -949,6 +1026,7 @@ class FileBasedVariableManager(VariableManager):
             if config_file.is_file():
                 try:
                     import yaml
+
                     with open(config_file) as f:
                         config = yaml.safe_load(f) or {}
                     default_variant = config.get("default", "")
@@ -1002,6 +1080,9 @@ class FileBasedVariableManager(VariableManager):
         resolution_stack: List[str],
         current_level_path: Optional[Path] = None,
         master_version: Optional[str] = None,
+        extra_roots: Optional[List[Path]] = None,
+        extra_roots_skip_keys: Optional[Set[str]] = None,
+        skip_file_paths: Optional[Set[Path]] = None,
     ) -> Optional[str]:
         """Resolve a single variable.
 
@@ -1016,6 +1097,11 @@ class FileBasedVariableManager(VariableManager):
             current_level_path: Path of file containing reference (for "." scope)
             master_version: When set, tries ``<var_name>/<master_version>/``
                 subdirectory before the flat path.
+            extra_roots: Extra variable roots (per-inferencer extensions),
+                most-derived first; prepended to the cascade. None -> no-op.
+            extra_roots_skip_keys: Keys opted out of ``extra_roots``.
+            skip_file_paths: Files to skip when matching (used by
+                ``{{ __super__ }}`` to reach the next cascade level down).
 
         Returns:
             Resolved content or None if not found
@@ -1037,9 +1123,21 @@ class FileBasedVariableManager(VariableManager):
                 resolution_stack, self.config.max_recursion_depth
             )
 
+        # Per-key disable: opt a single key out of the extension roots
+        # without disabling the rest (base-only cascade for that key).
+        eff_extra_roots = (
+            []
+            if extra_roots_skip_keys and variable_name in extra_roots_skip_keys
+            else extra_roots
+        )
+
         # Get cascade paths based on scope
         cascade_paths = self._get_cascade_paths(
-            variable_root_space, variable_type, scope, current_level_path
+            variable_root_space,
+            variable_type,
+            scope,
+            current_level_path,
+            extra_roots=eff_extra_roots,
         )
 
         # Sibling-first: for an unscoped, non-slash bare variable name
@@ -1079,16 +1177,23 @@ class FileBasedVariableManager(VariableManager):
                     break
 
         if file_path is None and master_version:
-            mv_chain = master_version if isinstance(master_version, list) else [master_version]
+            mv_chain = (
+                master_version if isinstance(master_version, list) else [master_version]
+            )
             for mv in mv_chain:
                 file_path, _ = self._find_variable_file(
-                    f"{variable_name}/{mv}", cascade_paths, version
+                    f"{variable_name}/{mv}",
+                    cascade_paths,
+                    version,
+                    skip_file_paths=skip_file_paths,
                 )
                 if file_path is not None:
                     break
 
         if file_path is None:
-            file_path, _ = self._find_variable_file(variable_name, cascade_paths, version)
+            file_path, _ = self._find_variable_file(
+                variable_name, cascade_paths, version, skip_file_paths=skip_file_paths
+            )
 
         if file_path is None:
             return "" if is_optional else None
@@ -1109,11 +1214,96 @@ class FileBasedVariableManager(VariableManager):
         # Recursively resolve any variable references in the content
         new_stack = resolution_stack + [variable_name]
         content = self._resolve_content(
-            content, variable_root_space, variable_type, version, new_stack, file_path,
+            content,
+            variable_root_space,
+            variable_type,
+            version,
+            new_stack,
+            file_path,
             master_version=master_version,
+            extra_roots=extra_roots,
+            extra_roots_skip_keys=extra_roots_skip_keys,
+            skip_file_paths=skip_file_paths,
         )
 
         return content
+
+    def _warn_on_duplicate_super(
+        self, content: str, current_file_path: Optional[Path]
+    ) -> None:
+        """Warn if a file has more than one bare ``{{ __super__ }}``.
+
+        Two bare supers each resolve to the identical shadowed value
+        (duplication, not composition) -- an authoring mistake. Warn but
+        still resolve; the shared resolver never hard-fails on this.
+        """
+        bare_supers = [
+            m
+            for m in self.VARIABLE_PATTERN.finditer(content)
+            if m.group(2).strip() == SUPER_REF_TOKEN
+            and m.group(1) is None
+            and m.group(3) is None
+        ]
+        if len(bare_supers) > 1:
+            logger.warning(
+                "Multiple {{ __super__ }} references in %s; each resolves to "
+                "the same shadowed value (duplication, not composition)",
+                current_file_path,
+            )
+
+    def _resolve_super_ref(
+        self,
+        scope: Optional[str],
+        is_optional: bool,
+        variable_root_space: str,
+        variable_type: str,
+        version: str,
+        resolution_stack: List[str],
+        current_file_path: Optional[Path],
+        master_version: Optional[str],
+        extra_roots: Optional[List[Path]],
+        extra_roots_skip_keys: Optional[Set[str]],
+        skip_file_paths: Optional[Set[Path]],
+    ) -> str:
+        """Resolve a ``{{ __super__ }}`` reference (compose-on-override).
+
+        Re-resolves the *current* variable key one cascade level down (the
+        value this file shadows) by re-running resolution with the current
+        file added to ``skip_file_paths``. Author-positioned, this yields
+        append / prepend / wrap composition, and chains across levels.
+        """
+        if scope is not None or is_optional:
+            raise SuperRefError(
+                "scope/optional modifiers are not allowed on the reserved token",
+                str(current_file_path) if current_file_path else None,
+            )
+        if not resolution_stack:
+            logger.warning(
+                "{{ __super__ }} used outside a variable file "
+                "(no parent key); resolving to ''"
+            )
+            return ""
+
+        parent_key = resolution_stack[-1]
+        next_skip: Set[Path] = set(skip_file_paths or ())
+        if current_file_path is not None:
+            next_skip.add(current_file_path.resolve())
+
+        resolved = self._resolve_variable(
+            parent_key,
+            variable_root_space,
+            variable_type,
+            version,
+            scope=None,
+            is_optional=True,
+            resolution_stack=resolution_stack[:-1],
+            current_level_path=None,
+            master_version=master_version,
+            extra_roots=extra_roots,
+            extra_roots_skip_keys=extra_roots_skip_keys,
+            skip_file_paths=next_skip,
+        )
+        return resolved if resolved is not None else ""
 
     def _resolve_content(
         self,
@@ -1124,6 +1314,9 @@ class FileBasedVariableManager(VariableManager):
         resolution_stack: List[str],
         current_file_path: Optional[Path] = None,
         master_version: Optional[str] = None,
+        extra_roots: Optional[List[Path]] = None,
+        extra_roots_skip_keys: Optional[Set[str]] = None,
+        skip_file_paths: Optional[Set[Path]] = None,
     ) -> str:
         """Resolve all variable references in content.
 
@@ -1136,6 +1329,10 @@ class FileBasedVariableManager(VariableManager):
             current_file_path: Path of the file containing the content
             master_version: When set, tries ``<var_name>/<master_version>/``
                 subdirectory before the flat path.
+            extra_roots: Extra variable roots (per-inferencer extensions),
+                most-derived first; prepended to the cascade. None -> no-op.
+            extra_roots_skip_keys: Keys opted out of ``extra_roots``.
+            skip_file_paths: Files to skip (super-ref chain accumulator).
 
         Returns:
             Content with variables resolved
@@ -1148,11 +1345,32 @@ class FileBasedVariableManager(VariableManager):
         )
 
         if use_handlebars_pattern:
+            # Warn (once) if an author placed multiple bare {{ __super__ }} in
+            # one file. Cheap substring gate keeps the non-super hot path fast.
+            if SUPER_REF_TOKEN in content:
+                self._warn_on_duplicate_super(content, current_file_path)
+
             # Use built-in pattern matching for scope modifiers support
             def replace_match(match: re.Match) -> str:
                 scope = match.group(1)  # ^ or . or None
                 var_name = match.group(2)  # variable name
                 is_optional = match.group(3) == "?"
+
+                # Reserved super-ref: compose against the shadowed value.
+                if var_name.strip() == SUPER_REF_TOKEN:
+                    return self._resolve_super_ref(
+                        scope,
+                        is_optional,
+                        variable_root_space,
+                        variable_type,
+                        version,
+                        resolution_stack,
+                        current_file_path,
+                        master_version,
+                        extra_roots,
+                        extra_roots_skip_keys,
+                        skip_file_paths,
+                    )
 
                 resolved = self._resolve_variable(
                     var_name,
@@ -1164,6 +1382,9 @@ class FileBasedVariableManager(VariableManager):
                     resolution_stack,
                     current_file_path,
                     master_version=master_version,
+                    extra_roots=extra_roots,
+                    extra_roots_skip_keys=extra_roots_skip_keys,
+                    skip_file_paths=None,
                 )
 
                 if resolved is not None:
@@ -1206,6 +1427,9 @@ class FileBasedVariableManager(VariableManager):
                     resolution_stack=resolution_stack,
                     current_level_path=current_file_path,
                     master_version=master_version,
+                    extra_roots=extra_roots,
+                    extra_roots_skip_keys=extra_roots_skip_keys,
+                    skip_file_paths=None,
                 )
                 if resolved is not None:
                     resolved_vars[var_name] = resolved
@@ -1282,9 +1506,7 @@ class FileBasedVariableManager(VariableManager):
                 pass
 
             try:
-                from rich_python_utils.string_utils.formatting import (
-                    python_str_format,
-                )
+                from rich_python_utils.string_utils.formatting import python_str_format
 
                 extractors[VariableSyntax.PYTHON_FORMAT] = (
                     python_str_format.extract_variables
@@ -1368,9 +1590,7 @@ class FileBasedVariableManager(VariableManager):
                 pass
 
             try:
-                from rich_python_utils.string_utils.formatting import (
-                    python_str_format,
-                )
+                from rich_python_utils.string_utils.formatting import python_str_format
 
                 formatters[VariableSyntax.PYTHON_FORMAT] = (
                     lambda t, v: python_str_format.format_template(t, v)

@@ -1,5 +1,3 @@
-
-
 """Abstract message handler framework for session-aware services."""
 
 from __future__ import annotations
@@ -36,9 +34,11 @@ class AbstractMessageHandlers(ABC):
             return handler(message)
         elif msg_type not in ("ping", "pong", "heartbeat"):
             import logging as _logging
+
             _logging.getLogger(__name__).warning(
                 "dispatch: no handler for type=%s (available: %s)",
-                msg_type, list(all_handlers.keys()),
+                msg_type,
+                list(all_handlers.keys()),
             )
 
     def _get_standard_handlers(self) -> dict[str, Callable]:

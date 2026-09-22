@@ -40,9 +40,9 @@ Usage:
 
 import json
 import sqlite3
-from typing import Any, Optional, List, Dict
+from typing import Any, Dict, List, Optional
 
-from attr import attrs, attrib
+from attr import attrib, attrs
 
 from .keyvalue_service_base import KeyValueServiceBase
 
@@ -236,9 +236,7 @@ class SQLiteKeyValueService(KeyValueServiceBase):
         Returns:
             List of distinct namespace strings.
         """
-        cursor = self._conn.execute(
-            "SELECT DISTINCT namespace FROM kv_store"
-        )
+        cursor = self._conn.execute("SELECT DISTINCT namespace FROM kv_store")
         return [row[0] for row in cursor.fetchall()]
 
     def get_stats(self, namespace: Optional[str] = None) -> Dict[str, Any]:
@@ -273,9 +271,7 @@ class SQLiteKeyValueService(KeyValueServiceBase):
                 "db_path": self.db_path,
                 "namespace_count": len(all_ns),
                 "total_keys": total_keys,
-                "namespaces": {
-                    ns: self.size(namespace=ns) for ns in all_ns
-                },
+                "namespaces": {ns: self.size(namespace=ns) for ns in all_ns},
             }
 
     def ping(self) -> bool:
@@ -308,7 +304,9 @@ class SQLiteKeyValueService(KeyValueServiceBase):
 
     # ── Optimized batch methods using executemany ──
 
-    def get_many(self, keys: List[str], namespace: Optional[str] = None) -> Dict[str, Any]:
+    def get_many(
+        self, keys: List[str], namespace: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Get multiple values by keys using a single query.
 
@@ -377,11 +375,7 @@ class SQLiteKeyValueService(KeyValueServiceBase):
     def __repr__(self) -> str:
         """String representation of the service."""
         if self._closed:
-            return (
-                f"SQLiteKeyValueService("
-                f"db_path='{self.db_path}', "
-                f"closed=True)"
-            )
+            return f"SQLiteKeyValueService(db_path='{self.db_path}', closed=True)"
         ns_count = len(self.namespaces())
         cursor = self._conn.execute("SELECT COUNT(*) FROM kv_store")
         total_keys = cursor.fetchone()[0]

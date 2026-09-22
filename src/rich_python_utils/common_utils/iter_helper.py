@@ -1,9 +1,23 @@
 import itertools
+import random
 import uuid
 import warnings
-from itertools import zip_longest, chain, product, islice, repeat
-from typing import Iterator, Union, Tuple, List, Type, Iterable, Callable, Optional, Mapping, Sequence, Set, Dict, Any
-import random
+from itertools import chain, islice, product, repeat, zip_longest
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Type,
+    Union,
+)
 
 from rich_python_utils.common_utils.array_helper import split_list
 from rich_python_utils.common_utils.typing_helper import iterable__, sliceable
@@ -11,8 +25,8 @@ from rich_python_utils.common_utils.typing_helper import iterable__, sliceable
 
 # region Essential Iter Helpers
 def _get_non_atom_types(
-        non_atom_types: Union[Tuple[Type, ...], List[Type], Type],
-        always_consider_iterator_as_non_atom: bool = True
+    non_atom_types: Union[Tuple[Type, ...], List[Type], Type],
+    always_consider_iterator_as_non_atom: bool = True,
 ) -> Union[Iterable[Type], Type]:
     """
     Internal function. Used by `iter_`.
@@ -46,11 +60,7 @@ def _get_non_atom_types(
     return non_atom_types
 
 
-def in__(
-        x,
-        collection,
-        atom_types=(str,)
-):
+def in__(x, collection, atom_types=(str,)):
     """
     Checks if an element `x` is in `collection`, treating certain types as atomic.
 
@@ -106,18 +116,20 @@ def in__(
     if collection is None:
         return False
     else:
-        if isinstance(collection, Iterator) or iterable__(collection, atom_types=atom_types):
+        if isinstance(collection, Iterator) or iterable__(
+            collection, atom_types=atom_types
+        ):
             return x in collection
         else:
             return x == collection
 
 
 def iter_(
-        _it,
-        non_atom_types=(list, tuple),
-        infinitely_yield_atom: bool = False,
-        iter_none: bool = False,
-        always_consider_iterator_as_non_atom: bool = True
+    _it,
+    non_atom_types=(list, tuple),
+    infinitely_yield_atom: bool = False,
+    iter_none: bool = False,
+    always_consider_iterator_as_non_atom: bool = True,
 ) -> Iterator:
     """
     Get an iterator for an iterable object, whose type must be one of `non_atom_types`;
@@ -168,8 +180,7 @@ def iter_(
         [(1, 0), (2, 0), (3, 0)]
     """
     non_atom_types = _get_non_atom_types(
-        non_atom_types,
-        always_consider_iterator_as_non_atom
+        non_atom_types, always_consider_iterator_as_non_atom
     )
     if _it is not None:
         if isinstance(_it, non_atom_types):
@@ -188,10 +199,7 @@ def iter_(
 
 
 def iter__(
-        _it,
-        atom_types=(str,),
-        infinitely_yield_atom: bool = False,
-        iter_none: bool = False
+    _it, atom_types=(str,), infinitely_yield_atom: bool = False, iter_none: bool = False
 ) -> Iterator:
     """
     Get an iterator for an iterable object which is not of `atom_types`;
@@ -243,10 +251,10 @@ def iter__(
 
 
 def tuple_(
-        x,
-        size_or_default_values: Union[int, Sequence] = None,
-        non_atom_types=(list, tuple),
-        cutoff: bool = False
+    x,
+    size_or_default_values: Union[int, Sequence] = None,
+    non_atom_types=(list, tuple),
+    cutoff: bool = False,
 ):
     """
     Convert the input into a tuple with a specified size or default values.
@@ -306,12 +314,14 @@ def tuple_(
             if cutoff:
                 return x[:size_or_default_values]
             else:
-                raise ValueError(f'expected maximum tuple length {size_or_default_values}; got {len(x)}')
+                raise ValueError(
+                    f"expected maximum tuple length {size_or_default_values}; got {len(x)}"
+                )
         else:
             return x + (None,) * (size_or_default_values - len(x))
     elif size_or_default_values is None:
         if not isinstance(x, non_atom_types):
-            return x,
+            return (x,)
         elif not isinstance(x, tuple):
             return tuple(x)
         else:
@@ -326,11 +336,15 @@ def tuple_(
             if cutoff:
                 return x[:size_or_default_values]
             else:
-                raise ValueError(f'expected maximum tuple length {size_or_default_values}; got {len(x)}')
+                raise ValueError(
+                    f"expected maximum tuple length {size_or_default_values}; got {len(x)}"
+                )
         else:
-            return x + tuple(size_or_default_values[len(x):])
+            return x + tuple(size_or_default_values[len(x) :])
     else:
-        raise ValueError(f"'defaults' can only be an integer, a Sequence, or None, got '{size_or_default_values}'")
+        raise ValueError(
+            f"'defaults' can only be an integer, a Sequence, or None, got '{size_or_default_values}'"
+        )
 
 
 def dedup_iter(iterable: Iterable, key: Union[str, Callable, None] = None):
@@ -374,6 +388,7 @@ def dedup_iter(iterable: Iterable, key: Union[str, Callable, None] = None):
                     seen.add(x)
     else:
         from rich_python_utils.common_utils import get_
+
         seen = set()
         for item in iterable:
             _key = get_(item, key)
@@ -383,19 +398,19 @@ def dedup_iter(iterable: Iterable, key: Union[str, Callable, None] = None):
 
 
 def update_values(
-        update_func: Callable[[Any], Any],
-        obj: Any,
-        atom_types: Tuple[Type, ...] = (str,),
-        inplace: bool = True,
-        _obj_cache: Optional[Dict[int, Any]] = None
+    update_func: Callable[[Any], Any],
+    obj: Any,
+    atom_types: Tuple[Type, ...] = (str,),
+    inplace: bool = True,
+    _obj_cache: Optional[Dict[int, Any]] = None,
 ) -> Any:
     """
     Recursively iterates through non-atom values in an object and applies an update function.
-    
+
     This function traverses nested data structures (lists, tuples, dicts, sets, etc.) and applies
     the update_func to atomic values (leaf nodes). Non-atomic structures are recursively processed.
     For mutable types (dict, list), updates can be done in-place for better performance.
-    
+
     Args:
         update_func: A callable that takes an atomic value and returns the updated value.
         obj: The object to process. Can be any type including nested structures.
@@ -405,26 +420,26 @@ def update_values(
         inplace: If True, modifies mutable objects (dict, list) in-place for better performance.
                 If False, creates new objects. Defaults to True.
         _obj_cache: Internal parameter to handle circular references. Do not use directly.
-    
+
     Returns:
         The updated object with the same structure as the input, but with atomic values
         transformed by update_func. If inplace=True and obj is mutable, returns the same
         object (modified). Otherwise returns a new object.
-    
+
     Examples:
         # Update all numbers in a nested structure
         >>> update_values(lambda x: x * 2 if isinstance(x, (int, float)) else x, [1, [2, 3], {'a': 4}])
         [2, [4, 6], {'a': 8}]
-        
+
         # Convert all strings to uppercase
         >>> update_values(str.upper, {'name': 'alice', 'items': ['apple', 'banana']})
         {'name': 'ALICE', 'items': ['APPLE', 'BANANA']}
-        
+
         # Update nested dictionaries
         >>> data = {'a': 1, 'b': {'c': 2, 'd': [3, 4]}}
         >>> update_values(lambda x: x + 10 if isinstance(x, int) else x, data)
         {'a': 11, 'b': {'c': 12, 'd': [13, 14]}}
-        
+
         # In-place update (default)
         >>> data = {'a': 1, 'b': [2, 3]}
         >>> result = update_values(lambda x: x * 2 if isinstance(x, int) else x, data)
@@ -432,7 +447,7 @@ def update_values(
         True
         >>> data
         {'a': 2, 'b': [4, 6]}
-        
+
         # Non-in-place update
         >>> data = {'a': 1, 'b': [2, 3]}
         >>> result = update_values(lambda x: x * 2 if isinstance(x, int) else x, data, inplace=False)
@@ -442,28 +457,28 @@ def update_values(
         {'a': 1, 'b': [2, 3]}
         >>> result
         {'a': 2, 'b': [4, 6]}
-        
+
         # Handle tuples (converted to lists by default)
         >>> update_values(lambda x: x * 2 if isinstance(x, int) else x, (1, 2, (3, 4)))
         [2, 4, [6, 8]]
-        
+
         # Handle sets (converted to lists)
         >>> result = update_values(lambda x: x + 1 if isinstance(x, int) else x, {1, 2, 3})
         >>> sorted(result)
         [2, 3, 4]
-        
+
         # Treat strings as atoms (default behavior)
         >>> update_values(str.upper, ['hello', 'world'])
         ['HELLO', 'WORLD']
-        
+
         # Process strings as iterables by excluding from atom_types
         >>> update_values(str.upper, ['hello'], atom_types=())
         [['H', 'E', 'L', 'L', 'O']]
-        
+
         # Handle None values
         >>> update_values(lambda x: 'null' if x is None else x, [1, None, [2, None]])
         [1, 'null', [2, 'null']]
-        
+
         # Complex nested structure
         >>> data = {
         ...     'users': [
@@ -481,79 +496,96 @@ def update_values(
     # Initialize cache for circular reference detection
     if _obj_cache is None:
         _obj_cache = {}
-    
+
     obj_id = id(obj)
-    
+
     # Handle circular references
     if obj_id in _obj_cache:
         return _obj_cache[obj_id]
-    
+
     # Check if obj is an atom type - apply update_func directly
     if obj is None or isinstance(obj, atom_types):
         return update_func(obj)
-    
+
     # Check if obj is a basic immutable type (not iterable in a meaningful way)
     if isinstance(obj, (int, float, bool, complex, bytes)):
         return update_func(obj)
-    
+
     # Special case: single-character strings should be treated as atoms
     # to avoid infinite recursion when atom_types doesn't include str
     if isinstance(obj, str) and len(obj) <= 1:
         return update_func(obj)
-    
+
     # Handle dict types - update in-place if possible
     if isinstance(obj, dict):
         if inplace:
             # Update in-place for better performance
             _obj_cache[obj_id] = obj
-            for key in list(obj.keys()):  # Use list() to avoid RuntimeError during iteration
-                obj[key] = update_values(update_func, obj[key], atom_types, inplace, _obj_cache)
+            for key in list(
+                obj.keys()
+            ):  # Use list() to avoid RuntimeError during iteration
+                obj[key] = update_values(
+                    update_func, obj[key], atom_types, inplace, _obj_cache
+                )
             return obj
         else:
             # Create new dict
             result = {}
             _obj_cache[obj_id] = result
             for key, value in obj.items():
-                result[key] = update_values(update_func, value, atom_types, inplace, _obj_cache)
+                result[key] = update_values(
+                    update_func, value, atom_types, inplace, _obj_cache
+                )
             return result
-    
+
     # Handle other Mapping types (OrderedDict, etc.) - create new since we can't assume mutability
     if isinstance(obj, Mapping):
         result = {}
         _obj_cache[obj_id] = result
         for key, value in obj.items():
-            result[key] = update_values(update_func, value, atom_types, inplace, _obj_cache)
+            result[key] = update_values(
+                update_func, value, atom_types, inplace, _obj_cache
+            )
         return result
-    
+
     # Handle list types - update in-place if possible
     if isinstance(obj, list):
         if inplace:
             # Update in-place for better performance
             _obj_cache[obj_id] = obj
             for i in range(len(obj)):
-                obj[i] = update_values(update_func, obj[i], atom_types, inplace, _obj_cache)
+                obj[i] = update_values(
+                    update_func, obj[i], atom_types, inplace, _obj_cache
+                )
             return obj
         else:
             # Create new list
             result = []
             _obj_cache[obj_id] = result
             for item in obj:
-                result.append(update_values(update_func, item, atom_types, inplace, _obj_cache))
+                result.append(
+                    update_values(update_func, item, atom_types, inplace, _obj_cache)
+                )
             return result
-    
+
     # Handle other Sequence types (tuple) and other iterables (set, etc.) - always create new
-    if isinstance(obj, (Sequence, Set)) or (hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes))):
+    if isinstance(obj, (Sequence, Set)) or (
+        hasattr(obj, "__iter__") and not isinstance(obj, (str, bytes))
+    ):
         result_list = []
         _obj_cache[obj_id] = result_list
         for item in obj:
-            result_list.append(update_values(update_func, item, atom_types, inplace, _obj_cache))
+            result_list.append(
+                update_values(update_func, item, atom_types, inplace, _obj_cache)
+            )
         return result_list
-    
+
     # For any other type, treat as atom and apply update_func
     return update_func(obj)
 
 
 # endregion
+
 
 # region Iterable Information
 def is_homogeneous_iterable(items: Iterable) -> bool:
@@ -627,7 +659,7 @@ def len_(x, non_atom_types=(List, Tuple, Set)):
     """
     if x is None:
         return 0
-    return len(x) if isinstance(x, non_atom_types) and hasattr(x, '__len__') else 1
+    return len(x) if isinstance(x, non_atom_types) and hasattr(x, "__len__") else 1
 
 
 def len__(x, atom_types=(str,)):
@@ -664,7 +696,7 @@ def len__(x, atom_types=(str,)):
     """
     if x is None:
         return 0
-    return 1 if isinstance(x, atom_types) or (not hasattr(x, '__len__')) else len(x)
+    return 1 if isinstance(x, atom_types) or (not hasattr(x, "__len__")) else len(x)
 
 
 def max_len__(x, atom_types=(str,), default=0):
@@ -680,6 +712,7 @@ def min_len__(x, atom_types=(str,), default=0):
 
 
 # endregion
+
 
 # region Zipping Helpers
 def zip_(*iterables, non_atom_types=(list, tuple), iter_none: bool = True):
@@ -715,7 +748,12 @@ def zip_(*iterables, non_atom_types=(list, tuple), iter_none: bool = True):
     if any(isinstance(x, non_atom_types) for x in iterables):
         yield from zip(
             *(
-                iter_(x, non_atom_types=non_atom_types, infinitely_yield_atom=True, iter_none=iter_none)
+                iter_(
+                    x,
+                    non_atom_types=non_atom_types,
+                    infinitely_yield_atom=True,
+                    iter_none=iter_none,
+                )
                 for x in iterables
             )
         )
@@ -758,7 +796,12 @@ def zip__(*iterables, atom_types=(str,), iter_none: bool = True):
     if any(iterable__(x, atom_types=atom_types) for x in iterables):
         yield from zip(
             *(
-                iter__(x, atom_types=atom_types, infinitely_yield_atom=True, iter_none=iter_none)
+                iter__(
+                    x,
+                    atom_types=atom_types,
+                    infinitely_yield_atom=True,
+                    iter_none=iter_none,
+                )
                 for x in iterables
             )
         )
@@ -767,9 +810,9 @@ def zip__(*iterables, atom_types=(str,), iter_none: bool = True):
 
 
 def zip_longest__(
-        *iterables,
-        atom_types=(str,),
-        fill_none_by_previous_values: Union[bool, Tuple[bool], List[bool]] = True
+    *iterables,
+    atom_types=(str,),
+    fill_none_by_previous_values: Union[bool, Tuple[bool], List[bool]] = True,
 ):
     """
     Allows zipping atoms with iterables.
@@ -811,21 +854,21 @@ def zip_longest__(
             for items in zip_obj:
                 _items = tuple(
                     (x if (x is not None or not _fill_none) else y)
-                    for x, y, _fill_none in zip(items, _items, fill_none_by_previous_values)
+                    for x, y, _fill_none in zip(
+                        items, _items, fill_none_by_previous_values
+                    )
                 )
                 yield _items
         elif fill_none_by_previous_values is True:
             for items in zip_obj:
                 _items = tuple(
-                    (x if x is not None else y)
-                    for x, y in zip(items, _items)
+                    (x if x is not None else y) for x, y in zip(items, _items)
                 )
                 yield _items
 
 
 def unzip(
-        tuples: Iterable[Tuple],
-        idx: Optional[Union[int, Iterable[int]]] = None
+    tuples: Iterable[Tuple], idx: Optional[Union[int, Iterable[int]]] = None
 ) -> Union[Tuple, Iterable[Tuple]]:
     """
     Unzips a sequence of tuples to a tuple of sequences.
@@ -853,6 +896,7 @@ def unzip(
 
 # region Product Iterators
 
+
 def product_(*iterables, non_atom_types=(list, tuple, set), ignore_none=False):
     """
     Cartesian product of input iterables like `product`, but any one of `iterables` of `atom_types`
@@ -870,11 +914,18 @@ def product_(*iterables, non_atom_types=(list, tuple, set), ignore_none=False):
     """
     if ignore_none:
         yield from product(
-            *(iter_(x, non_atom_types=non_atom_types) for x in iterables if x is not None)
+            *(
+                iter_(x, non_atom_types=non_atom_types)
+                for x in iterables
+                if x is not None
+            )
         )
     else:
         yield from product(
-            *(iter_(x, non_atom_types=non_atom_types, iter_none=True) for x in iterables)
+            *(
+                iter_(x, non_atom_types=non_atom_types, iter_none=True)
+                for x in iterables
+            )
         )
 
 
@@ -907,6 +958,7 @@ def product__(*iterables, atom_types=(str,), ignore_none=False):
 
 # region Chain Iterators
 
+
 def dedup_chain(*_its: Iterable):
     """Chains multiple iterables, returning each item once in order of first occurrence.
 
@@ -925,15 +977,17 @@ def dedup_chain(*_its: Iterable):
 
 
 def chain__(*_its, atom_types=(str,), iter_none=False):
-    return chain(iter__(_it, atom_types=atom_types, iter_none=iter_none) for _it in _its)
+    return chain(
+        iter__(_it, atom_types=atom_types, iter_none=iter_none) for _it in _its
+    )
 
 
 def flatten_iter(
-        x: Iterable,
-        non_atom_types=(list, tuple),
-        always_consider_iterator_as_non_atom: bool = True,
-        sort: Callable[[Iterable], Iterable] = None,
-        ignore_none: bool = False
+    x: Iterable,
+    non_atom_types=(list, tuple),
+    always_consider_iterator_as_non_atom: bool = True,
+    sort: Callable[[Iterable], Iterable] = None,
+    ignore_none: bool = False,
 ) -> Iterator:
     """
     Flattens a nested iterable (one level deep) into a flat generator, yielding elements one by one.
@@ -985,7 +1039,9 @@ def flatten_iter(
         >>> list(flatten_iter((None, 42), ignore_none=True))
         [42]
     """
-    non_atom_types = _get_non_atom_types(non_atom_types, always_consider_iterator_as_non_atom)
+    non_atom_types = _get_non_atom_types(
+        non_atom_types, always_consider_iterator_as_non_atom
+    )
     if x is None:
         if not ignore_none:
             yield None
@@ -1012,20 +1068,23 @@ def flatten_iter(
 
 
 def concat(
-        x: Iterable,
-        non_atom_types=(list, tuple),
-        always_consider_iterator_as_non_atom: bool = True,
-        sort: Callable[[Iterable], Iterable] = None
+    x: Iterable,
+    non_atom_types=(list, tuple),
+    always_consider_iterator_as_non_atom: bool = True,
+    sort: Callable[[Iterable], Iterable] = None,
 ):
-    return list(flatten_iter(x, non_atom_types, always_consider_iterator_as_non_atom, sort))
+    return list(
+        flatten_iter(x, non_atom_types, always_consider_iterator_as_non_atom, sort)
+    )
 
 
 # endregion
 
+
 # region Group Iterators
 def get_groups(
-        iterable: Iterable[Any],
-        group_key: Union[str, Callable],
+    iterable: Iterable[Any],
+    group_key: Union[str, Callable],
 ) -> List[Union[Any, List]]:
     """
     Groups items in the provided iterable based on a specified key and returns these groups as a list.
@@ -1088,9 +1147,9 @@ def get_groups(
 
 
 def flatten_iter_groups(
-        iterable: Iterable,
-        group_key: Union[str, Callable],
-        sort: Callable[[Iterable], Iterable] = None
+    iterable: Iterable,
+    group_key: Union[str, Callable],
+    sort: Callable[[Iterable], Iterable] = None,
 ) -> Iterator:
     """
     Groups items in the provided iterable based on a specified key and yields these groups.
@@ -1135,6 +1194,7 @@ def flatten_iter_groups(
 
 
 # endregion
+
 
 # region Filter Iterators
 def filter_(_filter, _it):
@@ -1189,6 +1249,7 @@ def filter_tuples_by_head_element(_filter, _it):
 # endregion
 
 # region Extraction Iterators
+
 
 def first(x, cond: Callable = None):
     """
@@ -1276,7 +1337,7 @@ def first__(x, atom_types=str, cond: Callable = None):
         >>> first__('hello')
         'hello'
     """
-    if isinstance(x, atom_types) or (not hasattr(x, '__getitem__')):
+    if isinstance(x, atom_types) or (not hasattr(x, "__getitem__")):
         return x
     elif cond is None:
         for _x in x:
@@ -1378,7 +1439,7 @@ def last__(x, atom_types=(str,), cond: Callable = None):
         >>> last__('hello')
         'hello'
     """
-    if isinstance(x, atom_types) or (not hasattr(x, '__getitem__')):
+    if isinstance(x, atom_types) or (not hasattr(x, "__getitem__")):
         return x
     elif isinstance(x, Sequence):
         for i in range(len(x) - 1, -1, -1):
@@ -1415,7 +1476,9 @@ def head(iterable: Iterable, cond: Callable) -> Iterator:
             break
 
 
-def tail(iterable: Iterable, cond: Callable, keep_first_match: bool = False) -> Iterator:
+def tail(
+    iterable: Iterable, cond: Callable, keep_first_match: bool = False
+) -> Iterator:
     """
     Yields elements from an iterable starting from the element just after a condition is first met.
     Optionally includes the element that satisfies the condition as the first element in the output.
@@ -1455,12 +1518,13 @@ def tail(iterable: Iterable, cond: Callable, keep_first_match: bool = False) -> 
 
 # endregion
 
+
 # region Chunking Iterators
 def chunk_iter(
-        it: Union[Iterator, Iterable],
-        chunk_size: int,
-        item_weight_func: Callable[[Any], int] = None,
-        as_list: bool = False
+    it: Union[Iterator, Iterable],
+    chunk_size: int,
+    item_weight_func: Callable[[Any], int] = None,
+    as_list: bool = False,
 ) -> Union[Iterator[Iterator], Iterator[List]]:
     """
     Returns an iterator that iterates through chunks of the provided iterator or iterable,
@@ -1536,12 +1600,12 @@ def chunk_iter(
 
 
 def chunk_iters(
-        iterables: Iterable[Iterable],
-        chunk_size: int,
-        group_key: Union[str, Callable] = None,
-        group_sort: Callable[[Iterable], Iterable] = None,
-        item_weight_func: Callable[[Any], int] = None,
-        as_list: bool = False
+    iterables: Iterable[Iterable],
+    chunk_size: int,
+    group_key: Union[str, Callable] = None,
+    group_sort: Callable[[Iterable], Iterable] = None,
+    item_weight_func: Callable[[Any], int] = None,
+    as_list: bool = False,
 ) -> Union[Iterator[Iterator], Iterator[List]]:
     """
     Processes multiple iterables by optionally grouping and sorting items within each iterable based on a provided key,
@@ -1613,7 +1677,9 @@ def chunk_iters(
             for group_or_item in grouped_iterable:
                 if isinstance(group_or_item, list):
                     if item_weight_func is not None:
-                        group_or_item_weight = sum(item_weight_func(x) for x in group_or_item)
+                        group_or_item_weight = sum(
+                            item_weight_func(x) for x in group_or_item
+                        )
                     else:
                         group_or_item_weight = len(group_or_item)
 
@@ -1656,11 +1722,12 @@ def chunk_iters(
             chained_iter,
             chunk_size=chunk_size,
             item_weight_func=item_weight_func,
-            as_list=as_list
+            as_list=as_list,
         )
 
 
 # endregion
+
 
 # region Misc
 def get_by_indexes(x, *index):
@@ -1701,10 +1768,7 @@ def shuffle_together(*arrs: Iterable):
 
 
 def split_iter(
-        it: Union[Iterator, Iterable, List],
-        num_splits: int,
-        use_tqdm=False,
-        tqdm_msg=None
+    it: Union[Iterator, Iterable, List], num_splits: int, use_tqdm=False, tqdm_msg=None
 ) -> List[List]:
     """
     Splits the items read from an iterator into a list of lists, where each nested list is a split
@@ -1715,7 +1779,7 @@ def split_iter(
     """
     return split_list(
         list_to_split=it if sliceable(it) else list(tqdm_wrap(it, use_tqdm, tqdm_msg)),
-        num_splits_or_weights=num_splits
+        num_splits_or_weights=num_splits,
     )
 
 
@@ -1736,17 +1800,17 @@ def get_item_if_singleton(x):
     """
     if isinstance(x, Mapping):
         return next(iter(x.values())) if len(x) == 1 else x
-    elif hasattr(x, '__len__'):
+    elif hasattr(x, "__len__"):
         return x[0] if len(x) == 1 else x
     else:
         return x
 
 
 def tqdm_wrap(
-        _it: Union[Iterable, Iterator],
-        use_tqdm: bool,
-        tqdm_msg: str = None,
-        verbose: bool = __debug__
+    _it: Union[Iterable, Iterator],
+    use_tqdm: bool,
+    tqdm_msg: str = None,
+    verbose: bool = __debug__,
 ) -> Union[Iterator, Iterable]:
     """
     Wraps an iterator/iterable in a tadm object to display iteration progress.
@@ -1780,20 +1844,23 @@ def tqdm_wrap(
         print(tqdm_msg)
     return _it
 
+
 # endregion
 
 
 # region Naming Helpers
 
-def with_uuid(it, prefix='', suffix=''):
+
+def with_uuid(it, prefix="", suffix=""):
     yield from ((prefix + str(uuid.uuid4()) + suffix, x) for x in it)
 
 
-def with_names(it, name_format: str = None, name_prefix='', name_suffix=''):
-    if name_format is None or name_format == 'uuid':
+def with_names(it, name_format: str = None, name_prefix="", name_suffix=""):
+    if name_format is None or name_format == "uuid":
         return with_uuid(it=it, prefix=name_prefix, suffix=name_suffix)
     else:
         for i, x in enumerate(it):
             yield name_prefix + name_format.format(i) + name_suffix, x
+
 
 # endregion

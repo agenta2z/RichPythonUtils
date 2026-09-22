@@ -28,12 +28,14 @@ _HAS_NLTK = False
 
 try:
     from wordfreq import word_frequency
+
     _HAS_WORDFREQ = True
 except ImportError:
     word_frequency = None
 
 try:
     from nltk.corpus import words as nltk_words
+
     _HAS_NLTK = True
 except ImportError:
     nltk_words = None
@@ -45,50 +47,211 @@ _NLTK_WORDS_CACHE: Optional[set] = None
 # These get a guaranteed minimum score even if not in word frequency data
 HTML_CSS_VOCABULARY = {
     # Layout & Structure
-    'nav', 'header', 'footer', 'sidebar', 'main', 'section', 'article',
-    'container', 'wrapper', 'content', 'layout', 'grid', 'row', 'col',
-    'column', 'panel', 'card', 'modal', 'popup', 'dropdown', 'menu',
-    'toolbar', 'overlay', 'drawer', 'pane', 'view', 'page',
+    "nav",
+    "header",
+    "footer",
+    "sidebar",
+    "main",
+    "section",
+    "article",
+    "container",
+    "wrapper",
+    "content",
+    "layout",
+    "grid",
+    "row",
+    "col",
+    "column",
+    "panel",
+    "card",
+    "modal",
+    "popup",
+    "dropdown",
+    "menu",
+    "toolbar",
+    "overlay",
+    "drawer",
+    "pane",
+    "view",
+    "page",
     # Navigation
-    'link', 'btn', 'button', 'tab', 'tabs', 'breadcrumb', 'pagination',
-    'prev', 'next', 'back', 'forward', 'home', 'anchor',
+    "link",
+    "btn",
+    "button",
+    "tab",
+    "tabs",
+    "breadcrumb",
+    "pagination",
+    "prev",
+    "next",
+    "back",
+    "forward",
+    "home",
+    "anchor",
     # Form elements
-    'form', 'input', 'textarea', 'select', 'checkbox', 'radio', 'label',
-    'field', 'submit', 'reset', 'search', 'filter', 'query', 'option',
-    'picker', 'datepicker', 'timepicker',
+    "form",
+    "input",
+    "textarea",
+    "select",
+    "checkbox",
+    "radio",
+    "label",
+    "field",
+    "submit",
+    "reset",
+    "search",
+    "filter",
+    "query",
+    "option",
+    "picker",
+    "datepicker",
+    "timepicker",
     # Media
-    'img', 'image', 'icon', 'avatar', 'thumbnail', 'logo', 'banner',
-    'video', 'audio', 'media', 'gallery', 'slider', 'carousel',
-    'photo', 'picture',
+    "img",
+    "image",
+    "icon",
+    "avatar",
+    "thumbnail",
+    "logo",
+    "banner",
+    "video",
+    "audio",
+    "media",
+    "gallery",
+    "slider",
+    "carousel",
+    "photo",
+    "picture",
     # Text
-    'text', 'title', 'heading', 'subtitle', 'description', 'caption',
-    'paragraph', 'list', 'item', 'badge', 'tag', 'chip', 'hint',
-    'placeholder', 'tooltip',
+    "text",
+    "title",
+    "heading",
+    "subtitle",
+    "description",
+    "caption",
+    "paragraph",
+    "list",
+    "item",
+    "badge",
+    "tag",
+    "chip",
+    "hint",
+    "placeholder",
+    "tooltip",
     # Data & Content
-    'table', 'thead', 'tbody', 'tfoot', 'cell', 'data', 'result',
-    'results', 'record', 'entry', 'detail', 'details', 'summary', 'preview',
+    "table",
+    "thead",
+    "tbody",
+    "tfoot",
+    "cell",
+    "data",
+    "result",
+    "results",
+    "record",
+    "entry",
+    "detail",
+    "details",
+    "summary",
+    "preview",
     # Actions
-    'action', 'actions', 'edit', 'delete', 'save', 'cancel', 'close',
-    'open', 'toggle', 'expand', 'collapse', 'show', 'hide', 'add',
-    'remove', 'create', 'update', 'copy', 'paste', 'undo', 'redo',
-    'refresh', 'reload', 'download', 'upload', 'share', 'print',
-    'export', 'import',
+    "action",
+    "actions",
+    "edit",
+    "delete",
+    "save",
+    "cancel",
+    "close",
+    "open",
+    "toggle",
+    "expand",
+    "collapse",
+    "show",
+    "hide",
+    "add",
+    "remove",
+    "create",
+    "update",
+    "copy",
+    "paste",
+    "undo",
+    "redo",
+    "refresh",
+    "reload",
+    "download",
+    "upload",
+    "share",
+    "print",
+    "export",
+    "import",
     # User & Auth
-    'user', 'profile', 'account', 'login', 'logout', 'signup', 'signin',
-    'signout', 'register', 'auth', 'password', 'username', 'email',
+    "user",
+    "profile",
+    "account",
+    "login",
+    "logout",
+    "signup",
+    "signin",
+    "signout",
+    "register",
+    "auth",
+    "password",
+    "username",
+    "email",
     # Notifications
-    'notification', 'notifications', 'alert', 'toast', 'message',
-    'messages', 'chat', 'inbox', 'bell',
+    "notification",
+    "notifications",
+    "alert",
+    "toast",
+    "message",
+    "messages",
+    "chat",
+    "inbox",
+    "bell",
     # State
-    'active', 'disabled', 'selected', 'checked', 'loading', 'error',
-    'success', 'warning', 'info', 'primary', 'secondary', 'pending',
-    'complete', 'empty', 'readonly',
+    "active",
+    "disabled",
+    "selected",
+    "checked",
+    "loading",
+    "error",
+    "success",
+    "warning",
+    "info",
+    "primary",
+    "secondary",
+    "pending",
+    "complete",
+    "empty",
+    "readonly",
     # Position
-    'top', 'bottom', 'left', 'right', 'center', 'middle', 'start',
-    'end', 'inner', 'outer',
+    "top",
+    "bottom",
+    "left",
+    "right",
+    "center",
+    "middle",
+    "start",
+    "end",
+    "inner",
+    "outer",
     # Common abbreviations
-    'nav', 'btn', 'img', 'src', 'href', 'alt', 'msg', 'err', 'warn',
-    'ctx', 'cfg', 'opt', 'val', 'idx', 'num', 'str', 'len',
+    "nav",
+    "btn",
+    "img",
+    "src",
+    "href",
+    "alt",
+    "msg",
+    "err",
+    "warn",
+    "ctx",
+    "cfg",
+    "opt",
+    "val",
+    "idx",
+    "num",
+    "str",
+    "len",
 }
 
 # Minimum score for HTML/CSS vocabulary words
@@ -123,7 +286,7 @@ def _tokenize(value: str) -> List[str]:
         return []
 
     # First split by common separators (space, dash, underscore)
-    parts = re.split(r'[\s\-_]+', value)
+    parts = re.split(r"[\s\-_]+", value)
 
     # Then split camelCase
     tokens = []
@@ -132,10 +295,7 @@ def _tokenize(value: str) -> List[str]:
             continue
         # Split on camelCase boundaries: 'userName' -> ['user', 'Name']
         # Also handles: 'XMLParser' -> ['XML', 'Parser']
-        camel_parts = re.findall(
-            r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\d|\W|$)|\d+',
-            part
-        )
+        camel_parts = re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\d|\W|$)|\d+", part)
         if camel_parts:
             tokens.extend(camel_parts)
         else:
@@ -189,7 +349,9 @@ def _score_wordfreq(value: str) -> float:
         Float from 0.0 to 1.0 indicating readability
     """
     if not _HAS_WORDFREQ:
-        raise RuntimeError("wordfreq is not installed. Install with: pip install wordfreq")
+        raise RuntimeError(
+            "wordfreq is not installed. Install with: pip install wordfreq"
+        )
 
     tokens = _tokenize(value)
     if not tokens:
@@ -204,14 +366,14 @@ def _score_wordfreq(value: str) -> float:
 
         # 2-char tokens: only count if very common (like 'to', 'in', 'on', 'at', 'is', 'it')
         if len(token) == 2:
-            freq = word_frequency(token.lower(), 'en')
+            freq = word_frequency(token.lower(), "en")
             # Threshold 0.001 includes 'to', 'in', 'on' but excludes 'pj', 'fq'
             if freq < 0.001:
                 scores.append(0.0)
                 continue
 
         token_lower = token.lower()
-        freq = word_frequency(token_lower, 'en')
+        freq = word_frequency(token_lower, "en")
         if freq > 0:
             # Convert frequency to 0-1 score using log scale
             # Common words like 'the' have freq ~0.07 -> score ~1.0
@@ -285,7 +447,7 @@ def _score_nltk(value: str) -> float:
 
 def get_string_readability_score(
     value: str,
-    backend: str = 'auto',
+    backend: str = "auto",
 ) -> float:
     """
     Calculate readability score for a string value.
@@ -322,11 +484,11 @@ def get_string_readability_score(
     if not value or not value.strip():
         return 0.0
 
-    if backend == 'wordfreq':
+    if backend == "wordfreq":
         return _score_wordfreq(value)
-    elif backend == 'nltk':
+    elif backend == "nltk":
         return _score_nltk(value)
-    elif backend == 'auto':
+    elif backend == "auto":
         # Try wordfreq first (preferred)
         if _HAS_WORDFREQ:
             return _score_wordfreq(value)
@@ -339,10 +501,14 @@ def get_string_readability_score(
         # No backend available
         return 0.0
     else:
-        raise ValueError(f"Unknown backend: {backend}. Use 'auto', 'wordfreq', or 'nltk'")
+        raise ValueError(
+            f"Unknown backend: {backend}. Use 'auto', 'wordfreq', or 'nltk'"
+        )
 
 
-def is_readable_string(value: str, threshold: float = 0.3, backend: str = 'auto') -> bool:
+def is_readable_string(
+    value: str, threshold: float = 0.3, backend: str = "auto"
+) -> bool:
     """
     Check if a string is considered readable (above threshold).
 

@@ -6,12 +6,11 @@ import string
 
 import pytest
 from hypothesis import strategies as st
-
-from rich_python_utils.service_utils.keyvalue_service.memory_keyvalue_service import (
-    MemoryKeyValueService,
-)
 from rich_python_utils.service_utils.keyvalue_service.file_keyvalue_service import (
     FileKeyValueService,
+)
+from rich_python_utils.service_utils.keyvalue_service.memory_keyvalue_service import (
+    MemoryKeyValueService,
 )
 from rich_python_utils.service_utils.keyvalue_service.sqlite_keyvalue_service import (
     SQLiteKeyValueService,

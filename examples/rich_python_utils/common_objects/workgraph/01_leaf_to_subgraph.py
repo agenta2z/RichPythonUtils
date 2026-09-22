@@ -12,6 +12,7 @@ Scenario:
 
 Run: python 01_leaf_to_subgraph.py
 """
+
 from __future__ import annotations
 
 import os
@@ -24,23 +25,24 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from resolve_path import resolve_path
+
 resolve_path()
 
-from rich_python_utils.common_objects.workflow import (
-    GraphExpansionResult, SubgraphSpec,
-)
-from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode, WorkGraph
+from rich_python_utils.common_objects.workflow import GraphExpansionResult, SubgraphSpec
 from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
     ResultPassDownMode,
 )
+from rich_python_utils.common_objects.workflow.workgraph import WorkGraph, WorkGraphNode
 
 
 # =============================================================
 # CORE CODE
 # =============================================================
 
+
 class SavingNode(WorkGraphNode):
     """WorkGraphNode subclass that stores results in a directory."""
+
     def __init__(self, save_dir=None, **kwargs):
         super().__init__(**kwargs)
         self._save_dir = save_dir
@@ -69,8 +71,8 @@ def build_graph(save_dir):
         return GraphExpansionResult(
             result=f"{x}|expander",
             subgraph=SubgraphSpec(
-                nodes=[sub_a, sub_b],      # all subgraph nodes
-                entry_nodes=[sub_a],        # only sub_a connects to expander
+                nodes=[sub_a, sub_b],  # all subgraph nodes
+                entry_nodes=[sub_a],  # only sub_a connects to expander
             ),
         )
 
@@ -85,6 +87,7 @@ def build_graph(save_dir):
 # =============================================================
 # DRIVER
 # =============================================================
+
 
 def main():
     tmp = Path(tempfile.mkdtemp(prefix="wg_example01_"))
@@ -103,6 +106,7 @@ def main():
 # =============================================================
 # NARRATION
 # =============================================================
+
 
 def banner(text):
     print(f"\n{'=' * 60}\n  {text}\n{'=' * 60}")

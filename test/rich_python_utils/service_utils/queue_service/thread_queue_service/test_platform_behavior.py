@@ -5,8 +5,8 @@ This script explains why the shared manager approach fails on ALL platforms
 (not just Windows) and documents the fundamental limitation.
 """
 
-import sys
 import multiprocessing as mp
+import sys
 
 print("""
 ================================================================================
@@ -22,9 +22,9 @@ print(f"Platform: {platform}")
 default_method = mp.get_start_method()
 print(f"Default multiprocessing start method: {default_method}")
 
-print("\n" + "="*80)
+print("\n" + "=" * 80)
 print("MULTIPROCESSING START METHODS")
-print("="*80)
+print("=" * 80)
 
 print("""
 There are three start methods for multiprocessing:
@@ -47,9 +47,9 @@ There are three start methods for multiprocessing:
    - Still doesn't properly share Manager connections
 """)
 
-print("\n" + "="*80)
+print("\n" + "=" * 80)
 print("WHY SHARED MANAGER DOESN'T WORK")
-print("="*80)
+print("=" * 80)
 
 print("""
 The fundamental issue is NOT about the start method, but about how
@@ -76,9 +76,9 @@ The shared manager pattern fails on ALL platforms (Windows, Linux, macOS)
 because Manager connections cannot be properly inherited by child processes.
 """)
 
-print("\n" + "="*80)
+print("\n" + "=" * 80)
 print("WHAT DOES WORK")
-print("="*80)
+print("=" * 80)
 
 print("""
 Option 1: Pass Manager explicitly to child processes (LIMITED)
@@ -106,9 +106,9 @@ Option 4: Use threading instead of multiprocessing
 - LIMITATION: GIL limits CPU parallelism in Python
 """)
 
-print("\n" + "="*80)
+print("\n" + "=" * 80)
 print("RECOMMENDATION")
-print("="*80)
+print("=" * 80)
 
 print(f"""
 For this platform ({platform}, start method: {default_method}):
@@ -132,9 +132,9 @@ For threading (single-process, multiple threads):
 - Good for quick prototyping
 """)
 
-print("\n" + "="*80)
+print("\n" + "=" * 80)
 print("TECHNICAL DETAILS")
-print("="*80)
+print("=" * 80)
 
 # Show available start methods
 available_methods = mp.get_all_start_methods()
@@ -143,6 +143,7 @@ print(f"Available start methods on this platform: {available_methods}")
 # Test if Manager can be pickled (it can't)
 try:
     import pickle
+
     manager = mp.Manager()
     pickled = pickle.dumps(manager)
     print("\n[UNEXPECTED] Manager was successfully pickled!")
@@ -161,9 +162,9 @@ try:
 except Exception as e:
     print(f"\n[UNEXPECTED] Manager.Queue proxy cannot be pickled: {type(e).__name__}")
 
-print("\n" + "="*80)
+print("\n" + "=" * 80)
 print("FINAL VERDICT")
-print("="*80)
+print("=" * 80)
 
 print("""
 ThreadQueueService inter-process limitation:
@@ -183,4 +184,4 @@ For your web agent UI integration (separate processes):
 >>> Use RedisQueueService <<<
 """)
 
-print("\n" + "="*80 + "\n")
+print("\n" + "=" * 80 + "\n")

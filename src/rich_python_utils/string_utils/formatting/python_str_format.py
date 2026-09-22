@@ -1,6 +1,6 @@
 import re
 import string
-from typing import Mapping, Callable, Dict, Optional, Any, List, Union, Tuple, Set
+from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Union
 
 from rich_python_utils.common_utils import dict_
 
@@ -17,14 +17,15 @@ def get_common_helpers() -> Dict[str, Any]:
         Dict[str, Any]: Dictionary mapping helper names to values
     """
     from rich_python_utils.datetime_utils.common import (
-        current_date_time_string,
         current_date_string,
-        current_time_string
+        current_date_time_string,
+        current_time_string,
     )
+
     return {
-        'currentDateTime': current_date_time_string(),
-        'currentDate': current_date_string(),
-        'currentTime': current_time_string()
+        "currentDateTime": current_date_time_string(),
+        "currentDate": current_date_string(),
+        "currentTime": current_time_string(),
     }
 
 
@@ -68,17 +69,17 @@ def extract_variables(template: str) -> Set[str]:
 
     try:
         for _, field_name, _, _ in formatter.parse(template):
-            if field_name is not None and field_name != '':
+            if field_name is not None and field_name != "":
                 # Extract the root variable name (before any . or [ accessor)
                 # field_name could be "name", "name.attr", "name[0]", etc.
-                root_name = field_name.split('.')[0].split('[')[0]
+                root_name = field_name.split(".")[0].split("[")[0]
                 # Skip positional arguments (numeric indices)
                 if root_name and not root_name.isdigit():
                     variables.add(root_name)
     except (ValueError, IndexError):
         # If parsing fails, fall back to regex
         # Pattern matches {name}, {name.attr}, {name[0]}, {name:spec}, {name!conv}
-        pattern = r'\{([a-zA-Z_][a-zA-Z0-9_]*)(?:[.\[]|[!:}])'
+        pattern = r"\{([a-zA-Z_][a-zA-Z0-9_]*)(?:[.\[]|[!:}])"
         for match in re.finditer(pattern, template):
             variables.add(match.group(1))
 
@@ -86,9 +87,9 @@ def extract_variables(template: str) -> Set[str]:
 
 
 def compile_template(
-        template: str,
-        return_variables: bool = False,
-        required_variables: Optional[Union[Set[str], List[str]]] = None
+    template: str,
+    return_variables: bool = False,
+    required_variables: Optional[Union[Set[str], List[str]]] = None,
 ) -> Union[str, Tuple[str, Set[str]]]:
     """
     Validate a Python str.format template string and optionally return variables found in it.
@@ -148,7 +149,11 @@ def compile_template(
 
     # Validate required variables if provided
     if required_variables is not None:
-        required_set = set(required_variables) if not isinstance(required_variables, set) else required_variables
+        required_set = (
+            set(required_variables)
+            if not isinstance(required_variables, set)
+            else required_variables
+        )
         missing_variables = required_set - variables_found
 
         if missing_variables:
@@ -163,12 +168,12 @@ def compile_template(
 
 
 def format_template(
-        template: str,
-        feed: Optional[Mapping[str, Any]] = None,
-        post_process: Optional[Callable[[str], str]] = None,
-        helpers: Optional[Mapping[str, Any]] = None,
-        use_builtin_common_helpers: bool = True,
-        **default_feed
+    template: str,
+    feed: Optional[Mapping[str, Any]] = None,
+    post_process: Optional[Callable[[str], str]] = None,
+    helpers: Optional[Mapping[str, Any]] = None,
+    use_builtin_common_helpers: bool = True,
+    **default_feed,
 ) -> str:
     """
     Renders a Python str.format template string with provided context.
@@ -273,9 +278,9 @@ def format_template(
 
 
 def validate_table_and_compile_template(
-        data_frame: Any,
-        prompt: str,
-        get_colnames: Optional[Callable[[Any], List[str]]] = None,
+    data_frame: Any,
+    prompt: str,
+    get_colnames: Optional[Callable[[Any], List[str]]] = None,
 ) -> Tuple[str, Any, List[str], List[str]]:
     """
     Utility function to validate data frame columns against Python str.format template variables
@@ -323,13 +328,17 @@ def validate_table_and_compile_template(
         try:
             columns = get_colnames(data_frame)
         except Exception as e:
-            raise ValueError(f"Failed to get column names using provided function: {str(e)}")
+            raise ValueError(
+                f"Failed to get column names using provided function: {str(e)}"
+            )
     else:
         # Default: assume pandas-like interface
         try:
             columns = list(data_frame.columns)
         except AttributeError:
-            raise ValueError("Data frame does not have .columns attribute. Please provide get_colnames function.")
+            raise ValueError(
+                "Data frame does not have .columns attribute. Please provide get_colnames function."
+            )
 
     # Check if required variables exist as columns in the dataframe
     missing_columns = []

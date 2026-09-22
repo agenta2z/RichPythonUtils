@@ -24,6 +24,7 @@ import shutil
 import tempfile
 
 from resolve_path import resolve_path
+
 resolve_path()
 
 from rich_python_utils.service_utils.keyvalue_service.sqlite_keyvalue_service import (
@@ -83,11 +84,18 @@ def main():
 
         # 4. Batch operations
         reagents = {
-            f"reagent_{i}": {"name": f"Reagent {chr(65+i)}", "purity": 0.95 + i * 0.01, "lot": f"LOT-{i:04d}"}
+            f"reagent_{i}": {
+                "name": f"Reagent {chr(65 + i)}",
+                "purity": 0.95 + i * 0.01,
+                "lot": f"LOT-{i:04d}",
+            }
             for i in range(10)
         }
         svc.put_many(reagents, namespace="chemistry_lab")
-        retrieved = svc.get_many(["reagent_0", "reagent_5", "reagent_9", "missing"], namespace="chemistry_lab")
+        retrieved = svc.get_many(
+            ["reagent_0", "reagent_5", "reagent_9", "missing"],
+            namespace="chemistry_lab",
+        )
         batch_results = {}
         for k, v in retrieved.items():
             batch_results[k] = f"purity={v['purity']}" if v else "not found"
@@ -132,7 +140,9 @@ def main():
 
         print("\n[3] CRUD operations")
         print("-" * 50)
-        print(f"    get('nmr_600')      -> {nmr['model']}, calibrated {nmr['last_calibrated']}")
+        print(
+            f"    get('nmr_600')      -> {nmr['model']}, calibrated {nmr['last_calibrated']}"
+        )
         print(f"    exists('nmr_600')   -> {exists_nmr}")
         print(f"    exists('mass_spec') -> {exists_mass_spec}")
         print(f"    Updated nmr_600 calibration date -> {updated_cal_date}")
@@ -177,4 +187,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n[X] Error: {e}")
         import traceback
+
         traceback.print_exc()

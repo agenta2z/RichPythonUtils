@@ -5,22 +5,26 @@ Covers:
 - Graph reconstruction without seed or registry raises ExpansionReplayError
 - NextNodesSelector precedence when both GER and NNS have conflicting values
 """
+
 import os
 import shutil
 import tempfile
 
 import pytest
-
-from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode, WorkGraph
+from rich_python_utils.common_objects.workflow.common.exceptions import (
+    ExpansionReplayError,
+)
 from rich_python_utils.common_objects.workflow.common.expansion import (
     GraphExpansionResult,
     SubgraphSpec,
 )
-from rich_python_utils.common_objects.workflow.common.exceptions import (
-    ExpansionReplayError,
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
 )
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
-from rich_python_utils.common_objects.workflow.common.worknode_base import NextNodesSelector
+from rich_python_utils.common_objects.workflow.common.worknode_base import (
+    NextNodesSelector,
+)
+from rich_python_utils.common_objects.workflow.workgraph import WorkGraph, WorkGraphNode
 
 
 class _TestNode(WorkGraphNode):
@@ -37,8 +41,11 @@ class _TestNode(WorkGraphNode):
 
 def _make_node(name, fn, save_dir, **kw):
     return _TestNode(
-        name=name, value=fn, save_dir=save_dir,
-        result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg, **kw,
+        name=name,
+        value=fn,
+        save_dir=save_dir,
+        result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
+        **kw,
     )
 
 
@@ -54,7 +61,7 @@ class TestCrossBoundaryCycleDetection:
 
     def test_cross_boundary_cycle_detected_and_rejected(self, save_dir):
         """A cross-boundary cycle through existing topology is rejected.
-        
+
         Setup: root → downstream, downstream → root (existing back-edge)
         After insert mode: root → sub_a → downstream → root (cycle!)
         """
@@ -123,9 +130,9 @@ class TestGraphReconstruction:
 
         # Simulate a persisted expansion record (as if expansion happened in a prior run)
         expansion_record = {
-            'expanding_node': 'root',
-            'expansion_id': 'test_expansion',
-            'subgraph': {'nodes': [], 'entry_node_names': []},
+            "expanding_node": "root",
+            "expansion_id": "test_expansion",
+            "subgraph": {"nodes": [], "entry_node_names": []},
             # No seed, no factory_module, no factory_qualname
         }
         root._save_result(
@@ -170,7 +177,9 @@ class TestNNSPrecedence:
                 )
             else:
                 # Second call: stop self-loop
-                return NextNodesSelector(include_self=False, include_others=True, result=x + 1)
+                return NextNodesSelector(
+                    include_self=False, include_others=True, result=x + 1
+                )
 
         root.value = emitter
         result = root.run(1)

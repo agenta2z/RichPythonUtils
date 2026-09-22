@@ -1,5 +1,3 @@
-
-
 """Base configuration for session-aware queue-based services."""
 
 from __future__ import annotations

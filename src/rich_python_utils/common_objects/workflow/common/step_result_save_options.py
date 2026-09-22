@@ -14,10 +14,11 @@ class StepResultSaveOptions(str, Enum):
             Resumable workers (e.g., PTI, nested BTA) handle their own
             persistence internally.
     """
-    NoSave = 'no_save'
-    Always = 'always'
-    OnError = 'on_error'
-    SkipResumable = 'skip_resumable'
+
+    NoSave = "no_save"
+    Always = "always"
+    OnError = "on_error"
+    SkipResumable = "skip_resumable"
 
 
 class ResumeMode(str, Enum):
@@ -31,6 +32,7 @@ class ResumeMode(str, Enum):
             workers are re-invoked so they can resume from their own internal
             checkpoints.
     """
-    Never = 'never'
-    Always = 'always'
-    SkipResumable = 'skip_resumable'
+
+    Never = "never"
+    Always = "always"
+    SkipResumable = "skip_resumable"

@@ -110,7 +110,9 @@ class ArgumentRegistrar:
             return description
         if description:
             default_str = (
-                f"'{default_value}'" if isinstance(default_value, str) else f"{default_value}"
+                f"'{default_value}'"
+                if isinstance(default_value, str)
+                else f"{default_value}"
             )
             return f"{description}; the default value is {default_str}"
         return description
@@ -170,7 +172,13 @@ class ArgumentRegistrar:
         # Register new argument
         if converter is not None:
             self._register_with_converter(
-                full_name, short_name, cli_name, default_value, desc, converter, is_required
+                full_name,
+                short_name,
+                cli_name,
+                default_value,
+                desc,
+                converter,
+                is_required,
             )
         else:
             self._register_without_converter(
@@ -192,7 +200,9 @@ class ArgumentRegistrar:
         Returns:
             True if argument existed and was updated
         """
-        from rich_python_utils.common_utils.arg_utils.arg_parse import update_argument_default
+        from rich_python_utils.common_utils.arg_utils.arg_parse import (
+            update_argument_default,
+        )
 
         return update_argument_default(
             arg_parser=self.parser,

@@ -10,8 +10,7 @@ GraphEdge represents a directed, typed edge between two graph nodes.
 
 from typing import Any, Dict, List
 
-from attr import attrs, attrib
-
+from attr import attrib, attrs
 from rich_python_utils.algorithms.graph.node import Node
 from rich_python_utils.service_utils.data_operation_record import DataOperationRecord
 
@@ -83,10 +82,7 @@ class GraphNode(Node):
             node_type=data["node_type"],
             label=data.get("label", ""),
             properties=data.get("properties", {}),
-            history=[
-                DataOperationRecord.from_dict(r)
-                for r in data.get("history", [])
-            ],
+            history=[DataOperationRecord.from_dict(r) for r in data.get("history", [])],
             is_active=data.get("is_active", True),
         )
 
@@ -146,9 +142,6 @@ class GraphEdge:
             target_id=data["target_id"],
             edge_type=data["edge_type"],
             properties=data.get("properties", {}),
-            history=[
-                DataOperationRecord.from_dict(r)
-                for r in data.get("history", [])
-            ],
+            history=[DataOperationRecord.from_dict(r) for r in data.get("history", [])],
             is_active=data.get("is_active", True),
         )

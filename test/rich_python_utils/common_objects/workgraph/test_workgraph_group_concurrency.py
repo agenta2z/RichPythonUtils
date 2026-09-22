@@ -8,12 +8,14 @@ Tests cover:
 - Mixed grouped and ungrouped nodes
 - Backward compatibility
 """
+
 import asyncio
 
 import pytest
-
-from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode, WorkGraph
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
+)
+from rich_python_utils.common_objects.workflow.workgraph import WorkGraph, WorkGraphNode
 
 
 class TestWorkGraphNodeGroup:
@@ -101,7 +103,9 @@ class TestPerGroupConcurrency:
         g = WorkGraph(start_nodes=nodes, group_max_concurrency={"parallel": 3})
         await g.arun()
         assert max_concurrent <= 3, f"Expected max 3 concurrent, got {max_concurrent}"
-        assert max_concurrent > 1, f"Expected >1 concurrent with 6 nodes, got {max_concurrent}"
+        assert max_concurrent > 1, (
+            f"Expected >1 concurrent with 6 nodes, got {max_concurrent}"
+        )
 
     @pytest.mark.asyncio
     async def test_different_groups_independent(self):
@@ -134,16 +138,24 @@ class TestPerGroupConcurrency:
                 group_b_current -= 1
             return "b"
 
-        slow_nodes = [WorkGraphNode(name=f"s{i}", value=tracked_a, group="slow") for i in range(3)]
-        fast_nodes = [WorkGraphNode(name=f"f{i}", value=tracked_b, group="fast") for i in range(4)]
+        slow_nodes = [
+            WorkGraphNode(name=f"s{i}", value=tracked_a, group="slow") for i in range(3)
+        ]
+        fast_nodes = [
+            WorkGraphNode(name=f"f{i}", value=tracked_b, group="fast") for i in range(4)
+        ]
 
         g = WorkGraph(
             start_nodes=slow_nodes + fast_nodes,
             group_max_concurrency={"slow": 1, "fast": 4},
         )
         await g.arun()
-        assert group_a_max == 1, f"Group 'slow' (limit=1): expected max 1, got {group_a_max}"
-        assert group_b_max > 1, f"Group 'fast' (limit=4): expected >1, got {group_b_max}"
+        assert group_a_max == 1, (
+            f"Group 'slow' (limit=1): expected max 1, got {group_a_max}"
+        )
+        assert group_b_max > 1, (
+            f"Group 'fast' (limit=4): expected >1, got {group_b_max}"
+        )
 
     @pytest.mark.asyncio
     async def test_ungrouped_nodes_use_global_semaphore_with_groups(self):
@@ -170,7 +182,9 @@ class TestPerGroupConcurrency:
             group_max_concurrency={"grouped": 5},
         )
         await g.arun()
-        assert ungrouped_max == 1, f"Ungrouped (global limit=1): expected 1, got {ungrouped_max}"
+        assert ungrouped_max == 1, (
+            f"Ungrouped (global limit=1): expected 1, got {ungrouped_max}"
+        )
 
 
 class TestBackwardCompatibility:
@@ -203,8 +217,12 @@ class TestBackwardCompatibility:
         """Sync _run() ignores semaphores — groups don't affect sync execution."""
         results = []
 
-        n1 = WorkGraphNode(name="n1", value=lambda: results.append("n1") or "n1", group="a")
-        n2 = WorkGraphNode(name="n2", value=lambda: results.append("n2") or "n2", group="a")
+        n1 = WorkGraphNode(
+            name="n1", value=lambda: results.append("n1") or "n1", group="a"
+        )
+        n2 = WorkGraphNode(
+            name="n2", value=lambda: results.append("n2") or "n2", group="a"
+        )
         g = WorkGraph(start_nodes=[n1, n2], group_max_concurrency={"a": 1})
         g.run()
         assert set(results) == {"n1", "n2"}

@@ -4,7 +4,6 @@ import asyncio
 import time
 
 import pytest
-
 from rich_python_utils.mp_utils.async_queued_executor import AsyncQueuedExecutor
 from rich_python_utils.mp_utils.task import Task, TaskStatus
 
@@ -12,6 +11,7 @@ from rich_python_utils.mp_utils.task import Task, TaskStatus
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 async def _async_sleep_task(duration: float, label: str = ""):
     await asyncio.sleep(duration)
@@ -33,6 +33,7 @@ async def _failing_task():
 # ---------------------------------------------------------------------------
 # Basic execution
 # ---------------------------------------------------------------------------
+
 
 class TestBasicExecution:
     @pytest.mark.asyncio
@@ -75,6 +76,7 @@ class TestBasicExecution:
 # Concurrency limits
 # ---------------------------------------------------------------------------
 
+
 class TestConcurrencyLimits:
     @pytest.mark.asyncio
     async def test_single_group_limit_2(self):
@@ -89,7 +91,9 @@ class TestConcurrencyLimits:
 
         executor = AsyncQueuedExecutor(group_max_concurrency={"A": 2})
         for i in range(4):
-            await executor.async_submit(Task(callable=_record_task, args=(i,), group="A"))
+            await executor.async_submit(
+                Task(callable=_record_task, args=(i,), group="A")
+            )
         results = await executor.arun()
 
         assert len(results) == 4
@@ -150,7 +154,9 @@ class TestConcurrencyLimits:
 
         executor = AsyncQueuedExecutor(group_max_concurrency={"A": 1})
         for i in range(5):
-            await executor.async_submit(Task(callable=_ordered_task, args=(i,), group="A"))
+            await executor.async_submit(
+                Task(callable=_ordered_task, args=(i,), group="A")
+            )
         await executor.arun()
         assert order == [0, 1, 2, 3, 4]
 
@@ -158,6 +164,7 @@ class TestConcurrencyLimits:
 # ---------------------------------------------------------------------------
 # Error handling
 # ---------------------------------------------------------------------------
+
 
 class TestErrorHandling:
     @pytest.mark.asyncio
@@ -198,6 +205,7 @@ class TestErrorHandling:
 # Result metadata
 # ---------------------------------------------------------------------------
 
+
 class TestResultMetadata:
     @pytest.mark.asyncio
     async def test_timing_recorded(self):
@@ -224,6 +232,7 @@ class TestResultMetadata:
 # Fresh instances
 # ---------------------------------------------------------------------------
 
+
 class TestFreshInstances:
     @pytest.mark.asyncio
     async def test_multiple_arun_calls(self):
@@ -242,6 +251,7 @@ class TestFreshInstances:
 # ---------------------------------------------------------------------------
 # Ungrouped tasks
 # ---------------------------------------------------------------------------
+
 
 class TestUngroupedTasks:
     @pytest.mark.asyncio

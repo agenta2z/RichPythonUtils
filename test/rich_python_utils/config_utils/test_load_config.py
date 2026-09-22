@@ -4,7 +4,6 @@ import os
 import tempfile
 
 import pytest
-
 from rich_python_utils.config_utils import load_config, merge_configs
 
 
@@ -14,11 +13,9 @@ def yaml_dir(tmp_path):
     (tmp_path / "simple.yaml").write_text("name: hello\ncount: 42\n")
     (tmp_path / "override_test.yaml").write_text("a: 1\nb: 2\nc: 3\n")
     (tmp_path / "with_env.yaml").write_text(
-        'value: ${oc.env:_TEST_CONFIG_VAR,fallback_val}\n'
+        "value: ${oc.env:_TEST_CONFIG_VAR,fallback_val}\n"
     )
-    (tmp_path / "with_path.yaml").write_text(
-        'data_dir: ${path:data/input}\n'
-    )
+    (tmp_path / "with_path.yaml").write_text("data_dir: ${path:data/input}\n")
     return tmp_path
 
 

@@ -15,6 +15,7 @@ Tests correctness properties from the design document:
 
 **Validates: Requirements 6.2, 10.4, 10.5, 10.6, 10.7, 11.2, 11.3, 13.1, 13.2, 14.2**
 """
+
 import asyncio
 import sys
 import time
@@ -31,9 +32,11 @@ if _src_dir.exists() and str(_src_dir) not in sys.path:
     sys.path.insert(0, str(_src_dir))
 
 import pytest
-from hypothesis import given, settings, strategies as st, assume
-
-from rich_python_utils.common_utils.async_utils import async_execute_with_retry, FallbackMode
+from hypothesis import assume, given, settings, strategies as st
+from rich_python_utils.common_utils.async_utils import (
+    async_execute_with_retry,
+    FallbackMode,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -42,33 +45,41 @@ from rich_python_utils.common_utils.async_utils import async_execute_with_retry,
 
 small_max_retry = st.integers(min_value=1, max_value=5)
 chain_length = st.integers(min_value=1, max_value=4)
-fallback_mode_strategy = st.sampled_from([FallbackMode.ON_EXHAUSTED, FallbackMode.ON_FIRST_FAILURE])
+fallback_mode_strategy = st.sampled_from(
+    [FallbackMode.ON_EXHAUSTED, FallbackMode.ON_FIRST_FAILURE]
+)
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def make_async_recording_callable(call_log, label):
     """Create an async callable that records its invocations and always raises."""
+
     async def _func(*args, **kwargs):
         call_log.append(label)
         raise RuntimeError(f"fail-{label}")
+
     return _func
 
 
 def make_async_counting_callable(counter_dict, label):
     """Create an async callable that counts invocations and always raises."""
     counter_dict[label] = 0
+
     async def _func(*args, **kwargs):
         counter_dict[label] += 1
         raise RuntimeError(f"fail-{label}")
+
     return _func
 
 
 # ---------------------------------------------------------------------------
 # Property 1: Backward Compatibility Preservation (async)
 # ---------------------------------------------------------------------------
+
 
 class TestAsyncBackwardCompatibilityPreservation:
     """Property 1: Backward Compatibility Preservation (async).
@@ -133,6 +144,7 @@ class TestAsyncBackwardCompatibilityPreservation:
 
         **Validates: Requirements 6.2, 14.2**
         """
+
         async def always_fail():
             raise RuntimeError("intentional failure")
 
@@ -195,6 +207,7 @@ class TestAsyncBackwardCompatibilityPreservation:
 # ---------------------------------------------------------------------------
 # Property 6: Fallback Chain Exhaustion (async)
 # ---------------------------------------------------------------------------
+
 
 class TestAsyncFallbackChainExhaustion:
     """Property 6: Fallback Chain Exhaustion (async).
@@ -315,6 +328,7 @@ class TestAsyncFallbackChainExhaustion:
 # Property 7: Fallback Ordering Guarantee (async)
 # ---------------------------------------------------------------------------
 
+
 class TestAsyncFallbackOrderingGuarantee:
     """Property 7: Fallback Ordering Guarantee (async).
 
@@ -417,6 +431,7 @@ class TestAsyncFallbackOrderingGuarantee:
 # Property 8: Timeout Supersedes Fallback (async)
 # ---------------------------------------------------------------------------
 
+
 class TestAsyncTimeoutSupersedesFallback:
     """Property 8: Timeout Supersedes Fallback (async).
 
@@ -449,6 +464,7 @@ class TestAsyncTimeoutSupersedesFallback:
                 call_log.append(label)
                 await asyncio.sleep(0.1)
                 raise RuntimeError(f"fail-{label}")
+
             return _func
 
         primary = make_slow_async_fail("primary")
@@ -487,6 +503,7 @@ class TestAsyncTimeoutSupersedesFallback:
 # Property 9: Fallback Exception Filtering (async)
 # ---------------------------------------------------------------------------
 
+
 class TestAsyncFallbackExceptionFiltering:
     """Property 9: Fallback Exception Filtering (async).
 
@@ -514,7 +531,9 @@ class TestAsyncFallbackExceptionFiltering:
         filter_idx=st.integers(min_value=0, max_value=2),
         raise_idx=st.integers(min_value=0, max_value=2),
     )
-    def test_matching_exception_triggers_transition(self, filter_idx: int, raise_idx: int):
+    def test_matching_exception_triggers_transition(
+        self, filter_idx: int, raise_idx: int
+    ):
         """When the raised exception matches fallback_on_exceptions, the
         fallback chain should transition to the next callable.
 
@@ -603,6 +622,7 @@ class TestAsyncFallbackExceptionFiltering:
 # Property 17: on_fallback_callback Single-Fire (async)
 # ---------------------------------------------------------------------------
 
+
 class TestAsyncOnFallbackCallbackSingleFire:
     """Property 17: on_fallback_callback Single-Fire Per Transition (async).
 
@@ -641,12 +661,14 @@ class TestAsyncOnFallbackCallbackSingleFire:
         ]
 
         async def on_fallback(from_func, to_func, exception, total_attempts):
-            callback_log.append({
-                "from": from_func,
-                "to": to_func,
-                "exception": exception,
-                "total_attempts": total_attempts,
-            })
+            callback_log.append(
+                {
+                    "from": from_func,
+                    "to": to_func,
+                    "exception": exception,
+                    "total_attempts": total_attempts,
+                }
+            )
 
         async def run():
             await async_execute_with_retry(
@@ -689,12 +711,14 @@ class TestAsyncOnFallbackCallbackSingleFire:
             raise RuntimeError("fallback fail")
 
         async def on_fallback(from_func, to_func, exception, total_attempts):
-            callback_log.append({
-                "from": from_func,
-                "to": to_func,
-                "exception": exception,
-                "total_attempts": total_attempts,
-            })
+            callback_log.append(
+                {
+                    "from": from_func,
+                    "to": to_func,
+                    "exception": exception,
+                    "total_attempts": total_attempts,
+                }
+            )
 
         async def run():
             await async_execute_with_retry(
@@ -724,6 +748,7 @@ class TestAsyncOnFallbackCallbackSingleFire:
 # ---------------------------------------------------------------------------
 # Property 18: on_retry_callback Attempt Reset (async)
 # ---------------------------------------------------------------------------
+
 
 class TestAsyncOnRetryCallbackAttemptReset:
     """Property 18: on_retry_callback Attempt Reset (async).
@@ -757,6 +782,7 @@ class TestAsyncOnRetryCallbackAttemptReset:
             async def _func(*args, **kwargs):
                 call_log.append(label)
                 raise RuntimeError(f"fail-{label}")
+
             return _func
 
         primary = make_async_func("primary")
@@ -805,6 +831,7 @@ class TestAsyncOnRetryCallbackAttemptReset:
 # Property 20: Two-Tier Wiring
 # ---------------------------------------------------------------------------
 
+
 class TestTwoTierWiring:
     """Property 20: Two-Tier Wiring.
 
@@ -827,7 +854,9 @@ class TestTwoTierWiring:
         num_external=st.integers(min_value=1, max_value=3),
         mode=fallback_mode_strategy,
     )
-    def test_recovery_wrapper_is_first_in_chain(self, num_external: int, mode: FallbackMode):
+    def test_recovery_wrapper_is_first_in_chain(
+        self, num_external: int, mode: FallbackMode
+    ):
         """When building a chain with [recovery_wrapper, ext_0, ext_1, ...],
         the recovery_wrapper is always invoked before any external wrapper.
 
@@ -851,9 +880,11 @@ class TestTwoTierWiring:
         external_wrappers = []
         for i in range(num_external):
             label = f"external_{i}"
+
             async def make_ext(lbl=label):
                 call_log.append(lbl)
                 raise RuntimeError(f"{lbl} fail")
+
             external_wrappers.append(make_ext)
 
         # Build chain as InferencerBase would: [recovery_wrapper] + external_wrappers
@@ -881,7 +912,9 @@ class TestTwoTierWiring:
                 order.append(label)
 
         # Recovery should always come right after primary, before any external
-        expected_order = ["primary", "recovery"] + [f"external_{i}" for i in range(num_external)]
+        expected_order = ["primary", "recovery"] + [
+            f"external_{i}" for i in range(num_external)
+        ]
         assert order == expected_order, (
             f"Expected invocation order {expected_order}, got {order}. "
             f"Recovery wrapper must be first in fallback chain (before external wrappers). "

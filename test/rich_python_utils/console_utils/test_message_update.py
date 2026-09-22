@@ -4,14 +4,15 @@ This test demonstrates the new message_id and update_previous parameters
 that prevent console flooding by updating messages in place.
 """
 
-import time
 import sys
+import time
 from pathlib import Path
 
 # Enable ANSI escape codes on Windows for cursor control
-if sys.platform == 'win32':
+if sys.platform == "win32":
     try:
         import ctypes
+
         kernel32 = ctypes.windll.kernel32
         kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
     except Exception:
@@ -20,7 +21,7 @@ if sys.platform == 'win32':
 # Find and add src directory to path (robust - works even if file is moved)
 current = Path(__file__).resolve().parent
 while current != current.parent:  # Stop at filesystem root
-    src_candidate = current / 'src'
+    src_candidate = current / "src"
     if src_candidate.is_dir():
         sys.path.insert(0, str(src_candidate))
         break
@@ -28,7 +29,7 @@ while current != current.parent:  # Stop at filesystem root
 else:
     raise FileNotFoundError("Could not find 'src' directory in parent hierarchy")
 
-from rich_python_utils.console_utils import hprint_message, clear_message
+from rich_python_utils.console_utils import clear_message, hprint_message
 
 
 def test_basic_update():
@@ -40,11 +41,18 @@ def test_basic_update():
     time.sleep(1)
 
     # Update the same message
-    hprint_message(title="Status", content="Processing...", message_id="status", update_previous=True)
+    hprint_message(
+        title="Status",
+        content="Processing...",
+        message_id="status",
+        update_previous=True,
+    )
     time.sleep(1)
 
     # Update again
-    hprint_message(title="Status", content="Complete!", message_id="status", update_previous=True)
+    hprint_message(
+        title="Status", content="Complete!", message_id="status", update_previous=True
+    )
     time.sleep(1)
 
     print("[+] Basic update test complete\n")
@@ -55,7 +63,7 @@ def test_without_update():
     print("\n=== Test 2: Without Update (shows flooding) ===")
 
     for i in range(3):
-        hprint_message(title="Attempt", content=f"{i+1}", message_id="attempt")
+        hprint_message(title="Attempt", content=f"{i + 1}", message_id="attempt")
         time.sleep(0.5)
 
     print("[+] Non-update test complete (should see 3 separate lines)\n")
@@ -66,7 +74,12 @@ def test_with_update():
     print("\n=== Test 3: With Update (prevents flooding) ===")
 
     for i in range(3):
-        hprint_message(title="Attempt", content=f"{i+1}", message_id="attempt_updated", update_previous=True)
+        hprint_message(
+            title="Attempt",
+            content=f"{i + 1}",
+            message_id="attempt_updated",
+            update_previous=True,
+        )
         time.sleep(0.5)
 
     print("[+] Update test complete (should see only final line)\n")
@@ -85,17 +98,31 @@ def test_multiple_trackers():
     time.sleep(0.5)
 
     # Update first tracker
-    hprint_message(title="Task A", content="50% complete", message_id="task_a", update_previous=True)
+    hprint_message(
+        title="Task A",
+        content="50% complete",
+        message_id="task_a",
+        update_previous=True,
+    )
     time.sleep(0.5)
 
     # Update second tracker
-    hprint_message(title="Task B", content="25% complete", message_id="task_b", update_previous=True)
+    hprint_message(
+        title="Task B",
+        content="25% complete",
+        message_id="task_b",
+        update_previous=True,
+    )
     time.sleep(0.5)
 
     # Complete both
-    hprint_message(title="Task A", content="Done!", message_id="task_a", update_previous=True)
+    hprint_message(
+        title="Task A", content="Done!", message_id="task_a", update_previous=True
+    )
     time.sleep(0.5)
-    hprint_message(title="Task B", content="Done!", message_id="task_b", update_previous=True)
+    hprint_message(
+        title="Task B", content="Done!", message_id="task_b", update_previous=True
+    )
 
     print("[+] Multiple trackers test complete\n")
 
@@ -120,9 +147,9 @@ def test_polling_simulation():
         # This simulates checking for queue repeatedly
         hprint_message(
             title="Queue Status",
-            content=f"No queue storage found (attempt {i+1}/5)",
+            content=f"No queue storage found (attempt {i + 1}/5)",
             message_id="queue_check",
-            update_previous=True
+            update_previous=True,
         )
         time.sleep(0.8)
 
@@ -131,7 +158,7 @@ def test_polling_simulation():
         title="Queue Status",
         content="Queue storage found!",
         message_id="queue_check",
-        update_previous=True
+        update_previous=True,
     )
 
     print("\n[+] Polling simulation complete (should only see final status)\n")

@@ -11,9 +11,9 @@ Covers:
 - templates=None guard (TM with only default_template)
 """
 
-import pytest
 from pathlib import Path
 
+import pytest
 from rich_python_utils.string_utils.formatting.template_manager import (
     TemplateManager,
     TemplateRootPriority,
@@ -26,6 +26,7 @@ from rich_python_utils.string_utils.formatting.template_manager.template_manager
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _write(path: Path, content: str):
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -44,8 +45,8 @@ def _make_root(base: Path, templates: dict):
 # LOWEST priority
 # ---------------------------------------------------------------------------
 
-class TestAddTemplateRootLowest:
 
+class TestAddTemplateRootLowest:
     def test_fills_missing_keys(self, tmp_path):
         """LOWEST adds templates that don't exist in the base root."""
         base = tmp_path / "base"
@@ -107,8 +108,8 @@ class TestAddTemplateRootLowest:
 # HIGHEST priority
 # ---------------------------------------------------------------------------
 
-class TestAddTemplateRootHighest:
 
+class TestAddTemplateRootHighest:
     def test_overrides_existing_keys(self, tmp_path):
         """HIGHEST replaces existing templates at template-name level."""
         base = tmp_path / "base"
@@ -150,8 +151,8 @@ class TestAddTemplateRootHighest:
 # Copy-on-write isolation
 # ---------------------------------------------------------------------------
 
-class TestCopyOnWrite:
 
+class TestCopyOnWrite:
     def test_switch_copy_not_affected(self, tmp_path):
         """switch() copy is isolated from later add_template_root on original."""
         base = tmp_path / "base"
@@ -207,8 +208,8 @@ class TestCopyOnWrite:
 # Idempotency
 # ---------------------------------------------------------------------------
 
-class TestIdempotency:
 
+class TestIdempotency:
     def test_same_source_twice_is_noop(self, tmp_path):
         """Adding the same source twice doesn't duplicate or error."""
         base = tmp_path / "base"
@@ -228,8 +229,8 @@ class TestIdempotency:
 # Edge cases
 # ---------------------------------------------------------------------------
 
-class TestEdgeCases:
 
+class TestEdgeCases:
     def test_templates_none_guard(self, tmp_path):
         """add_template_root works when templates was originally None."""
         new = tmp_path / "new"

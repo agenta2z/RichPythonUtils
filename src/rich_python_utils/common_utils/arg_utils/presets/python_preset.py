@@ -75,9 +75,10 @@ class PythonPresetLoader(PresetLoader):
             FileNotFoundError: If the file does not exist
             AttributeError: If the file does not define a `config` variable
         """
+        from rich_python_utils.common_utils.arg_utils.arg_parse import dict_to_namespace
+
         # Import utilities - deferred to avoid circular imports
         from rich_python_utils.common_utils.environment_helper import path_import
-        from rich_python_utils.common_utils.arg_utils.arg_parse import dict_to_namespace
 
         resolved = self.resolve_path(file_path)
         if resolved is None:

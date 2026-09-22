@@ -11,12 +11,16 @@ Key concepts tested:
 - include_others flag for selective downstream execution
 - Cycle detection in str_all_descendants
 """
-import pytest
 
-from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode, WorkGraph
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
-from rich_python_utils.common_objects.workflow.common.worknode_base import NextNodesSelector
+import pytest
 from rich_python_utils.algorithms.graph.node import Node
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
+)
+from rich_python_utils.common_objects.workflow.common.worknode_base import (
+    NextNodesSelector,
+)
+from rich_python_utils.common_objects.workflow.workgraph import WorkGraph, WorkGraphNode
 
 
 class TestNextNodesSelectorBasic:
@@ -33,11 +37,11 @@ class TestNextNodesSelectorBasic:
         """Test NextNodesSelector with custom values."""
         selector = NextNodesSelector(
             include_self=True,
-            include_others={'action1', 'action2'},
-            result="test_result"
+            include_others={"action1", "action2"},
+            result="test_result",
         )
         assert selector.include_self is True
-        assert selector.include_others == {'action1', 'action2'}
+        assert selector.include_others == {"action1", "action2"}
         assert selector.result == "test_result"
 
     def test_next_nodes_selector_include_others_false(self):
@@ -53,7 +57,9 @@ class TestHandleNextNodesSelector:
     def test_handle_regular_result(self):
         """Test handling of regular (non-NextNodesSelector) result."""
         node = WorkGraphNode(name="test", value=lambda: None)
-        include_self, include_others, result = node._handle_next_nodes_selector("regular_result")
+        include_self, include_others, result = node._handle_next_nodes_selector(
+            "regular_result"
+        )
 
         assert include_self is False
         assert include_others is True
@@ -62,11 +68,15 @@ class TestHandleNextNodesSelector:
     def test_handle_next_nodes_selector_result(self):
         """Test handling of NextNodesSelector result."""
         node = WorkGraphNode(name="test", value=lambda: None)
-        selector = NextNodesSelector(include_self=True, include_others={'a', 'b'}, result=42)
-        include_self, include_others, result = node._handle_next_nodes_selector(selector)
+        selector = NextNodesSelector(
+            include_self=True, include_others={"a", "b"}, result=42
+        )
+        include_self, include_others, result = node._handle_next_nodes_selector(
+            selector
+        )
 
         assert include_self is True
-        assert include_others == {'a', 'b'}
+        assert include_others == {"a", "b"}
         assert result == 42
 
 
@@ -82,7 +92,9 @@ class TestSelectDownstreamNodes:
         node_a.add_next(node_b)
         node_a.add_next(node_c)
 
-        selected = node_a._select_downstream_nodes(include_others=True, include_self=False)
+        selected = node_a._select_downstream_nodes(
+            include_others=True, include_self=False
+        )
         assert len(selected) == 2
         assert node_b in selected
         assert node_c in selected
@@ -94,7 +106,9 @@ class TestSelectDownstreamNodes:
 
         node_a.add_next(node_b)
 
-        selected = node_a._select_downstream_nodes(include_others=False, include_self=False)
+        selected = node_a._select_downstream_nodes(
+            include_others=False, include_self=False
+        )
         assert len(selected) == 0
 
     def test_select_by_name(self):
@@ -108,7 +122,9 @@ class TestSelectDownstreamNodes:
         node_a.add_next(node_c)
         node_a.add_next(node_d)
 
-        selected = node_a._select_downstream_nodes(include_others={'B', 'D'}, include_self=False)
+        selected = node_a._select_downstream_nodes(
+            include_others={"B", "D"}, include_self=False
+        )
         assert len(selected) == 2
         assert node_b in selected
         assert node_d in selected
@@ -123,13 +139,17 @@ class TestSelectDownstreamNodes:
         node_a.add_next(node_a)  # Self-edge
 
         # With include_self=True
-        selected = node_a._select_downstream_nodes(include_others=True, include_self=True)
+        selected = node_a._select_downstream_nodes(
+            include_others=True, include_self=True
+        )
         assert len(selected) == 2
         assert node_a in selected
         assert node_b in selected
 
         # With include_self=False
-        selected = node_a._select_downstream_nodes(include_others=True, include_self=False)
+        selected = node_a._select_downstream_nodes(
+            include_others=True, include_self=False
+        )
         assert len(selected) == 1
         assert node_b in selected
         assert node_a not in selected
@@ -142,7 +162,9 @@ class TestSelectDownstreamNodes:
         node_a.add_next(node_b)
         node_a.add_next(node_a)  # Self-edge
 
-        selected = node_a._select_downstream_nodes(include_others=False, include_self=True)
+        selected = node_a._select_downstream_nodes(
+            include_others=False, include_self=True
+        )
         assert len(selected) == 1
         assert node_a in selected
 
@@ -158,14 +180,16 @@ class TestSelfLoopExecution:
         def monitor_func():
             execution_count[0] += 1
             if execution_count[0] < max_iterations:
-                return NextNodesSelector(include_self=True, include_others=False, result=execution_count[0])
+                return NextNodesSelector(
+                    include_self=True, include_others=False, result=execution_count[0]
+                )
             else:
                 return execution_count[0]  # Normal return stops the loop
 
         monitor = WorkGraphNode(
             name="monitor",
             value=monitor_func,
-            result_pass_down_mode=ResultPassDownMode.NoPassDown
+            result_pass_down_mode=ResultPassDownMode.NoPassDown,
         )
         monitor.add_next(monitor)  # Explicit self-edge
 
@@ -183,7 +207,9 @@ class TestSelfLoopExecution:
         def monitor_func():
             monitor_count[0] += 1
             if monitor_count[0] < max_iterations:
-                return NextNodesSelector(include_self=True, include_others=True, result=monitor_count[0])
+                return NextNodesSelector(
+                    include_self=True, include_others=True, result=monitor_count[0]
+                )
             else:
                 return monitor_count[0]
 
@@ -194,7 +220,7 @@ class TestSelfLoopExecution:
         monitor = WorkGraphNode(
             name="monitor",
             value=monitor_func,
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         action = WorkGraphNode(
             name="action",
@@ -221,14 +247,16 @@ class TestSelfLoopExecution:
             received_args.append(driver_arg)
             execution_count[0] += 1
             if execution_count[0] < max_iterations:
-                return NextNodesSelector(include_self=True, include_others=False, result="some_result")
+                return NextNodesSelector(
+                    include_self=True, include_others=False, result="some_result"
+                )
             else:
                 return "final"
 
         monitor = WorkGraphNode(
             name="monitor",
             value=monitor_func,
-            result_pass_down_mode=ResultPassDownMode.NoPassDown  # Keep original args
+            result_pass_down_mode=ResultPassDownMode.NoPassDown,  # Keep original args
         )
         monitor.add_next(monitor)  # Self-edge
 
@@ -249,14 +277,16 @@ class TestSelfLoopExecution:
             execution_count[0] += 1
             new_result = arg + 1 if isinstance(arg, int) else 1
             if execution_count[0] < max_iterations:
-                return NextNodesSelector(include_self=True, include_others=False, result=new_result)
+                return NextNodesSelector(
+                    include_self=True, include_others=False, result=new_result
+                )
             else:
                 return new_result
 
         monitor = WorkGraphNode(
             name="monitor",
             value=monitor_func,
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg  # Pass result
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,  # Pass result
         )
         monitor.add_next(monitor)  # Self-edge
 
@@ -335,7 +365,7 @@ class TestWorkGraphNodeStrWithCycle:
         # WorkGraphNode uses value for str, so check for cycle marker
         assert "[CYCLE]" in output
         # Verify the output contains the expected structure
-        lines = output.strip().split('\n')
+        lines = output.strip().split("\n")
         assert len(lines) == 3  # Monitor, Action, Monitor [CYCLE]
 
 
@@ -351,6 +381,7 @@ class TestSelectiveDownstreamExecution:
             def node_func(*args, **kwargs):
                 execution_log.append(name)
                 return name
+
             return WorkGraphNode(
                 name=name,
                 value=node_func,
@@ -359,14 +390,14 @@ class TestSelectiveDownstreamExecution:
         def selector_func():
             return NextNodesSelector(
                 include_self=False,
-                include_others={'B', 'D'},  # Only run B and D
-                result="selector_result"
+                include_others={"B", "D"},  # Only run B and D
+                result="selector_result",
             )
 
         node_a = WorkGraphNode(
             name="A",
             value=selector_func,
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_b = make_node("B")
         node_c = make_node("C")
@@ -394,12 +425,14 @@ class TestNoSelfEdgeWithIncludeSelf:
         def node_func():
             execution_count[0] += 1
             # Returns include_self=True, but there's no self-edge
-            return NextNodesSelector(include_self=True, include_others=True, result="done")
+            return NextNodesSelector(
+                include_self=True, include_others=True, result="done"
+            )
 
         node_a = WorkGraphNode(
             name="A",
             value=node_func,
-            result_pass_down_mode=ResultPassDownMode.NoPassDown
+            result_pass_down_mode=ResultPassDownMode.NoPassDown,
         )
         node_b = WorkGraphNode(
             name="B",
@@ -433,7 +466,9 @@ class TestSelfLoopWithMultipleParents:
             received_args_list.append(args)
             execution_count[0] += 1
             if execution_count[0] < max_iterations:
-                return NextNodesSelector(include_self=True, include_others=False, result="continue")
+                return NextNodesSelector(
+                    include_self=True, include_others=False, result="continue"
+                )
             else:
                 return "done"
 
@@ -441,17 +476,17 @@ class TestSelfLoopWithMultipleParents:
         parent1 = WorkGraphNode(
             name="parent1",
             value=lambda x: x + 10,
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         parent2 = WorkGraphNode(
             name="parent2",
             value=lambda x: x + 20,
-            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+            result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         monitor = WorkGraphNode(
             name="monitor",
             value=monitor_func,
-            result_pass_down_mode=ResultPassDownMode.NoPassDown  # Keep original (merged) args
+            result_pass_down_mode=ResultPassDownMode.NoPassDown,  # Keep original (merged) args
         )
 
         # Both parents feed into monitor

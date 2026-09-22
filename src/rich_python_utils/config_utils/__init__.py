@@ -32,15 +32,15 @@ Discoverability::
 """
 
 from rich_python_utils.config_utils._registry import (
+    _reset_registry,
     AliasResolutionError,
+    list_registered,
     MissingTargetError,
-    RegistryError,
     register,
     register_alias,
     register_class,
+    RegistryError,
     resolve_target,
-    list_registered,
-    _reset_registry,
 )
 
 # Lazy — only imported when called, not at module load time.
@@ -49,18 +49,27 @@ from rich_python_utils.config_utils._registry import (
 
 def load_config(path, overrides=None, env_prefix=None, config_defaults=None):
     from rich_python_utils.config_utils._instantiate import load_config as _load
-    return _load(path, overrides, env_prefix=env_prefix, config_defaults=config_defaults)
+
+    return _load(
+        path, overrides, env_prefix=env_prefix, config_defaults=config_defaults
+    )
 
 
 def merge_configs(*configs):
     from rich_python_utils.config_utils._instantiate import merge_configs as _merge
+
     return _merge(*configs)
 
 
 def instantiate(config, _convert_="all", merge_dict_typed_attributes=True, **kwargs):
     from rich_python_utils.config_utils._instantiate import instantiate as _inst
-    return _inst(config, _convert_=_convert_,
-                 merge_dict_typed_attributes=merge_dict_typed_attributes, **kwargs)
+
+    return _inst(
+        config,
+        _convert_=_convert_,
+        merge_dict_typed_attributes=merge_dict_typed_attributes,
+        **kwargs,
+    )
 
 
 __all__ = [

@@ -1,6 +1,6 @@
 from abc import ABC
 
-from attr import attrs, attrib
+from attr import attrib, attrs
 
 
 @attrs(slots=False)
@@ -22,6 +22,7 @@ class PostProcessable(ABC):
         - `post_process`: Combines both `_post_process` and `_optional_post_process` and serves as a single
           entry point for custom post-processing logic.
     """
+
     enable_optional_post_process = attrib(type=bool, default=False)
 
     def _post_process(self, result, *args, **kwargs):

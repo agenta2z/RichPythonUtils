@@ -1,4 +1,5 @@
 from typing import Sequence, TypeVar
+
 from rich_python_utils.common_utils.array_helper import reverse_in_place
 
 """
@@ -8,7 +9,8 @@ We do not include it here as it is a very specialized algorithm.
 Python has a build-in function `itertools.permutations` for permutation, and it is based on the same logic as `next_lexicographic_permutation` below.
 """
 
-T = TypeVar('T')
+T = TypeVar("T")
+
 
 def iter_permutation_recursive(seq: Sequence[T]):
     """
@@ -54,13 +56,16 @@ def iter_permutation_recursive(seq: Sequence[T]):
         for i in range(len(seq)):
             # Remove the current element from the list
             current = seq[i]
-            remaining = seq[:i] + seq[i + 1:]
+            remaining = seq[:i] + seq[i + 1 :]
 
             # Generate all permutations of the remaining elements
             for perm in iter_permutation_recursive(remaining):
                 yield [current] + perm
 
-def next_lexicographic_permutation(seq: Sequence[T], in_place: bool = False) -> Sequence[T]:
+
+def next_lexicographic_permutation(
+    seq: Sequence[T], in_place: bool = False
+) -> Sequence[T]:
     """
     Generates the next lexicographic permutation of a given sequence.
 
@@ -123,10 +128,14 @@ def next_lexicographic_permutation(seq: Sequence[T], in_place: bool = False) -> 
     while i >= 0 and seq[i] >= seq[i + 1]:
         i -= 1
 
-    if i == -1:  # the full sequence is in sorted (descending), the just reverse the whole sequence
+    if (
+        i == -1
+    ):  # the full sequence is in sorted (descending), the just reverse the whole sequence
         return seq[::-1]
 
-    pivot = seq[i]  # we call this "first decreasing element from the right side view" as the pivot element
+    pivot = seq[
+        i
+    ]  # we call this "first decreasing element from the right side view" as the pivot element
 
     # Proof that the best option we have is to increase seq[i].
     # - A swap must happen to increase the sequence order.
@@ -169,5 +178,3 @@ def next_lexicographic_permutation(seq: Sequence[T], in_place: bool = False) -> 
     # endregion
 
     return seq
-
-

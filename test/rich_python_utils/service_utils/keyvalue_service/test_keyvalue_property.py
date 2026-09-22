@@ -10,19 +10,16 @@ randomly generated inputs. Tests are parametrized across all three backends
 (memory, file, sqlite) via the kv_service fixture.
 """
 
-from hypothesis import given, settings, assume, HealthCheck
-from hypothesis import strategies as st
-
-from rich_python_utils.service_utils.keyvalue_service.file_keyvalue_service import (
-    _encode_key,
-    _decode_key,
-)
-
 from conftest import (
     json_value_strategy,
     key_strategy,
-    namespace_strategy,
     kv_items_strategy,
+    namespace_strategy,
+)
+from hypothesis import assume, given, HealthCheck, settings, strategies as st
+from rich_python_utils.service_utils.keyvalue_service.file_keyvalue_service import (
+    _decode_key,
+    _encode_key,
 )
 
 # Shared settings for tests that use the kv_service fixture.
@@ -205,7 +202,7 @@ def _percent_encoding_string_strategy():
             st.one_of(_special_chars, _any_char),
             min_size=1,
             max_size=50,
-        ).filter(lambda chars: any(c in chars for c in ["%", ":", "/", "\\"]))
+        ).filter(lambda chars: any(c in chars for c in ["%", ":", "/", "\\"])),
     )
 
 

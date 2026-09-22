@@ -3,22 +3,22 @@
 import os
 
 import pytest
-
 from rich_python_utils.path_utils.path_listing import (
-    FileCandidate,
-    MultiRootDiff,
     canonicalize_text,
-    hash_file_canonical,
+    FileCandidate,
     find_conflicting_and_agreed_files,
+    group_conflicts_by_parent,
+    hash_file_canonical,
+    MultiRootDiff,
     safe_copy_agreed,
     safe_copy_per_file,
-    group_conflicts_by_parent,
 )
 
 
 # ---------------------------------------------------------------------------
 # canonicalize_text
 # ---------------------------------------------------------------------------
+
 
 class TestCanonicalizeText:
     def test_strips_trailing_whitespace(self):
@@ -51,26 +51,35 @@ class TestCanonicalizeText:
 # hash_file_canonical
 # ---------------------------------------------------------------------------
 
+
 class TestHashFileCanonical:
     def test_identical_files_same_hash(self, tmp_path):
         (tmp_path / "a.txt").write_text("hello\n")
         (tmp_path / "b.txt").write_text("hello\n")
-        assert hash_file_canonical(str(tmp_path / "a.txt")) == hash_file_canonical(str(tmp_path / "b.txt"))
+        assert hash_file_canonical(str(tmp_path / "a.txt")) == hash_file_canonical(
+            str(tmp_path / "b.txt")
+        )
 
     def test_trailing_whitespace_same_hash(self, tmp_path):
         (tmp_path / "a.txt").write_text("hello\n")
         (tmp_path / "b.txt").write_text("hello   \n")
-        assert hash_file_canonical(str(tmp_path / "a.txt")) == hash_file_canonical(str(tmp_path / "b.txt"))
+        assert hash_file_canonical(str(tmp_path / "a.txt")) == hash_file_canonical(
+            str(tmp_path / "b.txt")
+        )
 
     def test_crlf_vs_lf_same_hash(self, tmp_path):
         (tmp_path / "a.txt").write_bytes(b"hello\n")
         (tmp_path / "b.txt").write_bytes(b"hello\r\n")
-        assert hash_file_canonical(str(tmp_path / "a.txt")) == hash_file_canonical(str(tmp_path / "b.txt"))
+        assert hash_file_canonical(str(tmp_path / "a.txt")) == hash_file_canonical(
+            str(tmp_path / "b.txt")
+        )
 
     def test_different_content_different_hash(self, tmp_path):
         (tmp_path / "a.txt").write_text("hello\n")
         (tmp_path / "b.txt").write_text("world\n")
-        assert hash_file_canonical(str(tmp_path / "a.txt")) != hash_file_canonical(str(tmp_path / "b.txt"))
+        assert hash_file_canonical(str(tmp_path / "a.txt")) != hash_file_canonical(
+            str(tmp_path / "b.txt")
+        )
 
     def test_large_file_threshold(self, tmp_path):
         f = tmp_path / "large.txt"
@@ -88,6 +97,7 @@ class TestHashFileCanonical:
 # find_conflicting_and_agreed_files
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def three_roots(tmp_path):
     """Three roots with overlapping files."""
@@ -103,7 +113,9 @@ def three_roots(tmp_path):
 
     # Conflicting file: different content
     (r0 / "shared" / "conflict.txt").write_text("version A short\n")
-    (r1 / "shared" / "conflict.txt").write_text("version B much longer with more detail and content\n")
+    (r1 / "shared" / "conflict.txt").write_text(
+        "version B much longer with more detail and content\n"
+    )
     (r2 / "shared" / "conflict.txt").write_text("version C medium length\n")
 
     # Unique file: only in root_1
@@ -157,6 +169,7 @@ class TestFindConflictingAndAgreedFiles:
 # safe_copy_agreed + safe_copy_per_file
 # ---------------------------------------------------------------------------
 
+
 class TestSafeCopyAgreed:
     def test_copies_files(self, three_roots, tmp_path):
         roots, names = three_roots
@@ -204,7 +217,9 @@ class TestSafeCopyPerFile:
         # Simulate aggregator having written a merged version
         with open(os.path.join(dst, "shared", "conflict.txt"), "w") as f:
             f.write("aggregator merged version\n")
-        copied = safe_copy_per_file(diff, dst, skip_existing=True, conflict_fallback="largest")
+        copied = safe_copy_per_file(
+            diff, dst, skip_existing=True, conflict_fallback="largest"
+        )
         assert "shared/conflict.txt" not in copied
         with open(os.path.join(dst, "shared", "conflict.txt")) as f:
             assert f.read() == "aggregator merged version\n"
@@ -221,6 +236,7 @@ class TestSafeCopyPerFile:
 # ---------------------------------------------------------------------------
 # group_conflicts_by_parent
 # ---------------------------------------------------------------------------
+
 
 class TestGroupConflictsByParent:
     def test_depth_1(self):

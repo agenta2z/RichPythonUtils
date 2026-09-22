@@ -38,9 +38,9 @@ import tempfile
 from pathlib import Path
 
 from rich_python_utils.string_utils.formatting.template_manager import (
+    TemplateManager,
     VariableLoader,
     VariableLoaderConfig,
-    TemplateManager,
 )
 
 
@@ -53,8 +53,7 @@ def create_sample_structure(base_dir: Path) -> None:
 
     # Global mindset (flat file, no underscore)
     (global_vars / "mindset.hbs").write_text(
-        "You are a helpful AI assistant.\n"
-        "Think step by step and be thorough.\n"
+        "You are a helpful AI assistant.\nThink step by step and be thorough.\n"
     )
 
     # Global notes/core_values (categorized with underscore inference)
@@ -68,18 +67,12 @@ def create_sample_structure(base_dir: Path) -> None:
     )
 
     (notes_dir / "guidelines.hbs").write_text(
-        "GUIDELINES:\n"
-        "- Be concise and direct\n"
-        "- Provide examples when helpful\n"
+        "GUIDELINES:\n- Be concise and direct\n- Provide examples when helpful\n"
     )
 
     # Composed variable that references other variables
     (notes_dir / "composed.hbs").write_text(
-        "=== Composed Notes ===\n"
-        "{{mindset}}\n"
-        "\n"
-        "{{notes_core_values}}\n"
-        "=== End ===\n"
+        "=== Composed Notes ===\n{{mindset}}\n\n{{notes_core_values}}\n=== End ===\n"
     )
 
     # Agent-level _variables (overrides global)
@@ -87,9 +80,7 @@ def create_sample_structure(base_dir: Path) -> None:
     agent_vars.mkdir(parents=True)
 
     (agent_vars / "core_values.hbs").write_text(
-        "AGENT-SPECIFIC CORE VALUES:\n"
-        "- Focus: Stay on task\n"
-        "- Speed: Respond quickly\n"
+        "AGENT-SPECIFIC CORE VALUES:\n- Focus: Stay on task\n- Speed: Respond quickly\n"
     )
 
     # Template-type level _variables
@@ -97,8 +88,7 @@ def create_sample_structure(base_dir: Path) -> None:
     template_type_vars.mkdir(parents=True)
 
     (template_type_vars / "local.hbs").write_text(
-        "LOCAL CONTEXT:\n"
-        "- This is specific to the main template type\n"
+        "LOCAL CONTEXT:\n- This is specific to the main template type\n"
     )
 
     # Sample template file
@@ -178,7 +168,9 @@ def demo_scope_modifiers():
         variables = loader.resolve_from_template(
             template, template_root_space="my_agent", template_type="main"
         )
-        print(f"   Non-existent optional returns empty: '{variables.get('nonexistent_var', 'KEY NOT FOUND')}'")
+        print(
+            f"   Non-existent optional returns empty: '{variables.get('nonexistent_var', 'KEY NOT FOUND')}'"
+        )
 
         # Combined modifiers
         print("\n3. Combined modifiers ^{{var}}?:")
@@ -186,7 +178,9 @@ def demo_scope_modifiers():
         variables = loader.resolve_from_template(
             template, template_root_space="my_agent", template_type="main"
         )
-        print(f"   Global + optional: {variables.get('notes_core_values', 'NOT FOUND')[:40]}...")
+        print(
+            f"   Global + optional: {variables.get('notes_core_values', 'NOT FOUND')[:40]}..."
+        )
 
 
 def demo_composition():

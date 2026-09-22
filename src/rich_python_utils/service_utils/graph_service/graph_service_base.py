@@ -12,8 +12,10 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 
 from attr import attrs
-
-from rich_python_utils.service_utils.graph_service.graph_node import GraphEdge, GraphNode
+from rich_python_utils.service_utils.graph_service.graph_node import (
+    GraphEdge,
+    GraphNode,
+)
 
 
 @attrs(slots=False)
@@ -76,7 +78,9 @@ class GraphServiceBase(ABC):
         pass
 
     @abstractmethod
-    def get_node(self, node_id: str, namespace: Optional[str] = None) -> Optional[GraphNode]:
+    def get_node(
+        self, node_id: str, namespace: Optional[str] = None
+    ) -> Optional[GraphNode]:
         """
         Retrieve a node by its ID.
 

@@ -59,9 +59,9 @@ class SessionLogger:
         session_type: str,
         turn_aware_loggers: Optional[List[Callable]] = None,
         cross_turn_loggers: Optional[List[Callable]] = None,
-        new_turn_log_type: str = 'AgentState',
-        manifest_filename: str = 'manifest.json',
-        session_log_filename: str = 'session.jsonl',
+        new_turn_log_type: str = "AgentState",
+        manifest_filename: str = "manifest.json",
+        session_log_filename: str = "session.jsonl",
     ):
         """Create session directory with timestamp, initialize manifest.
 
@@ -155,9 +155,9 @@ class SessionLogger:
             is_cross_turn (bool): If True, route only to cross-turn loggers
                 (or turn-aware loggers without ``group`` as fallback).
         """
-        is_cross_turn = kwargs.pop('is_cross_turn', False)
+        is_cross_turn = kwargs.pop("is_cross_turn", False)
 
-        log_type = log_data.get('type', '') if isinstance(log_data, dict) else ''
+        log_type = log_data.get("type", "") if isinstance(log_data, dict) else ""
 
         # Detect turn boundary
         if log_type == self._new_turn_log_type:
@@ -167,21 +167,21 @@ class SessionLogger:
 
         if is_cross_turn:
             # Cross-turn: use cross_turn_loggers, fallback to turn_aware (no group)
-            for logger in (self._cross_turn_loggers or self._turn_aware_loggers):
+            for logger in self._cross_turn_loggers or self._turn_aware_loggers:
                 r = logger(log_data, **kwargs)
                 if result is None and r is not None:
                     result = r
         else:
             # Turn-aware: inject group if a turn is active
             if self._current_turn_number > 0:
-                kwargs.setdefault('group', f'turn_{self._current_turn_number:03d}')
+                kwargs.setdefault("group", f"turn_{self._current_turn_number:03d}")
             for logger in self._turn_aware_loggers:
                 r = logger(log_data, **kwargs)
                 if result is None and r is not None:
                     result = r
             # Also write to cross-turn loggers (without group) if they exist
             if self._cross_turn_loggers:
-                cross_kwargs = {k: v for k, v in kwargs.items() if k != 'group'}
+                cross_kwargs = {k: v for k, v in kwargs.items() if k != "group"}
                 for logger in self._cross_turn_loggers:
                     logger(log_data, **cross_kwargs)
 
@@ -195,7 +195,7 @@ class SessionLogger:
     def file_path(self) -> Optional[str]:
         """First available file path from loggers."""
         for logger in (*self._turn_aware_loggers, *self._cross_turn_loggers):
-            fp = getattr(logger, 'file_path', None)
+            fp = getattr(logger, "file_path", None)
             if fp:
                 return fp
         return None
@@ -239,8 +239,8 @@ class SessionLogger:
         """Advance to the next turn: update manifest, reset step counter."""
         with self._lock:
             if self._current_turn_number > 0 and self._manifest.turns:
-                self._manifest.turns[-1].end_timestamp = (
-                    datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+                self._manifest.turns[-1].end_timestamp = datetime.now().strftime(
+                    "%Y-%m-%dT%H:%M:%S"
                 )
             self._current_turn_number += 1
             self._turn_step_counter = 0
@@ -251,7 +251,7 @@ class SessionLogger:
             turn_entry = TurnEntry(
                 turn_number=self._current_turn_number,
                 start_timestamp=start_timestamp,
-                log_file=f'turn_{self._current_turn_number:03d}',
+                log_file=f"turn_{self._current_turn_number:03d}",
             )
             self._manifest.turns.append(turn_entry)
 
@@ -307,6 +307,12 @@ class SessionLogReader:
         resolve_parts: Resolve parts references when reading log entries.
             Default ``True``.
         parts_suffix: Parts directory suffix. Default ``'.parts'``.
+        workspace_root: Optional base directory for resolving LINK-mode
+            (``"write once, link"``) parts markers, whose ``__parts_file__`` is
+            stored WORKSPACE-relative. The adjacent ``.parts`` directory is still
+            tried first for every marker, so existing logs resolve unchanged;
+            this base is consulted only as a fallback. Default ``None`` (LINK
+            markers left unresolved — byte-identical to the prior behavior).
 
     Examples:
         >>> reader = SessionLogReader('logs/sess_001_20260101_120000')
@@ -321,16 +327,18 @@ class SessionLogReader:
     def __init__(
         self,
         session_dir,
-        manifest_filename='manifest.json',
+        manifest_filename="manifest.json",
         resolve_parts=True,
-        parts_suffix='.parts',
+        parts_suffix=".parts",
+        workspace_root=None,
     ):
         self._session_dir = Path(session_dir)
         self._resolve_parts = resolve_parts
         self._parts_suffix = parts_suffix
+        self._workspace_root = workspace_root
 
         manifest_path = self._session_dir / manifest_filename
-        manifest_text = manifest_path.read_text(encoding='utf-8')
+        manifest_text = manifest_path.read_text(encoding="utf-8")
         self._manifest = SessionManifest.from_json(manifest_text)
 
     @property
@@ -357,6 +365,7 @@ class SessionLogReader:
             path_str,
             resolve_parts=self._resolve_parts,
             parts_suffix=self._parts_suffix,
+            workspace_root=self._workspace_root,
             use_tqdm=False,
             verbose=False,
         )
@@ -380,8 +389,9 @@ class SessionLogReader:
         """
         for turn in self._manifest.turns:
             if turn.turn_number == turn_number:
-                log_path = (self._session_dir / turn.log_file
-                            / self._manifest.session_log_file)
+                log_path = (
+                    self._session_dir / turn.log_file / self._manifest.session_log_file
+                )
                 return self._iter_log_file(log_path)
         return iter(())
 
@@ -389,11 +399,14 @@ class SessionLogReader:
         """Iterate over ALL log entries: cross-turn first, then each turn."""
         yield from self.iter_cross_turn()
         for turn in self._manifest.turns:
-            log_path = (self._session_dir / turn.log_file
-                        / self._manifest.session_log_file)
+            log_path = (
+                self._session_dir / turn.log_file / self._manifest.session_log_file
+            )
             yield from self._iter_log_file(log_path)
 
     def __repr__(self):
-        return (f'SessionLogReader(session_dir={str(self._session_dir)!r}, '
-                f'session_id={self._manifest.session_id!r}, '
-                f'turns={len(self._manifest.turns)})')
+        return (
+            f"SessionLogReader(session_dir={str(self._session_dir)!r}, "
+            f"session_id={self._manifest.session_id!r}, "
+            f"turns={len(self._manifest.turns)})"
+        )

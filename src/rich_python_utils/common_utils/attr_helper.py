@@ -1,7 +1,7 @@
-from typing import Callable, Union, Optional, Sequence, Type
+from typing import Callable, Optional, Sequence, Type, Union
 
 
-def getattr_or_new(obj, name: str, default_factory: Optional[Callable]=None):
+def getattr_or_new(obj, name: str, default_factory: Optional[Callable] = None):
     """
     Retrieves an attribute from an object if it exists; otherwise, creates it with a value
     provided by a default factory, sets it on the object, and returns it.
@@ -143,17 +143,14 @@ def getattr__(_o, name, default, transform: Union[Callable, str] = None, null_se
 
     _o = getattr(_o, name, None)
     return (
-        transform.format(_o) if (
-                transform and isinstance(transform, str)
+        (
+            transform.format(_o)
+            if (transform and isinstance(transform, str))
+            else (transform(_o) if callable(transform) else _o)
         )
-        else (
-            transform(_o)
-            if callable(transform)
-            else _o
-        )
-    ) if (
-            _o and (not null_set or _o not in null_set)
-    ) else default
+        if (_o and (not null_set or _o not in null_set))
+        else default
+    )
 
 
 def hasattr_(_o, name) -> bool:
@@ -228,7 +225,7 @@ def copy_attrs_from(
     source_instance,
     target_class: Type = None,
     exclude: Sequence[str] = None,
-    include_non_init: bool = False
+    include_non_init: bool = False,
 ):
     """
     Copy attribute values from one attrs instance to another.

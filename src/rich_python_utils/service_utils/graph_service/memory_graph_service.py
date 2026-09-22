@@ -42,7 +42,7 @@ import threading
 from collections import deque
 from typing import Any, Dict, List, Optional, Tuple
 
-from attr import attrs, attrib
+from attr import attrib, attrs
 
 from .graph_node import GraphEdge, GraphNode
 from .graph_service_base import GraphServiceBase
@@ -99,7 +99,9 @@ class MemoryGraphService(GraphServiceBase):
                 self._nodes[ns] = {}
             self._nodes[ns][node.node_id] = node
 
-    def get_node(self, node_id: str, namespace: Optional[str] = None) -> Optional[GraphNode]:
+    def get_node(
+        self, node_id: str, namespace: Optional[str] = None
+    ) -> Optional[GraphNode]:
         """
         Retrieve a node by its ID.
 
@@ -145,7 +147,8 @@ class MemoryGraphService(GraphServiceBase):
             # Cascade delete all edges involving this node
             if ns in self._edges:
                 self._edges[ns] = [
-                    e for e in self._edges[ns]
+                    e
+                    for e in self._edges[ns]
                     if e.source_id != node_id and e.target_id != node_id
                 ]
                 # Clean up empty namespace for edges
@@ -171,13 +174,11 @@ class MemoryGraphService(GraphServiceBase):
             ns_nodes = self._nodes.get(ns, {})
             if edge.source_id not in ns_nodes:
                 raise ValueError(
-                    f"Source node '{edge.source_id}' does not exist "
-                    f"in namespace '{ns}'"
+                    f"Source node '{edge.source_id}' does not exist in namespace '{ns}'"
                 )
             if edge.target_id not in ns_nodes:
                 raise ValueError(
-                    f"Target node '{edge.target_id}' does not exist "
-                    f"in namespace '{ns}'"
+                    f"Target node '{edge.target_id}' does not exist in namespace '{ns}'"
                 )
             if ns not in self._edges:
                 self._edges[ns] = []
@@ -214,7 +215,11 @@ class MemoryGraphService(GraphServiceBase):
                     continue
                 if direction == "incoming" and e.target_id != node_id:
                     continue
-                if direction == "both" and e.source_id != node_id and e.target_id != node_id:
+                if (
+                    direction == "both"
+                    and e.source_id != node_id
+                    and e.target_id != node_id
+                ):
                     continue
                 # Check edge type filter
                 if edge_type is not None and e.edge_type != edge_type:
@@ -248,9 +253,11 @@ class MemoryGraphService(GraphServiceBase):
             if ns_edges is None:
                 return False
             for i, e in enumerate(ns_edges):
-                if (e.source_id == source_id
-                        and e.target_id == target_id
-                        and e.edge_type == edge_type):
+                if (
+                    e.source_id == source_id
+                    and e.target_id == target_id
+                    and e.edge_type == edge_type
+                ):
                     ns_edges.pop(i)
                     # Clean up empty namespace for edges
                     if not ns_edges:
@@ -439,7 +446,9 @@ class MemoryGraphService(GraphServiceBase):
                             "nodes": len(self._nodes.get(ns, {})),
                             "edges": len(self._edges.get(ns, [])),
                         }
-                        for ns in set(list(self._nodes.keys()) + list(self._edges.keys()))
+                        for ns in set(
+                            list(self._nodes.keys()) + list(self._edges.keys())
+                        )
                     },
                 }
 

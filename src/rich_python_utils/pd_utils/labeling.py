@@ -5,14 +5,14 @@ import pandas as pd
 
 
 def add_bin_col(
-        df,
-        src_col: str,
-        bins: List,
-        labels: List = None,
-        output_col: str = None,
-        add_left_inf: bool = True,
-        add_right_inf: bool = True,
-        right: bool = False
+    df,
+    src_col: str,
+    bins: List,
+    labels: List = None,
+    output_col: str = None,
+    add_left_inf: bool = True,
+    add_right_inf: bool = True,
+    right: bool = False,
 ):
     """
     Adds a new column to a dataframe. The new column is a binned version of an existing column

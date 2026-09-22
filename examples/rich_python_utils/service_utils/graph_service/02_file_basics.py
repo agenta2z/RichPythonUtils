@@ -23,12 +23,16 @@ import shutil
 import tempfile
 
 from resolve_path import resolve_path
+
 resolve_path()
 
 from rich_python_utils.service_utils.graph_service.file_graph_service import (
     FileGraphService,
 )
-from rich_python_utils.service_utils.graph_service.graph_node import GraphNode, GraphEdge
+from rich_python_utils.service_utils.graph_service.graph_node import (
+    GraphEdge,
+    GraphNode,
+)
 
 
 def _build_network(svc, namespace=None):
@@ -36,19 +40,27 @@ def _build_network(svc, namespace=None):
     # Researchers
     for nid, label, props in [
         ("alice", "Dr. Alice Chen", {"institution": "MIT", "h_index": 42}),
-        ("bob",   "Dr. Bob Patel",  {"institution": "Stanford", "h_index": 35}),
-        ("carol", "Dr. Carol Kim",  {"institution": "MIT", "h_index": 28}),
+        ("bob", "Dr. Bob Patel", {"institution": "Stanford", "h_index": 35}),
+        ("carol", "Dr. Carol Kim", {"institution": "MIT", "h_index": 28}),
     ]:
-        svc.add_node(GraphNode(node_id=nid, node_type="researcher",
-                               label=label, properties=props), namespace=namespace)
+        svc.add_node(
+            GraphNode(
+                node_id=nid, node_type="researcher", label=label, properties=props
+            ),
+            namespace=namespace,
+        )
 
     # Institutions
     for nid, label, props in [
-        ("mit",     "MIT",      {"location": "Cambridge, MA"}),
+        ("mit", "MIT", {"location": "Cambridge, MA"}),
         ("stanford", "Stanford", {"location": "Stanford, CA"}),
     ]:
-        svc.add_node(GraphNode(node_id=nid, node_type="institution",
-                               label=label, properties=props), namespace=namespace)
+        svc.add_node(
+            GraphNode(
+                node_id=nid, node_type="institution", label=label, properties=props
+            ),
+            namespace=namespace,
+        )
 
     # Edges
     edges = [
@@ -60,8 +72,10 @@ def _build_network(svc, namespace=None):
         ("bob", "stanford", "affiliated_with", {}),
     ]
     for src, tgt, etype, props in edges:
-        svc.add_edge(GraphEdge(source_id=src, target_id=tgt,
-                               edge_type=etype, properties=props), namespace=namespace)
+        svc.add_edge(
+            GraphEdge(source_id=src, target_id=tgt, edge_type=etype, properties=props),
+            namespace=namespace,
+        )
 
 
 def main():
@@ -143,7 +157,9 @@ def main():
         print(f"    Service closed")
         print(f"    Reopened -- get_node('alice') -> {alice_reopened_label}")
         print(f"    size() -> {size_reopened}")
-        print(f"    Alice still has {len(edges_reopened)} outgoing edges -- graph intact!")
+        print(
+            f"    Alice still has {len(edges_reopened)} outgoing edges -- graph intact!"
+        )
 
         print("\n[5] Namespace isolation")
         print("-" * 50)
@@ -180,4 +196,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n[X] Error: {e}")
         import traceback
+
         traceback.print_exc()

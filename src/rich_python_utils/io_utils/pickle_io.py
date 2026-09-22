@@ -12,6 +12,7 @@ from rich_python_utils.path_utils.common import ensure_parent_dir_existence
 # Private helpers for enable_parts mode
 # ---------------------------------------------------------------------------
 
+
 def _get_field(data, field_name, is_dict):
     """Get a field value from data, handling dicts, __slots__, and regular objects."""
     if is_dict:
@@ -23,7 +24,7 @@ def _set_field(data, field_name, value, is_dict):
     """Set a field value on data, handling dicts, __slots__, and regular objects."""
     if is_dict:
         data[field_name] = value
-    elif hasattr(type(data), '__slots__'):
+    elif hasattr(type(data), "__slots__"):
         object.__setattr__(data, field_name, value)
     else:
         setattr(data, field_name, value)
@@ -35,23 +36,23 @@ def _get_field_names(data):
         return list(data.keys())
     # Prefer __dict__ (covers attrs slots=False, regular classes).
     # Only fall back to __slots__ scanning for true __slots__-only classes.
-    if hasattr(data, '__dict__'):
+    if hasattr(data, "__dict__"):
         return list(vars(data).keys())
     obj_type = type(data)
-    if hasattr(obj_type, '__slots__'):
+    if hasattr(obj_type, "__slots__"):
         names = []
         for cls in obj_type.__mro__:
-            if '__slots__' in cls.__dict__:
-                names.extend(cls.__dict__['__slots__'])
+            if "__slots__" in cls.__dict__:
+                names.extend(cls.__dict__["__slots__"])
         return names
     return []
 
 
 def _resolve_part_filename(field_name, ext):
     """Resolve the filename and type string for a part based on its ext metadata."""
-    if ext in ('.html', '.txt'):
-        return f"{field_name}{ext}", 'text'
-    return f"{field_name}.pkl", 'pickle'
+    if ext in (".html", ".txt"):
+        return f"{field_name}{ext}", "text"
+    return f"{field_name}.pkl", "pickle"
 
 
 def _write_manifest(dir_path, main_file, parts):
@@ -62,7 +63,7 @@ def _write_manifest(dir_path, main_file, parts):
         "parts": parts,
     }
     manifest_path = os.path.join(dir_path, "manifest.json")
-    with open(manifest_path, 'w', encoding='utf-8') as f:
+    with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
 
 
@@ -90,47 +91,55 @@ def _collect_artifact_fields(data, artifact_types=None, path_prefix=""):
     # Build the type_map: {target_type: {'ext': ..., 'subfolder': ...}}
     type_map = {}
     # From class-level __artifact_types__
-    cls_entries = getattr(type(data), '__artifact_types__', None)
+    cls_entries = getattr(type(data), "__artifact_types__", None)
     if cls_entries:
         for entry in cls_entries:
-            tt = entry['target_type']
+            tt = entry["target_type"]
             if tt not in type_map:
                 type_map[tt] = entry
     # From explicit artifact_types parameter
     if artifact_types:
         for entry in artifact_types:
-            tt = entry['target_type']
+            tt = entry["target_type"]
             if tt not in type_map:
                 type_map[tt] = entry
 
     # Also collect __artifacts__ (field-level decorators)
-    field_artifacts = getattr(type(data), '__artifacts__', None)
+    field_artifacts = getattr(type(data), "__artifacts__", None)
 
     if not type_map and not field_artifacts:
         # No metadata at this level — but still recurse into children
         # to find metadata at deeper levels (Pattern B)
         is_dict = isinstance(data, dict)
-        field_names = _get_field_names(data) if not isinstance(data, (list, tuple)) else []
+        field_names = (
+            _get_field_names(data) if not isinstance(data, (list, tuple)) else []
+        )
 
         if isinstance(data, dict):
             for key, val in data.items():
                 if val is None:
                     continue
                 child_path = f"{path_prefix}.{key}" if path_prefix else key
-                results.extend(_collect_artifact_fields(val, artifact_types, child_path))
+                results.extend(
+                    _collect_artifact_fields(val, artifact_types, child_path)
+                )
         elif isinstance(data, (list, tuple)):
             for i, val in enumerate(data):
                 if val is None:
                     continue
                 child_path = f"{path_prefix}.{i}" if path_prefix else str(i)
-                results.extend(_collect_artifact_fields(val, artifact_types, child_path))
+                results.extend(
+                    _collect_artifact_fields(val, artifact_types, child_path)
+                )
         elif field_names:
             for name in field_names:
                 val = getattr(data, name, None)
                 if val is None:
                     continue
                 child_path = f"{path_prefix}.{name}" if path_prefix else name
-                results.extend(_collect_artifact_fields(val, artifact_types, child_path))
+                results.extend(
+                    _collect_artifact_fields(val, artifact_types, child_path)
+                )
         return results
 
     # Process __artifacts__ (explicit field-level extraction)
@@ -141,7 +150,7 @@ def _collect_artifact_fields(data, artifact_types=None, path_prefix=""):
             ext = artifact.ext
             subfolder = artifact.subfolder
             # Navigate dotted key path
-            parts = key.split('.')
+            parts = key.split(".")
             val = data
             for part in parts:
                 if val is None:
@@ -157,7 +166,9 @@ def _collect_artifact_fields(data, artifact_types=None, path_prefix=""):
     # Process type_map — deep scan into children
     if type_map:
         is_dict = isinstance(data, dict)
-        field_names = _get_field_names(data) if not isinstance(data, (list, tuple)) else []
+        field_names = (
+            _get_field_names(data) if not isinstance(data, (list, tuple)) else []
+        )
 
         if isinstance(data, dict):
             for key, val in data.items():
@@ -168,15 +179,16 @@ def _collect_artifact_fields(data, artifact_types=None, path_prefix=""):
                 matched = False
                 for target_type, entry in type_map.items():
                     if isinstance(val, target_type):
-                        results.append((
-                            child_path, val,
-                            entry.get('ext'), entry.get('subfolder')
-                        ))
+                        results.append(
+                            (child_path, val, entry.get("ext"), entry.get("subfolder"))
+                        )
                         matched = True
                         break
                 if not matched:
                     # Recurse deeper
-                    results.extend(_collect_artifact_fields(val, artifact_types, child_path))
+                    results.extend(
+                        _collect_artifact_fields(val, artifact_types, child_path)
+                    )
         elif isinstance(data, (list, tuple)):
             for i, val in enumerate(data):
                 if val is None:
@@ -185,14 +197,15 @@ def _collect_artifact_fields(data, artifact_types=None, path_prefix=""):
                 matched = False
                 for target_type, entry in type_map.items():
                     if isinstance(val, target_type):
-                        results.append((
-                            child_path, val,
-                            entry.get('ext'), entry.get('subfolder')
-                        ))
+                        results.append(
+                            (child_path, val, entry.get("ext"), entry.get("subfolder"))
+                        )
                         matched = True
                         break
                 if not matched:
-                    results.extend(_collect_artifact_fields(val, artifact_types, child_path))
+                    results.extend(
+                        _collect_artifact_fields(val, artifact_types, child_path)
+                    )
         elif field_names:
             for name in field_names:
                 val = getattr(data, name, None)
@@ -202,14 +215,15 @@ def _collect_artifact_fields(data, artifact_types=None, path_prefix=""):
                 matched = False
                 for target_type, entry in type_map.items():
                     if isinstance(val, target_type):
-                        results.append((
-                            child_path, val,
-                            entry.get('ext'), entry.get('subfolder')
-                        ))
+                        results.append(
+                            (child_path, val, entry.get("ext"), entry.get("subfolder"))
+                        )
                         matched = True
                         break
                 if not matched:
-                    results.extend(_collect_artifact_fields(val, artifact_types, child_path))
+                    results.extend(
+                        _collect_artifact_fields(val, artifact_types, child_path)
+                    )
 
     return results
 
@@ -221,7 +235,7 @@ def _navigate_to_parent(data, dotted_path):
     and returns (data['state'], 'planner', is_dict_of_parent).
     For a simple path like 'planner', returns (data, 'planner', is_dict).
     """
-    parts = dotted_path.split('.')
+    parts = dotted_path.split(".")
     current = data
     for part in parts[:-1]:
         if isinstance(current, dict):
@@ -246,7 +260,7 @@ def _save_parts(data, dir_path, artifact_types=None):
     if not collected:
         # Graceful degradation: no artifacts found, save entire object as main.pkl
         main_path = os.path.join(dir_path, "main.pkl")
-        with open(main_path, 'wb') as f:
+        with open(main_path, "wb") as f:
             pickle.dump(data, f)
             f.flush()
         _write_manifest(dir_path, "main.pkl", [])
@@ -263,7 +277,7 @@ def _save_parts(data, dir_path, artifact_types=None):
 
         # Pickle the lightweight main object (with artifact fields set to None)
         main_path = os.path.join(dir_path, "main.pkl")
-        with open(main_path, 'wb') as f:
+        with open(main_path, "wb") as f:
             pickle.dump(data, f)
             f.flush()
     finally:
@@ -276,7 +290,7 @@ def _save_parts(data, dir_path, artifact_types=None):
     for dotted_path, val, ext, subfolder in collected:
         # Use full dotted path (dots → __) to avoid filename collisions
         # e.g., "state.planner" → "state__planner.pkl"
-        safe_name = dotted_path.replace('.', '__')
+        safe_name = dotted_path.replace(".", "__")
         filename, type_str = _resolve_part_filename(safe_name, ext)
 
         # Handle subfolder grouping
@@ -289,20 +303,22 @@ def _save_parts(data, dir_path, artifact_types=None):
 
         part_path = os.path.join(dir_path, rel_path)
 
-        if type_str == 'text':
-            with open(part_path, 'w', encoding='utf-8') as f:
+        if type_str == "text":
+            with open(part_path, "w", encoding="utf-8") as f:
                 f.write(str(val))
         else:
-            with open(part_path, 'wb') as f:
+            with open(part_path, "wb") as f:
                 pickle.dump(val, f)
                 f.flush()
 
-        manifest_parts.append({
-            "field": dotted_path,
-            "file": rel_path,
-            "type": type_str,
-            "original_type": type(val).__qualname__,
-        })
+        manifest_parts.append(
+            {
+                "field": dotted_path,
+                "file": rel_path,
+                "type": type_str,
+                "original_type": type(val).__qualname__,
+            }
+        )
 
     _write_manifest(dir_path, "main.pkl", manifest_parts)
 
@@ -316,10 +332,10 @@ def _load_parts(dir_path):
     manifest_path = os.path.join(dir_path, "manifest.json")
     main_path = os.path.join(dir_path, "main.pkl")
 
-    with open(manifest_path, 'r', encoding='utf-8') as f:
+    with open(manifest_path, "r", encoding="utf-8") as f:
         manifest = json.load(f)
 
-    with open(main_path, 'rb') as f:
+    with open(main_path, "rb") as f:
         obj = pickle.load(f)
 
     parts = manifest.get("parts", [])
@@ -337,11 +353,11 @@ def _load_parts(dir_path):
                 f"Part file not found: {part_path} (field: {dotted_path})"
             )
 
-        if type_str == 'text':
-            with open(part_path, 'r', encoding='utf-8') as f:
+        if type_str == "text":
+            with open(part_path, "r", encoding="utf-8") as f:
                 val = f.read()
         else:
-            with open(part_path, 'rb') as f:
+            with open(part_path, "rb") as f:
                 val = pickle.load(f)
 
         # Navigate to parent and set the field
@@ -355,8 +371,13 @@ def _load_parts(dir_path):
 # Public API
 # ---------------------------------------------------------------------------
 
-def pickle_load(source: Union[str, bytes], compressed: bool = False, encoding=None,
-                enable_parts: bool = False):
+
+def pickle_load(
+    source: Union[str, bytes],
+    compressed: bool = False,
+    encoding=None,
+    enable_parts: bool = False,
+):
     """
     Load a Python object from a pickle file, bytes, or parts directory.
 
@@ -431,7 +452,7 @@ def pickle_load(source: Union[str, bytes], compressed: bool = False, encoding=No
         return pickle.loads(source)
 
     # Existing file load logic
-    with open(source, 'rb') if not compressed else gzip.open(source, 'rb') as f:
+    with open(source, "rb") if not compressed else gzip.open(source, "rb") as f:
         if encoding is None or sys.version_info < (3, 0):
             return pickle.load(f)
 
@@ -439,10 +460,15 @@ def pickle_load(source: Union[str, bytes], compressed: bool = False, encoding=No
             return pickle.load(f, encoding=encoding)
 
 
-def pickle_save(data, file_path: Optional[str] = None, compressed: bool = False,
-                ensure_dir_exists=True, verbose: bool = __debug__,
-                enable_parts: bool = False,
-                artifact_types: Optional[List[Dict[str, Any]]] = None) -> Optional[bytes]:
+def pickle_save(
+    data,
+    file_path: Optional[str] = None,
+    compressed: bool = False,
+    ensure_dir_exists=True,
+    verbose: bool = __debug__,
+    enable_parts: bool = False,
+    artifact_types: Optional[List[Dict[str, Any]]] = None,
+) -> Optional[bytes]:
     """
     Save a Python object to a pickle file, return bytes, or save as parts.
 
@@ -528,7 +554,7 @@ def pickle_save(data, file_path: Optional[str] = None, compressed: bool = False,
     # Existing file save logic
     if ensure_dir_exists:
         ensure_parent_dir_existence(file_path, verbose=verbose)
-    with open(file_path, 'wb+') if not compressed else gzip.open(file_path, 'wb+') as f:
+    with open(file_path, "wb+") if not compressed else gzip.open(file_path, "wb+") as f:
         pickle.dump(data, f)
         # ! must flush and close to ensure data completeness
         # ! when this function is called in multi-processing or Spark

@@ -9,8 +9,9 @@ feed (which has the caller's explicit values from load_variables with
 master_version). This test verifies the recomposition works correctly.
 """
 
-import pytest
 from pathlib import Path
+
+import pytest
 from rich_python_utils.string_utils.formatting.template_manager import TemplateManager
 
 
@@ -76,8 +77,9 @@ class TestWrapperRecomposition:
         feed["input"] = "test query"
         result = tm("initial", active_template_root_space="plan", **feed)
 
-        assert "DEFAULT_PREAMBLE_MARKER" in result, \
+        assert "DEFAULT_PREAMBLE_MARKER" in result, (
             "Should fall back to default.jinja2 when version doesn't exist"
+        )
         assert "AGGREGATION_PREAMBLE_MARKER" not in result
         assert "test query" in result
 
@@ -99,16 +101,19 @@ class TestWrapperRecomposition:
         feed["upstream_artifacts"] = "(See file: worker_0/facet.md)"
         result = tm("initial", active_template_root_space="plan", **feed)
 
-        assert "AGGREGATION_PREAMBLE_MARKER" in result, \
+        assert "AGGREGATION_PREAMBLE_MARKER" in result, (
             "Wrapper should use aggregation preamble after recomposition"
-        assert "DEFAULT_PREAMBLE_MARKER" not in result, \
+        )
+        assert "DEFAULT_PREAMBLE_MARKER" not in result, (
             "Default preamble should NOT appear after recomposition"
-        assert "(See file: worker_0/facet.md)" in result, \
+        )
+        assert "(See file: worker_0/facet.md)" in result, (
             "upstream_artifacts should be rendered inside the recomposed preamble"
-        assert "hire MLE" in result, \
-            "{{ input }} should still resolve correctly"
-        assert "AGG_CREATE_ROLE_INSTRUCTIONS" in result, \
+        )
+        assert "hire MLE" in result, "{{ input }} should still resolve correctly"
+        assert "AGG_CREATE_ROLE_INSTRUCTIONS" in result, (
             "task_instructions should resolve via master_version+version"
+        )
 
     def test_recomposition_only_when_enabled(self, recomposition_root):
         """Without enable_templated_feed, wrapper keeps the auto-discovered default."""

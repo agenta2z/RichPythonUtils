@@ -3,7 +3,8 @@
 This module provides SessionBase, which IS the per-session Debuggable.
 It replaces the pattern of creating standalone Debugger instances per session.
 """
-from attr import attrs, attrib
+
+from attr import attrib, attrs
 from rich_python_utils.common_objects.debuggable import Debuggable
 
 from .session_info import SessionInfo
@@ -21,6 +22,7 @@ class SessionBase(Debuggable):
         _info: Pure data container for session state.
         _session_logger: SessionLogger with turn-aware routing and console output.
     """
+
     _info: SessionInfo = attrib(kw_only=True)
     _session_logger: SessionLogger = attrib(kw_only=True)
 

@@ -15,7 +15,7 @@ except (AttributeError, ImportError):
     SetConsoleTextAttribute = lambda *_: None  # noqa: E731
     winapi_test = lambda *_: None  # noqa: E731
 else:
-    from ctypes import byref, Structure, c_char, POINTER
+    from ctypes import byref, c_char, POINTER, Structure
 
     COORD = wintypes._COORD
 
@@ -31,7 +31,7 @@ else:
         ]
 
         def __str__(self):
-            return '(%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d)' % (
+            return "(%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d)" % (
                 self.dwSize.Y,
                 self.dwSize.X,
                 self.dwCursorPosition.Y,
@@ -102,7 +102,9 @@ else:
         return bool(success)
 
     def winapi_test():
-        return any(_winapi_test(h) for h in (_GetStdHandle(STDOUT), _GetStdHandle(STDERR)))
+        return any(
+            _winapi_test(h) for h in (_GetStdHandle(STDOUT), _GetStdHandle(STDERR))
+        )
 
     def GetConsoleScreenBufferInfo(stream_id=STDOUT):
         handle = _GetStdHandle(stream_id)
@@ -142,17 +144,19 @@ else:
         return num_written.value
 
     def FillConsoleOutputAttribute(stream_id, attr, length, start):
-        '''
+        """
         FillConsoleOutputAttribute(
             hConsole, csbi.wAttributes, dwConSize, coordScreen, &cCharsWritten
         )
-        '''
+        """
         handle = _GetStdHandle(stream_id)
         attribute = wintypes.WORD(attr)
         length = wintypes.DWORD(length)
         num_written = wintypes.DWORD(0)
         # Note that this is hard-coded for ANSI (vs wide) bytes.
-        return _FillConsoleOutputAttribute(handle, attribute, length, start, byref(num_written))
+        return _FillConsoleOutputAttribute(
+            handle, attribute, length, start, byref(num_written)
+        )
 
     def SetConsoleTitle(title):
         return _SetConsoleTitleW(title)

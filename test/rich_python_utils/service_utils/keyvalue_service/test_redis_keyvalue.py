@@ -14,18 +14,15 @@ import pytest
 
 redis = pytest.importorskip("redis")
 
-from hypothesis import given, settings, assume, HealthCheck
-from hypothesis import strategies as st
-
-from rich_python_utils.service_utils.keyvalue_service.redis_keyvalue_service import (
-    RedisKeyValueService,
-)
-
 from conftest import (
     json_value_strategy,
     key_strategy,
-    namespace_strategy,
     kv_items_strategy,
+    namespace_strategy,
+)
+from hypothesis import assume, given, HealthCheck, settings, strategies as st
+from rich_python_utils.service_utils.keyvalue_service.redis_keyvalue_service import (
+    RedisKeyValueService,
 )
 
 # ── Availability fixture ──
@@ -77,7 +74,9 @@ _fx_settings = settings(
 class TestRedisPutGetRoundTrip:
     """**Validates: Requirements 3.1**"""
 
-    @given(key=key_strategy(), value=json_value_strategy(), namespace=namespace_strategy())
+    @given(
+        key=key_strategy(), value=json_value_strategy(), namespace=namespace_strategy()
+    )
     @_fx_settings
     def test_put_get_round_trip(self, redis_svc, key, value, namespace):
         redis_svc.put(key, value, namespace=namespace)
@@ -110,7 +109,9 @@ class TestRedisUpsertOverwrites:
 class TestRedisBatchEqualsIndividual:
     """**Validates: Requirements 1.2**"""
 
-    @given(items=kv_items_strategy(min_size=1, max_size=10), namespace=namespace_strategy())
+    @given(
+        items=kv_items_strategy(min_size=1, max_size=10), namespace=namespace_strategy()
+    )
     @_fx_settings
     def test_batch_equals_individual(self, redis_svc, items, namespace):
         non_none_items = {k: v for k, v in items.items() if v is not None}

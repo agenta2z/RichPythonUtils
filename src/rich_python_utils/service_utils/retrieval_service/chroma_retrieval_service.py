@@ -25,7 +25,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from attr import attrs, attrib
+from attr import attrib, attrs
 
 from .document import Document
 from .filter_utils import matches_filters
@@ -134,12 +134,18 @@ class ChromaRetrievalService(RetrievalServiceBase):
         # Duplicate check using compound ID (unique per namespace)
         existing = self._collection.get(ids=[chroma_id])
         if existing and existing["ids"]:
-            raise ValueError(f"Duplicate doc_id: '{doc.doc_id}' already exists in namespace '{ns}'")
+            raise ValueError(
+                f"Duplicate doc_id: '{doc.doc_id}' already exists in namespace '{ns}'"
+            )
         rec = self._doc_to_chroma(doc, ns)
-        self._collection.add(ids=[rec["id"]], documents=[rec["document"]], metadatas=[rec["metadata"]])
+        self._collection.add(
+            ids=[rec["id"]], documents=[rec["document"]], metadatas=[rec["metadata"]]
+        )
         return doc.doc_id
 
-    def get_by_id(self, doc_id: str, namespace: Optional[str] = None) -> Optional[Document]:
+    def get_by_id(
+        self, doc_id: str, namespace: Optional[str] = None
+    ) -> Optional[Document]:
         ns = self._resolve_namespace(namespace)
         chroma_id = self._make_chroma_id(ns, doc_id)
         result = self._collection.get(ids=[chroma_id])
@@ -156,7 +162,9 @@ class ChromaRetrievalService(RetrievalServiceBase):
             return False
         doc.updated_at = datetime.now(timezone.utc).isoformat()
         rec = self._doc_to_chroma(doc, ns)
-        self._collection.update(ids=[rec["id"]], documents=[rec["document"]], metadatas=[rec["metadata"]])
+        self._collection.update(
+            ids=[rec["id"]], documents=[rec["document"]], metadatas=[rec["metadata"]]
+        )
         return True
 
     def remove(self, doc_id: str, namespace: Optional[str] = None) -> bool:

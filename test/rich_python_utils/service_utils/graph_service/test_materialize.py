@@ -7,10 +7,14 @@ compatibility with bfs_traversal and dfs_traversal.
 """
 
 import pytest
-
 from rich_python_utils.algorithms.graph.traversal import bfs_traversal, dfs_traversal
-from rich_python_utils.service_utils.graph_service.graph_node import GraphEdge, GraphNode
-from rich_python_utils.service_utils.graph_service.materialize import materialize_subgraph
+from rich_python_utils.service_utils.graph_service.graph_node import (
+    GraphEdge,
+    GraphNode,
+)
+from rich_python_utils.service_utils.graph_service.materialize import (
+    materialize_subgraph,
+)
 from rich_python_utils.service_utils.graph_service.memory_graph_service import (
     MemoryGraphService,
 )
@@ -89,7 +93,11 @@ class TestMaterializeSubgraphSimpleChain:
         start = materialize_subgraph(svc, "A", depth=2)
         c = start.next[0].next[0]
         assert c.node_id == "C"
-        assert c.next is None or len(c.next) == 0 if isinstance(c.next, list) else c.next is None
+        assert (
+            c.next is None or len(c.next) == 0
+            if isinstance(c.next, list)
+            else c.next is None
+        )
 
     def test_chain_depth_0_returns_start_only(self):
         svc = _build_chain_service()
@@ -230,10 +238,11 @@ class TestMaterializeSubgraphCopiesNodes:
 
     def test_properties_are_preserved_in_copies(self):
         svc = MemoryGraphService()
-        svc.add_node(GraphNode(
-            node_id="A", node_type="step",
-            properties={"key": "value", "count": 42}
-        ))
+        svc.add_node(
+            GraphNode(
+                node_id="A", node_type="step", properties={"key": "value", "count": 42}
+            )
+        )
         start = materialize_subgraph(svc, "A", depth=0)
         assert start.properties == {"key": "value", "count": 42}
 
@@ -277,14 +286,14 @@ class TestMaterializeSubgraphBfsCompatibility:
     def test_bfs_traversal_on_chain(self):
         svc = _build_chain_service()
         start = materialize_subgraph(svc, "A", depth=2)
-        visited = list(bfs_traversal(start, {GraphNode: 'next'}))
+        visited = list(bfs_traversal(start, {GraphNode: "next"}))
         visited_ids = [n.node_id for n in visited]
         assert visited_ids == ["A", "B", "C"]
 
     def test_bfs_traversal_on_branching(self):
         svc = _build_branching_service()
         start = materialize_subgraph(svc, "A", depth=1)
-        visited = list(bfs_traversal(start, {GraphNode: 'next'}))
+        visited = list(bfs_traversal(start, {GraphNode: "next"}))
         visited_ids = [n.node_id for n in visited]
         assert visited_ids[0] == "A"
         assert sorted(visited_ids[1:]) == ["B", "C"]
@@ -292,7 +301,7 @@ class TestMaterializeSubgraphBfsCompatibility:
     def test_bfs_traversal_on_cycle(self):
         svc = _build_cycle_service()
         start = materialize_subgraph(svc, "A", depth=3)
-        visited = list(bfs_traversal(start, {GraphNode: 'next'}))
+        visited = list(bfs_traversal(start, {GraphNode: "next"}))
         visited_ids = [n.node_id for n in visited]
         # BFS should visit each node exactly once despite cycle
         assert sorted(visited_ids) == ["A", "B", "C"]
@@ -304,14 +313,14 @@ class TestMaterializeSubgraphDfsCompatibility:
     def test_dfs_traversal_on_chain(self):
         svc = _build_chain_service()
         start = materialize_subgraph(svc, "A", depth=2)
-        visited = list(dfs_traversal(start, {GraphNode: 'next'}))
+        visited = list(dfs_traversal(start, {GraphNode: "next"}))
         visited_ids = [n.node_id for n in visited]
         assert visited_ids == ["A", "B", "C"]
 
     def test_dfs_traversal_on_cycle(self):
         svc = _build_cycle_service()
         start = materialize_subgraph(svc, "A", depth=3)
-        visited = list(dfs_traversal(start, {GraphNode: 'next'}))
+        visited = list(dfs_traversal(start, {GraphNode: "next"}))
         visited_ids = [n.node_id for n in visited]
         # DFS should visit each node exactly once despite cycle
         assert sorted(visited_ids) == ["A", "B", "C"]

@@ -16,7 +16,7 @@ from typing import (
 
 from rich_python_utils.common_utils.iter_helper import chunk_iter, tqdm_wrap, with_names
 from rich_python_utils.common_utils.typing_helper import str2val_
-from rich_python_utils.io_utils.common import open_, DEFAULT_ENCODING
+from rich_python_utils.io_utils.common import DEFAULT_ENCODING, open_
 from rich_python_utils.path_utils.path_listing import NOEXT_PATTERN, sort_paths
 from rich_python_utils.path_utils.path_string_operations import (
     get_main_name,

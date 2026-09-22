@@ -18,10 +18,7 @@ VariableLoader).
 from pathlib import Path
 
 import pytest
-
-from rich_python_utils.string_utils.formatting.template_manager import (
-    TemplateManager,
-)
+from rich_python_utils.string_utils.formatting.template_manager import TemplateManager
 
 
 # ---------------------------------------------------------------------------
@@ -49,9 +46,7 @@ def two_root_templates(tmp_path: Path) -> tuple[Path, Path]:
     a_vars = consumer / "_variables" / "task_preamble"
     a_vars.mkdir(parents=True)
     (a_vars / "role_setup.j2").write_text("ROLE_SETUP_FROM_A", encoding="utf-8")
-    (a_vars / "aggregation.j2").write_text(
-        "AGG_FROM_A_SPECIALIZED", encoding="utf-8"
-    )
+    (a_vars / "aggregation.j2").write_text("AGG_FROM_A_SPECIALIZED", encoding="utf-8")
 
     # Root B — wrappers + generic variables
     b_main = framework / "main"
@@ -83,9 +78,7 @@ class TestCrossRootDisabledPreservesIsolation:
         )
         assert tm.cross_root_variable_lookup is False
 
-    def test_wrapper_in_B_cannot_see_specialized_variant_in_A(
-        self, two_root_templates
-    ):
+    def test_wrapper_in_B_cannot_see_specialized_variant_in_A(self, two_root_templates):
         # Strict per-root isolation: wrapper from B (framework) renders with
         # B's loader only. role_setup.j2 lives in A, never seen.
         consumer, framework = two_root_templates
@@ -107,9 +100,7 @@ class TestCrossRootDisabledPreservesIsolation:
 
 
 class TestCrossRootEnabled:
-    def test_wrapper_in_B_finds_specialized_variant_in_A(
-        self, two_root_templates
-    ):
+    def test_wrapper_in_B_finds_specialized_variant_in_A(self, two_root_templates):
         # With cross-root: wrapper from B uses B's loader as primary, then
         # the cross-root override re-resolves via load_variable (which finds
         # role_setup.j2 in A first).
@@ -143,9 +134,7 @@ class TestCrossRootEnabled:
         )
         result = tm("initial")
         # A is first in templates list → load_variable Pass 1 finds A's first.
-        assert "AGG_FROM_A_SPECIALIZED" in result, (
-            f"priority order broken: {result!r}"
-        )
+        assert "AGG_FROM_A_SPECIALIZED" in result, f"priority order broken: {result!r}"
         assert "AGG_FROM_B" not in result
 
     def test_origin_no_loader_falls_through_then_cross_root(self, tmp_path):
@@ -166,9 +155,7 @@ class TestCrossRootEnabled:
         # Wrapper root has no _variables/
         w_main = wrapper / "main"
         w_main.mkdir(parents=True)
-        (w_main / "initial.j2").write_text(
-            "{{var}}|{{var2}}", encoding="utf-8"
-        )
+        (w_main / "initial.j2").write_text("{{var}}|{{var2}}", encoding="utf-8")
 
         tm = TemplateManager(
             templates=[str(primary), str(secondary), str(wrapper)],
@@ -272,9 +259,7 @@ class TestMultiLevelVariantSelection:
     picks the consumer's variant).
     """
 
-    def test_consumer_specialized_variant_wins_via_cross_root_priority(
-        self, tmp_path
-    ):
+    def test_consumer_specialized_variant_wins_via_cross_root_priority(self, tmp_path):
         """Single-file-per-folder pattern across two roots.
 
         AgentFoundation root: ``implementation/main/_variables/task_preamble/
@@ -292,7 +277,14 @@ class TestMultiLevelVariantSelection:
         consumer = tmp_path / "consumer"
 
         # AgentFoundation: framework-level generic for implementation namespace
-        af_var = af / "implementation" / "main" / "_variables" / "task_preamble" / "understand_codebase"
+        af_var = (
+            af
+            / "implementation"
+            / "main"
+            / "_variables"
+            / "task_preamble"
+            / "understand_codebase"
+        )
         af_var.mkdir(parents=True)
         (af_var / "generic.j2").write_text("GENERIC_FRAMEWORK", encoding="utf-8")
         (af / "implementation" / "main" / "initial.j2").write_text(
@@ -303,7 +295,14 @@ class TestMultiLevelVariantSelection:
         (af / "_variables" / "_marker.j2").write_text("x", encoding="utf-8")
 
         # Consumer: project-specialized variant for plan namespace
-        c_var = consumer / "plan" / "main" / "_variables" / "task_preamble" / "understand_codebase"
+        c_var = (
+            consumer
+            / "plan"
+            / "main"
+            / "_variables"
+            / "task_preamble"
+            / "understand_codebase"
+        )
         c_var.mkdir(parents=True)
         (c_var / "meta_mrs_rankevolve.j2").write_text(
             "RANKEVOLVE_PROJECT", encoding="utf-8"
@@ -334,15 +333,18 @@ class TestMultiLevelVariantSelection:
         selects a specific one explicitly.
         """
         # Nested production layout: <root>/<space>/<type>/_variables/<var>/<version>/<variant>.<ext>
-        p = tmp_path / "plan" / "main" / "_variables" / "task_preamble" / "understand_codebase"
+        p = (
+            tmp_path
+            / "plan"
+            / "main"
+            / "_variables"
+            / "task_preamble"
+            / "understand_codebase"
+        )
         p.mkdir(parents=True)
         (p / "generic.j2").write_text("GENERIC", encoding="utf-8")
-        (p / "meta_mrs_rankevolve.j2").write_text(
-            "RANKEVOLVE", encoding="utf-8"
-        )
-        (p / "meta_mrs_attention.j2").write_text(
-            "ATTENTION", encoding="utf-8"
-        )
+        (p / "meta_mrs_rankevolve.j2").write_text("RANKEVOLVE", encoding="utf-8")
+        (p / "meta_mrs_attention.j2").write_text("ATTENTION", encoding="utf-8")
 
         tm = TemplateManager(
             templates=str(tmp_path),
@@ -377,9 +379,7 @@ class TestMultiLevelVariantSelection:
 
 
 class TestCrossRootWithMissingVersion:
-    def test_unknown_version_falls_back_to_origin_default(
-        self, two_root_templates
-    ):
+    def test_unknown_version_falls_back_to_origin_default(self, two_root_templates):
         # template_version='nonexistent' — no root has that version.
         # load_variable Pass 1: iterates [A, B] → no role_setup-equivalent
         # found anywhere. Pass 2 across roots: iterates [A, B] looking for

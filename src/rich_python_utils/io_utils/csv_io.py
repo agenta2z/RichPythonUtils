@@ -2,16 +2,24 @@ import csv
 from io import TextIOWrapper
 from itertools import chain, islice
 from os import path
-from typing import Any, Type, Sequence
-from typing import Dict, Union, Iterable, Iterator, Optional
+from typing import Any, Dict, Iterable, Iterator, Optional, Sequence, Type, Union
 
 from rich_python_utils.common_utils.iter_helper import tqdm_wrap
-from rich_python_utils.common_utils.typing_helper import str2val_, all_str, is_str
-from rich_python_utils.path_utils.path_listing import get_sorted_files_from_all_sub_dirs
+from rich_python_utils.common_utils.typing_helper import all_str, is_str, str2val_
 from rich_python_utils.path_utils.common import ensure_dir_existence
+from rich_python_utils.path_utils.path_listing import get_sorted_files_from_all_sub_dirs
 
 
-def write_csv(tup_iter, output_csv_path, sep='\t', header=None, append=False, encoding='utf-8', create_dir=True, flatten=False):
+def write_csv(
+    tup_iter,
+    output_csv_path,
+    sep="\t",
+    header=None,
+    append=False,
+    encoding="utf-8",
+    create_dir=True,
+    flatten=False,
+):
     """
     Writes tuples/lists to a csv file.
 
@@ -25,39 +33,57 @@ def write_csv(tup_iter, output_csv_path, sep='\t', header=None, append=False, en
     if create_dir:
         ensure_dir_existence(path.dirname(output_csv_path), verbose=False)
 
-    with open(output_csv_path, 'a' if append else 'w', encoding=encoding) as csv_f:
+    with open(output_csv_path, "a" if append else "w", encoding=encoding) as csv_f:
         if flatten:
             if header is not None and append is False:
-                csv_f.write(sep.join(((sep.join(x) if isinstance(x, (tuple, list)) else x) for x in header)))
-                csv_f.write('\n')
+                csv_f.write(
+                    sep.join(
+                        (
+                            (sep.join(x) if isinstance(x, (tuple, list)) else x)
+                            for x in header
+                        )
+                    )
+                )
+                csv_f.write("\n")
             for tup in tup_iter:
-                csv_f.write(sep.join(((sep.join(map(str, x)) if isinstance(x, (tuple, list)) else str(x)) for x in tup)))
-                csv_f.write('\n')
+                csv_f.write(
+                    sep.join(
+                        (
+                            (
+                                sep.join(map(str, x))
+                                if isinstance(x, (tuple, list))
+                                else str(x)
+                            )
+                            for x in tup
+                        )
+                    )
+                )
+                csv_f.write("\n")
         else:
             if header is not None and append is False:
                 csv_f.write(sep.join(header))
-                csv_f.write('\n')
+                csv_f.write("\n")
             for tup in tup_iter:
                 csv_f.write(sep.join(str(x) for x in tup))
-                csv_f.write('\n')
+                csv_f.write("\n")
 
 
 def iter_csv(
-        csv_input: Union[str, TextIOWrapper],
-        selection: Optional[Union[int, Iterable[int], str, Iterable[str]]] = None,
-        sep: str = '\t',
-        quotechar: str = '"',
-        quoting: int = csv.QUOTE_MINIMAL,
-        encoding: str = 'utf-8',
-        header: Union[bool, str] = True,
-        parse: bool = False,
-        result_type: Type = tuple,
-        allow_missing_cols: bool = False,
-        top: int = None,
-        use_tqdm: bool = True,
-        disp_msg: Optional[str] = None,
-        verbose: bool = __debug__,
-        **kwargs
+    csv_input: Union[str, TextIOWrapper],
+    selection: Optional[Union[int, Iterable[int], str, Iterable[str]]] = None,
+    sep: str = "\t",
+    quotechar: str = '"',
+    quoting: int = csv.QUOTE_MINIMAL,
+    encoding: str = "utf-8",
+    header: Union[bool, str] = True,
+    parse: bool = False,
+    result_type: Type = tuple,
+    allow_missing_cols: bool = False,
+    top: int = None,
+    use_tqdm: bool = True,
+    disp_msg: Optional[str] = None,
+    verbose: bool = __debug__,
+    **kwargs,
 ) -> Iterable[Any]:
     """
     Iterates through each line of a CSV file.
@@ -137,17 +163,21 @@ def iter_csv(
     """
 
     if result_type not in (list, tuple, dict):
-        raise ValueError("result_type must be one of the following: list, tuple, or dict")
+        raise ValueError(
+            "result_type must be one of the following: list, tuple, or dict"
+        )
 
     if isinstance(csv_input, str):
-        f = open(csv_input, 'r', encoding=encoding)
+        f = open(csv_input, "r", encoding=encoding)
     else:
         f = csv_input
 
-    csv_reader = csv.reader(f, delimiter=sep, quotechar=quotechar, quoting=quoting, **kwargs)
+    csv_reader = csv.reader(
+        f, delimiter=sep, quotechar=quotechar, quoting=quoting, **kwargs
+    )
 
     try:
-        if header is True or header == 'skip':
+        if header is True or header == "skip":
             header_fields = next(csv_reader)
 
             if isinstance(selection, str):
@@ -160,9 +190,13 @@ def iter_csv(
                 for _col_index_or_key in selection:
                     if isinstance(_col_index_or_key, str):
                         if _col_index_or_key in header_fields:
-                            col_index_or_key2.append(header_fields.index(_col_index_or_key))
+                            col_index_or_key2.append(
+                                header_fields.index(_col_index_or_key)
+                            )
                         else:
-                            raise ValueError(f"key '{_col_index_or_key}' does not exist in the header")
+                            raise ValueError(
+                                f"key '{_col_index_or_key}' does not exist in the header"
+                            )
                     else:
                         col_index_or_key2.append(_col_index_or_key)
                 selection = col_index_or_key2
@@ -170,10 +204,7 @@ def iter_csv(
             csv_reader = islice(csv_reader, top)
 
         csv_reader = tqdm_wrap(
-            csv_reader,
-            use_tqdm=use_tqdm,
-            tqdm_msg=disp_msg,
-            verbose=verbose
+            csv_reader, use_tqdm=use_tqdm, tqdm_msg=disp_msg, verbose=verbose
         )
 
         def process_line(splits):
@@ -188,13 +219,16 @@ def iter_csv(
             if selection is None:
                 return processed_splits
             elif isinstance(selection, int):
-                return processed_splits[selection] if selection < len(splits) else None,
+                return (
+                    processed_splits[selection] if selection < len(splits) else None,
+                )
             else:
                 if allow_missing_cols:
                     return [
                         processed_splits[col_idx]
                         if (col_idx is not None and col_idx < len(splits))
-                        else None for col_idx in selection
+                        else None
+                        for col_idx in selection
                     ]
                 else:
                     return [processed_splits[col_idx] for col_idx in selection]
@@ -206,7 +240,10 @@ def iter_csv(
             for line in csv_reader:
                 processed_data = process_line(line)
                 if processed_data is not None:
-                    yield {header_fields[i]: processed_data[i] for i in range(len(header_fields))}
+                    yield {
+                        header_fields[i]: processed_data[i]
+                        for i in range(len(header_fields))
+                    }
         else:
             for line in csv_reader:
                 processed_data = process_line(line)
@@ -219,22 +256,22 @@ def iter_csv(
 
 
 def iter_all_csv_objs_from_all_sub_dirs(
-        input_path_or_paths: Union[str, Iterable[str]],
-        pattern: str = '*.csv',
-        use_tqdm: bool = False,
-        display_msg: str = None,
-        verbose: bool = __debug__,
-        encoding: str = None,
-        selection: Union[int, Iterable[int], str, Iterable[str]] = None,
-        sep: str = '\t',
-        quotechar: str = '"',
-        quoting: int = csv.QUOTE_MINIMAL,
-        header: Union[bool, str] = True,
-        parse: bool = False,
-        result_type: Type = tuple,
-        allow_missing_cols: bool = False,
-        top: int = None,
-        top_per_input_path: int = None
+    input_path_or_paths: Union[str, Iterable[str]],
+    pattern: str = "*.csv",
+    use_tqdm: bool = False,
+    display_msg: str = None,
+    verbose: bool = __debug__,
+    encoding: str = None,
+    selection: Union[int, Iterable[int], str, Iterable[str]] = None,
+    sep: str = "\t",
+    quotechar: str = '"',
+    quoting: int = csv.QUOTE_MINIMAL,
+    header: Union[bool, str] = True,
+    parse: bool = False,
+    result_type: Type = tuple,
+    allow_missing_cols: bool = False,
+    top: int = None,
+    top_per_input_path: int = None,
 ) -> Iterator[Dict]:
     """
         Iterate through all CSV objects from all subdirectories of a given directory or directories,
@@ -316,7 +353,9 @@ def iter_all_csv_objs_from_all_sub_dirs(
         if path.isfile(input_path):
             all_files = [input_path]
         else:
-            all_files = get_sorted_files_from_all_sub_dirs(dir_path=input_path, pattern=pattern)
+            all_files = get_sorted_files_from_all_sub_dirs(
+                dir_path=input_path, pattern=pattern
+            )
 
         for csv_file in all_files:
             yield from iter_csv(
@@ -333,7 +372,7 @@ def iter_all_csv_objs_from_all_sub_dirs(
                 parse=parse,
                 result_type=result_type,
                 allow_missing_cols=allow_missing_cols,
-                top=top_per_input_path
+                top=top_per_input_path,
             )
 
     if isinstance(input_path_or_paths, str):

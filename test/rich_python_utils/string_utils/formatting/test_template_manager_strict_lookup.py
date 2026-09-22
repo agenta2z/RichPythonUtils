@@ -20,9 +20,9 @@ import unittest
 from pathlib import Path
 
 from rich_python_utils.string_utils.formatting.template_manager.template_manager import (
+    jinjia_template_format,
     TemplateManager,
     TemplateNotFoundError,
-    jinjia_template_format,
 )
 
 

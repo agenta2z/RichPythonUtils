@@ -19,27 +19,32 @@ Usage:
 """
 
 from resolve_path import resolve_path
+
 resolve_path()  # Add project src to sys.path
 
-import time
 import threading
-from rich_python_utils.mp_utils.task import Task, TaskStatus
+import time
+
 from rich_python_utils.mp_utils.queued_executor import SingleThreadExecutor
-from rich_python_utils.service_utils.queue_service.thread_queue_service import ThreadQueueService
+from rich_python_utils.mp_utils.task import Task, TaskStatus
+from rich_python_utils.service_utils.queue_service.thread_queue_service import (
+    ThreadQueueService,
+)
 
 
 # =============================================================================
 # Define some example task functions
 # =============================================================================
 
+
 def process_order(order_id, customer_name):
     """Simulate processing an order."""
     time.sleep(0.1)  # Simulate some work
     return {
-        'order_id': order_id,
-        'customer': customer_name,
-        'status': 'processed',
-        'timestamp': time.time()
+        "order_id": order_id,
+        "customer": customer_name,
+        "status": "processed",
+        "timestamp": time.time(),
     }
 
 
@@ -47,11 +52,7 @@ def calculate_discount(price, discount_percent):
     """Calculate discounted price."""
     discount_amount = price * (discount_percent / 100)
     final_price = price - discount_amount
-    return {
-        'original': price,
-        'discount': discount_amount,
-        'final': final_price
-    }
+    return {"original": price, "discount": discount_amount, "final": final_price}
 
 
 def send_notification(user_id, message):
@@ -84,10 +85,10 @@ processing with queue-based input and output.
     executor = SingleThreadExecutor(
         input_queue_service=queue_service,
         output_queue_service=queue_service,
-        input_queue_id='task_queue',
-        output_queue_id='result_queue',
-        name='OrderProcessor',
-        verbose=False  # Set to True to see worker messages
+        input_queue_id="task_queue",
+        output_queue_id="result_queue",
+        name="OrderProcessor",
+        verbose=False,  # Set to True to see worker messages
     )
 
     print(f"   [OK] Executor created: {executor.name}")
@@ -101,11 +102,15 @@ processing with queue-based input and output.
 
     # Create and submit tasks
     tasks = [
-        Task(callable=process_order, args=(1001, 'Alice'), name='Order-1001'),
-        Task(callable=process_order, args=(1002, 'Bob'), name='Order-1002'),
-        Task(callable=calculate_discount, args=(100.0, 15), name='Discount-Calc'),
-        Task(callable=send_notification, args=(42, 'Your order is ready!'), name='Notify-42'),
-        Task(callable=process_order, args=(1003, 'Charlie'), name='Order-1003'),
+        Task(callable=process_order, args=(1001, "Alice"), name="Order-1001"),
+        Task(callable=process_order, args=(1002, "Bob"), name="Order-1002"),
+        Task(callable=calculate_discount, args=(100.0, 15), name="Discount-Calc"),
+        Task(
+            callable=send_notification,
+            args=(42, "Your order is ready!"),
+            name="Notify-42",
+        ),
+        Task(callable=process_order, args=(1003, "Charlie"), name="Order-1003"),
     ]
 
     for task in tasks:
@@ -138,7 +143,9 @@ processing with queue-based input and output.
         if result:
             results.append(result)
             status = "SUCCESS" if result.is_success() else "FAILED"
-            print(f"   [{i+1}] {status}: Task completed in {result.execution_time:.4f}s")
+            print(
+                f"   [{i + 1}] {status}: Task completed in {result.execution_time:.4f}s"
+            )
             print(f"        Result: {result.result}")
 
     print(f"\n   Total results: {len(results)}")
@@ -185,8 +192,8 @@ processing with queue-based input and output.
     # =========================================================================
     print("\n8. Cleaning up...")
 
-    queue_service.delete('task_queue')
-    queue_service.delete('result_queue')
+    queue_service.delete("task_queue")
+    queue_service.delete("result_queue")
     queue_service.close()
 
     print("   [OK] Queues deleted")
@@ -197,12 +204,14 @@ processing with queue-based input and output.
     print("=" * 80 + "\n")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         main()
     except Exception as e:
         print(f"\n[X] Error: {e}")
         import traceback
+
         traceback.print_exc()
         import sys
+
         sys.exit(1)

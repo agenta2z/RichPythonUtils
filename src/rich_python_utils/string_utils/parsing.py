@@ -1,13 +1,15 @@
 import ast
 from enum import Enum
 from functools import partial
-from typing import List, Tuple, Callable, Optional, Mapping, Union
+from typing import Callable, List, Mapping, Optional, Tuple, Union
 
 from rich_python_utils.common_utils.iter_helper import zip_longest__
 from rich_python_utils.string_utils.misc import get_domain_from_name
 
 
-def parse_as_bins(s: str, boundary_type: Callable = int, sep=',') -> List[Tuple[int, int]]:
+def parse_as_bins(
+    s: str, boundary_type: Callable = int, sep=","
+) -> List[Tuple[int, int]]:
     """
     Parses a string a sequence of bins.
     Args:
@@ -45,10 +47,16 @@ class PreDefinedArgConverters(int, Enum):
 
 
 PREDEFINED_ARG_CONVERTERS = {
-    PreDefinedArgConverters.CommaSeparatedIntegers: lambda x: list(map(int, x.split(','))),
-    PreDefinedArgConverters.CommaSeparatedNumbers: lambda x: list(map(float, x.split(','))),
+    PreDefinedArgConverters.CommaSeparatedIntegers: lambda x: list(
+        map(int, x.split(","))
+    ),
+    PreDefinedArgConverters.CommaSeparatedNumbers: lambda x: list(
+        map(float, x.split(","))
+    ),
     PreDefinedArgConverters.CommaSeparatedIntegerBins: parse_as_bins,
-    PreDefinedArgConverters.CommaSeparatedNumberBins: partial(parse_as_bins, boundary_type=float)
+    PreDefinedArgConverters.CommaSeparatedNumberBins: partial(
+        parse_as_bins, boundary_type=float
+    ),
 }
 
 
@@ -71,18 +79,18 @@ def parse_with_predefined_convert(s: str, converter: PreDefinedArgConverters):
 
     """
     if converter not in PREDEFINED_ARG_CONVERTERS:
-        raise ValueError(f'{converter} is not a pre-defined converter')
+        raise ValueError(f"{converter} is not a pre-defined converter")
     return PREDEFINED_ARG_CONVERTERS[converter](s)
 
 
 # region python function call parsing
 def split_function_calls(
-        input_string: str,
-        separator: str = ';',
-        quotes: Tuple = ('"', "'"),
-        left_brackets: Tuple = ('(', '[', '{'),
-        right_brackets: Tuple = (')', ']', '}'),
-        escape: str = '\\'
+    input_string: str,
+    separator: str = ";",
+    quotes: Tuple = ('"', "'"),
+    left_brackets: Tuple = ("(", "[", "{"),
+    right_brackets: Tuple = (")", "]", "}"),
+    escape: str = "\\",
 ) -> List[str]:
     """
     Splits a string containing multiple function calls separated by a specified character,
@@ -132,7 +140,7 @@ def split_function_calls(
     bracket_stack = []
     current_call = []
     in_quote = False
-    quote_char = ''
+    quote_char = ""
 
     for char in input_string:
         if char in quotes:
@@ -151,21 +159,26 @@ def split_function_calls(
                 bracket_stack.pop()
 
         if char == separator and not bracket_stack and not in_quote:
-            function_calls.append(''.join(current_call).strip())
+            function_calls.append("".join(current_call).strip())
             current_call = []
         else:
             current_call.append(char)
 
     if current_call:
-        function_calls.append(''.join(current_call).strip())
+        function_calls.append("".join(current_call).strip())
 
     return function_calls
 
 
-def _parse_function_call(invocation_string: str, return_dict: bool = False, return_domain: bool = False, verbose=False):
+def _parse_function_call(
+    invocation_string: str,
+    return_dict: bool = False,
+    return_domain: bool = False,
+    verbose=False,
+):
     try:
         # Parse the string into an AST node
-        node = ast.parse(invocation_string, mode='eval')
+        node = ast.parse(invocation_string, mode="eval")
 
         if isinstance(node, ast.Expression) and isinstance(node.body, ast.Call):
             call_node = node.body
@@ -173,7 +186,7 @@ def _parse_function_call(invocation_string: str, return_dict: bool = False, retu
             # Function to recursively extract function name
             def extract_function_name(node):
                 if isinstance(node, ast.Attribute):
-                    return extract_function_name(node.value) + '.' + node.attr
+                    return extract_function_name(node.value) + "." + node.attr
                 elif isinstance(node, ast.Name):
                     return node.id
 
@@ -184,7 +197,7 @@ def _parse_function_call(invocation_string: str, return_dict: bool = False, retu
             args_dict = {}
             for arg in call_node.args:
                 # This handles unnamed arguments
-                args_dict[f'arg{len(args_dict) + 1}'] = ast.literal_eval(arg)
+                args_dict[f"arg{len(args_dict) + 1}"] = ast.literal_eval(arg)
 
             for keyword in call_node.keywords:
                 # This handles named arguments
@@ -197,21 +210,30 @@ def _parse_function_call(invocation_string: str, return_dict: bool = False, retu
             print(f"Error parsing `{invocation_string}` with exception `{e}`")
 
     if return_dict:
-        parsed_funtion_call = {
-            'name': function_name,
-            'args': args_dict
-        }
+        parsed_funtion_call = {"name": function_name, "args": args_dict}
         if return_domain:
-            parsed_funtion_call['domain'] = get_domain_from_name(function_name, domain_separator='.')
+            parsed_funtion_call["domain"] = get_domain_from_name(
+                function_name, domain_separator="."
+            )
         return parsed_funtion_call
     else:
         if return_domain:
-            return function_name, args_dict, get_domain_from_name(function_name, domain_separator='.')
+            return (
+                function_name,
+                args_dict,
+                get_domain_from_name(function_name, domain_separator="."),
+            )
         else:
             return function_name, args_dict
 
 
-def parse_function_call(invocation_string: str, separator: Optional[str] = None, return_dict: bool = False, return_domain: bool = False, verbose: bool = False):
+def parse_function_call(
+    invocation_string: str,
+    separator: Optional[str] = None,
+    return_dict: bool = False,
+    return_domain: bool = False,
+    verbose: bool = False,
+):
     """
     Parses one or multiple function call strings. When a separator is provided, it splits
     the string based on the separator and parses each function call individually. The function
@@ -262,21 +284,28 @@ def parse_function_call(invocation_string: str, separator: Optional[str] = None,
     """
     if separator:
         return [
-            _parse_function_call(x, return_dict=return_dict, return_domain=return_domain, verbose=verbose)
+            _parse_function_call(
+                x, return_dict=return_dict, return_domain=return_domain, verbose=verbose
+            )
             for x in split_function_calls(invocation_string, separator)
         ]
     else:
-        return _parse_function_call(invocation_string, return_dict=return_dict, return_domain=return_domain, verbose=verbose)
+        return _parse_function_call(
+            invocation_string,
+            return_dict=return_dict,
+            return_domain=return_domain,
+            verbose=verbose,
+        )
 
 
 def get_function_names(
-        invocation_string: str,
-        separator: Optional[str] = None,
-        simple_name_extraction_on_parsing_failure: bool = False,
-        quotes: Tuple = ('"', "'"),
-        left_brackets: Tuple = ('(', '[', '{'),
-        right_brackets: Tuple = (')', ']', '}'),
-        escape: str = '\\'
+    invocation_string: str,
+    separator: Optional[str] = None,
+    simple_name_extraction_on_parsing_failure: bool = False,
+    quotes: Tuple = ('"', "'"),
+    left_brackets: Tuple = ("(", "[", "{"),
+    right_brackets: Tuple = (")", "]", "}"),
+    escape: str = "\\",
 ) -> Union[str, List[str]]:
     """
     Extracts the function names from a string containing one or multiple function calls.
@@ -321,26 +350,25 @@ def get_function_names(
         >>> get_function_names('invalidSyntax call1(arg1=5); call2(arg2="text")', separator=';', simple_name_extraction_on_parsing_failure=True)
         ['invalidSyntax call1', 'call2']
     """
-    primary_left_bracket = left_brackets[0] if left_brackets else '('
+    primary_left_bracket = left_brackets[0] if left_brackets else "("
     if separator:
         try:
             return [
-                x.split('(', maxsplit=1)[0].strip()
+                x.split("(", maxsplit=1)[0].strip()
                 for x in split_function_calls(
                     invocation_string,
                     separator=separator,
                     quotes=quotes,
                     left_brackets=left_brackets,
                     right_brackets=right_brackets,
-                    escape=escape
+                    escape=escape,
                 )
             ]
         except:
             if simple_name_extraction_on_parsing_failure:
                 return [
                     invocation_string_split.split(primary_left_bracket, maxsplit=1)[0]
-                    for invocation_string_split
-                    in invocation_string.split(separator)
+                    for invocation_string_split in invocation_string.split(separator)
                 ]
     else:
         return invocation_string.split(primary_left_bracket, maxsplit=1)[0].strip()
@@ -348,10 +376,14 @@ def get_function_names(
 
 def _get_unit_parsed_func_call_name_and_args(unit_func_call):
     if isinstance(unit_func_call, Mapping):
-        if 'domain' in unit_func_call:
-            return unit_func_call['name'], unit_func_call['args'], unit_func_call['domain']
+        if "domain" in unit_func_call:
+            return (
+                unit_func_call["name"],
+                unit_func_call["args"],
+                unit_func_call["domain"],
+            )
         else:
-            return unit_func_call['name'], unit_func_call['args'], None
+            return unit_func_call["name"], unit_func_call["args"], None
     else:
         if len(unit_func_call) == 2:
             return unit_func_call[0], unit_func_call[1], None
@@ -359,7 +391,9 @@ def _get_unit_parsed_func_call_name_and_args(unit_func_call):
             return unit_func_call
 
 
-def compare_function_calls(func_call: List[Union[Tuple, Mapping]], ref_func_call: List[Union[Tuple, Mapping]]):
+def compare_function_calls(
+    func_call: List[Union[Tuple, Mapping]], ref_func_call: List[Union[Tuple, Mapping]]
+):
     """
 
     Compares two sequences of function calls to determine their match in terms of invocation count,
@@ -410,34 +444,50 @@ def compare_function_calls(func_call: List[Union[Tuple, Mapping]], ref_func_call
 
     """
     num_invocations = num_ref_invocations = 0
-    all_api_domain_accuracy = all_api_name_accuracy = all_api_args_accuracy = all_api_invocation_accuracy = 0
-    first_api_domain_accuracy = first_api_name_accuracy = first_api_args_accuracy = first_api_invocation_accuracy = None
-    last_api_domain_accuracy = last_api_name_accuracy = last_api_args_accuracy = last_api_invocation_accuracy = None
+    all_api_domain_accuracy = all_api_name_accuracy = all_api_args_accuracy = (
+        all_api_invocation_accuracy
+    ) = 0
+    first_api_domain_accuracy = first_api_name_accuracy = first_api_args_accuracy = (
+        first_api_invocation_accuracy
+    ) = None
+    last_api_domain_accuracy = last_api_name_accuracy = last_api_args_accuracy = (
+        last_api_invocation_accuracy
+    ) = None
 
     for unit_call, unit_ref_func_call in zip_longest__(
-            func_call,
-            ref_func_call,
-            atom_types=(Tuple, Mapping),
-            fill_none_by_previous_values=False
+        func_call,
+        ref_func_call,
+        atom_types=(Tuple, Mapping),
+        fill_none_by_previous_values=False,
     ):
         if unit_ref_func_call is None:
             if unit_call is not None:
                 num_invocations += 1
             continue
         else:
-            ref_name, ref_args, ref_domain = _get_unit_parsed_func_call_name_and_args(unit_ref_func_call)
+            ref_name, ref_args, ref_domain = _get_unit_parsed_func_call_name_and_args(
+                unit_ref_func_call
+            )
             if ref_name is not None:
                 num_ref_invocations += 1
                 if unit_call is None:
-                    last_api_domain_accuracy = last_api_name_accuracy = last_api_args_accuracy = last_api_invocation_accuracy = False
+                    last_api_domain_accuracy = last_api_name_accuracy = (
+                        last_api_args_accuracy
+                    ) = last_api_invocation_accuracy = False
                 else:
                     num_invocations += 1
-                    name, args, domain = _get_unit_parsed_func_call_name_and_args(unit_call)
+                    name, args, domain = _get_unit_parsed_func_call_name_and_args(
+                        unit_call
+                    )
 
-                    last_api_domain_accuracy = (ref_domain == domain)
-                    last_api_name_accuracy = (last_api_domain_accuracy and (name == ref_name))
-                    last_api_args_accuracy = (args == ref_args)
-                    last_api_invocation_accuracy = (last_api_name_accuracy and last_api_args_accuracy)
+                    last_api_domain_accuracy = ref_domain == domain
+                    last_api_name_accuracy = last_api_domain_accuracy and (
+                        name == ref_name
+                    )
+                    last_api_args_accuracy = args == ref_args
+                    last_api_invocation_accuracy = (
+                        last_api_name_accuracy and last_api_args_accuracy
+                    )
 
                 if first_api_domain_accuracy is None:
                     first_api_domain_accuracy = last_api_domain_accuracy
@@ -454,11 +504,29 @@ def compare_function_calls(func_call: List[Union[Tuple, Mapping]], ref_func_call
                 all_api_invocation_accuracy += int(last_api_invocation_accuracy)
     return (
         (
-            (all_api_domain_accuracy / num_ref_invocations, all_api_name_accuracy / num_ref_invocations, all_api_args_accuracy / num_ref_invocations, all_api_invocation_accuracy / num_ref_invocations)
-            if num_ref_invocations != 0 else (None, None, None, None)
+            (
+                all_api_domain_accuracy / num_ref_invocations,
+                all_api_name_accuracy / num_ref_invocations,
+                all_api_args_accuracy / num_ref_invocations,
+                all_api_invocation_accuracy / num_ref_invocations,
+            )
+            if num_ref_invocations != 0
+            else (None, None, None, None)
         ),
         (num_invocations, num_ref_invocations, num_invocations == num_ref_invocations),
-        (first_api_domain_accuracy, first_api_name_accuracy, first_api_args_accuracy, first_api_invocation_accuracy),
-        (last_api_domain_accuracy, last_api_name_accuracy, last_api_args_accuracy, last_api_invocation_accuracy)
+        (
+            first_api_domain_accuracy,
+            first_api_name_accuracy,
+            first_api_args_accuracy,
+            first_api_invocation_accuracy,
+        ),
+        (
+            last_api_domain_accuracy,
+            last_api_name_accuracy,
+            last_api_args_accuracy,
+            last_api_invocation_accuracy,
+        ),
     )
+
+
 # endregion

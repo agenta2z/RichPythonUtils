@@ -3,20 +3,22 @@
 Covers T1-T32 from the template versioning formalization plan §6.1.
 """
 
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
+
+import pytest
 from rich_python_utils.common_objects.file_space import (
-    FileSpaceManager,
-    ResolvedContent,
     FieldBackend,
     FileBackend,
+    FileSpaceManager,
+    ResolvedContent,
 )
 
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def single_root(tmp_path):
@@ -41,7 +43,9 @@ def single_root(tmp_path):
     (agg_instr / "create_role.jinja2").write_text("CREATE_ROLE_AGG_INSTRUCTIONS")
 
     # task_instructions flat (for Constraint H subdir fallback test)
-    (plan_vars / "task_instructions" / "default.jinja2").write_text("DEFAULT_INSTRUCTIONS")
+    (plan_vars / "task_instructions" / "default.jinja2").write_text(
+        "DEFAULT_INSTRUCTIONS"
+    )
 
     # space-level variable (plan/_variables/)
     space_vars = tmp_path / "plan" / "_variables" / "task_preamble"
@@ -91,6 +95,7 @@ def two_roots(tmp_path):
 # T1-T6: build_cascade
 # ---------------------------------------------------------------------------
 
+
 class TestBuildCascade:
     def test_T1_three_levels(self, single_root):
         fsm = FileSpaceManager(roots=[str(single_root)])
@@ -122,9 +127,7 @@ class TestBuildCascade:
         assert len(cascade) == 2
 
     def test_T5_empty_subfolder(self, tmp_path):
-        fsm = FileSpaceManager(
-            roots=[str(tmp_path)], reserved_subfolder_canonical=""
-        )
+        fsm = FileSpaceManager(roots=[str(tmp_path)], reserved_subfolder_canonical="")
         cascade = fsm.build_cascade(space="plan", type_="main")
         # No subfolder -> paths don't have _variables
         for p in cascade:
@@ -140,6 +143,7 @@ class TestBuildCascade:
 # ---------------------------------------------------------------------------
 # T7-T11: find_in_folder
 # ---------------------------------------------------------------------------
+
 
 class TestFindInFolder:
     def test_T7_direct_file(self, single_root):
@@ -174,9 +178,7 @@ class TestFindInFolder:
         folder.mkdir()
         (folder / "x.jinja2").write_text("NORMAL")
         (folder / "x.override.jinja2").write_text("OVERRIDE")
-        fsm = FileSpaceManager(
-            roots=[str(tmp_path)], enable_overrides=True
-        )
+        fsm = FileSpaceManager(roots=[str(tmp_path)], enable_overrides=True)
         result = fsm.find_in_folder(folder, "x")
         assert result is not None
         assert "override" in result.name.lower()
@@ -191,11 +193,14 @@ class TestFindInFolder:
 # T12-T13: resolve version basics
 # ---------------------------------------------------------------------------
 
+
 class TestResolveVersion:
     def test_T12_version_specific(self, single_root):
         fsm = FileSpaceManager(roots=[str(single_root)])
         r = fsm.resolve(
-            space="plan", type_="main", name="task_preamble",
+            space="plan",
+            type_="main",
+            name="task_preamble",
             version="aggregation",
         )
         # Constraint H: subdir fallback finds aggregation/default.jinja2
@@ -205,7 +210,9 @@ class TestResolveVersion:
     def test_T13_version_default_fallback(self, single_root):
         fsm = FileSpaceManager(roots=[str(single_root)])
         r = fsm.resolve(
-            space="plan", type_="main", name="task_preamble",
+            space="plan",
+            type_="main",
+            name="task_preamble",
         )
         assert r is not None
         assert r.read() == "DEFAULT_PREAMBLE"
@@ -215,11 +222,14 @@ class TestResolveVersion:
 # T14-T17: master_version
 # ---------------------------------------------------------------------------
 
+
 class TestMasterVersion:
     def test_T14_basic(self, single_root):
         fsm = FileSpaceManager(roots=[str(single_root)])
         r = fsm.resolve(
-            space="plan", type_="main", name="task_preamble",
+            space="plan",
+            type_="main",
+            name="task_preamble",
             master_version="aggregation",
         )
         assert r is not None
@@ -228,8 +238,11 @@ class TestMasterVersion:
     def test_T15_with_version(self, single_root):
         fsm = FileSpaceManager(roots=[str(single_root)])
         r = fsm.resolve(
-            space="plan", type_="main", name="task_preamble",
-            master_version="aggregation", version="create_role",
+            space="plan",
+            type_="main",
+            name="task_preamble",
+            master_version="aggregation",
+            version="create_role",
         )
         assert r is not None
         assert r.read() == "CREATE_ROLE_PREAMBLE"
@@ -237,8 +250,11 @@ class TestMasterVersion:
     def test_T16_default_fallback(self, single_root):
         fsm = FileSpaceManager(roots=[str(single_root)])
         r = fsm.resolve(
-            space="plan", type_="main", name="task_preamble",
-            master_version="aggregation", version="nonexistent",
+            space="plan",
+            type_="main",
+            name="task_preamble",
+            master_version="aggregation",
+            version="nonexistent",
         )
         assert r is not None
         assert r.read() == "AGGREGATION_PREAMBLE"
@@ -247,7 +263,9 @@ class TestMasterVersion:
         """Constraint A: master_version set -> NO flat fallback."""
         fsm = FileSpaceManager(roots=[str(single_root)])
         r = fsm.resolve(
-            space="plan", type_="main", name="task_preamble",
+            space="plan",
+            type_="main",
+            name="task_preamble",
             master_version="nonexistent",
         )
         assert r is None
@@ -265,9 +283,9 @@ def chain_root(tmp_path):
 
     # task_response_format: research_propose has it, aggregation has a different one
     (plan_vars / "task_response_format" / "research_propose").mkdir(parents=True)
-    (plan_vars / "task_response_format" / "research_propose" / "default.jinja2").write_text(
-        "PROPOSAL_INDEX_FENCE"
-    )
+    (
+        plan_vars / "task_response_format" / "research_propose" / "default.jinja2"
+    ).write_text("PROPOSAL_INDEX_FENCE")
     (plan_vars / "task_response_format" / "aggregation").mkdir(parents=True)
     (plan_vars / "task_response_format" / "aggregation" / "default.jinja2").write_text(
         "GENERIC_AGGREGATION_FORMAT"
@@ -286,9 +304,9 @@ def chain_root(tmp_path):
     )
 
     # task_response_format with version-specific files
-    (plan_vars / "task_response_format" / "research_propose" / "modeling.jinja2").write_text(
-        "MODELING_PROPOSAL_FENCE"
-    )
+    (
+        plan_vars / "task_response_format" / "research_propose" / "modeling.jinja2"
+    ).write_text("MODELING_PROPOSAL_FENCE")
     (plan_vars / "task_response_format" / "aggregation" / "special.jinja2").write_text(
         "SPECIAL_AGG_FORMAT"
     )
@@ -303,7 +321,9 @@ class TestMasterVersionChain:
         """When first version has the variable, use it."""
         fsm = FileSpaceManager(roots=[str(chain_root)])
         r = fsm.resolve(
-            space="plan", type_="main", name="task_response_format",
+            space="plan",
+            type_="main",
+            name="task_response_format",
             master_version=["research_propose", "aggregation"],
         )
         assert r is not None
@@ -313,7 +333,9 @@ class TestMasterVersionChain:
         """When first version lacks the variable, fall back to second."""
         fsm = FileSpaceManager(roots=[str(chain_root)])
         r = fsm.resolve(
-            space="plan", type_="main", name="task_preamble",
+            space="plan",
+            type_="main",
+            name="task_preamble",
             master_version=["research_propose", "aggregation"],
         )
         assert r is not None
@@ -323,7 +345,9 @@ class TestMasterVersionChain:
         """task_instructions: not in research_propose, falls back to aggregation."""
         fsm = FileSpaceManager(roots=[str(chain_root)])
         r = fsm.resolve(
-            space="plan", type_="main", name="task_instructions",
+            space="plan",
+            type_="main",
+            name="task_instructions",
             master_version=["research_propose", "aggregation"],
         )
         assert r is not None
@@ -333,7 +357,9 @@ class TestMasterVersionChain:
         """When no version in the chain has the variable, return None."""
         fsm = FileSpaceManager(roots=[str(chain_root)])
         r = fsm.resolve(
-            space="plan", type_="main", name="nonexistent_var",
+            space="plan",
+            type_="main",
+            name="nonexistent_var",
             master_version=["research_propose", "aggregation"],
         )
         assert r is None
@@ -342,7 +368,9 @@ class TestMasterVersionChain:
         """Backward compat: single string still works exactly as before."""
         fsm = FileSpaceManager(roots=[str(chain_root)])
         r = fsm.resolve(
-            space="plan", type_="main", name="task_response_format",
+            space="plan",
+            type_="main",
+            name="task_response_format",
             master_version="aggregation",
         )
         assert r is not None
@@ -352,7 +380,9 @@ class TestMasterVersionChain:
         """Version-specific file found in first master_version."""
         fsm = FileSpaceManager(roots=[str(chain_root)])
         r = fsm.resolve(
-            space="plan", type_="main", name="task_response_format",
+            space="plan",
+            type_="main",
+            name="task_response_format",
             master_version=["research_propose", "aggregation"],
             version="modeling",
         )
@@ -368,7 +398,9 @@ class TestMasterVersionChain:
         """
         fsm = FileSpaceManager(roots=[str(chain_root)])
         r = fsm.resolve(
-            space="plan", type_="main", name="task_response_format",
+            space="plan",
+            type_="main",
+            name="task_response_format",
             master_version=["research_propose", "aggregation"],
             version="special",
         )
@@ -379,7 +411,9 @@ class TestMasterVersionChain:
         """Version not found in any chain entry, falls to default in first match."""
         fsm = FileSpaceManager(roots=[str(chain_root)])
         r = fsm.resolve(
-            space="plan", type_="main", name="task_response_format",
+            space="plan",
+            type_="main",
+            name="task_response_format",
             master_version=["research_propose", "aggregation"],
             version="nonexistent_version",
         )
@@ -391,11 +425,15 @@ class TestMasterVersionChain:
         """List with one element behaves like a plain string."""
         fsm = FileSpaceManager(roots=[str(chain_root)])
         r_list = fsm.resolve(
-            space="plan", type_="main", name="task_response_format",
+            space="plan",
+            type_="main",
+            name="task_response_format",
             master_version=["aggregation"],
         )
         r_str = fsm.resolve(
-            space="plan", type_="main", name="task_response_format",
+            space="plan",
+            type_="main",
+            name="task_response_format",
             master_version="aggregation",
         )
         assert r_list is not None and r_str is not None
@@ -405,7 +443,9 @@ class TestMasterVersionChain:
         """Empty list behaves like master_version=None."""
         fsm = FileSpaceManager(roots=[str(chain_root)])
         r = fsm.resolve(
-            space="plan", type_="main", name="task_response_format",
+            space="plan",
+            type_="main",
+            name="task_response_format",
             master_version=[],
         )
         # No master_version → looks in flat task_response_format/ → no default there
@@ -422,7 +462,9 @@ class TestMasterVersionChain:
 
         fsm = FileSpaceManager(roots=[str(chain_root)])
         r = fsm.resolve(
-            space="plan", type_="main", name="rare_var",
+            space="plan",
+            type_="main",
+            name="rare_var",
             master_version=["research_propose", "aggregation", "deep_fallback"],
         )
         assert r is not None
@@ -433,11 +475,14 @@ class TestMasterVersionChain:
 # T18-T19: cascade cross-level + cross-space
 # ---------------------------------------------------------------------------
 
+
 class TestCascadeCrossLevel:
     def test_T18_found_at_space_level(self, single_root):
         fsm = FileSpaceManager(roots=[str(single_root)])
         r = fsm.resolve(
-            space="plan", type_="main", name="task_preamble",
+            space="plan",
+            type_="main",
+            name="task_preamble",
             version="space_level",
         )
         assert r is not None
@@ -447,7 +492,9 @@ class TestCascadeCrossLevel:
         consumer, framework = two_roots
         fsm = FileSpaceManager(roots=[str(consumer), str(framework)])
         r = fsm.resolve(
-            space="plan", type_="main", name="task_preamble",
+            space="plan",
+            type_="main",
+            name="task_preamble",
             version="aggregation",
         )
         # Consumer L1 doesn't have aggregation, framework L1 does
@@ -459,12 +506,16 @@ class TestCascadeCrossLevel:
 # T20-T22: ResolvedContent shape + explain
 # ---------------------------------------------------------------------------
 
+
 class TestResolvedContent:
     def test_T20_uri_shape_file(self, single_root):
         fsm = FileSpaceManager(roots=[str(single_root)])
         r = fsm.resolve(
-            space="plan", type_="main", name="task_preamble",
-            master_version="aggregation", version="create_role",
+            space="plan",
+            type_="main",
+            name="task_preamble",
+            master_version="aggregation",
+            version="create_role",
         )
         assert r is not None
         assert r.kind == "file"
@@ -475,7 +526,9 @@ class TestResolvedContent:
     def test_T21_lazy_read(self, single_root):
         fsm = FileSpaceManager(roots=[str(single_root)])
         r = fsm.resolve(
-            space="plan", type_="main", name="task_preamble",
+            space="plan",
+            type_="main",
+            name="task_preamble",
             master_version="aggregation",
         )
         assert r is not None
@@ -486,8 +539,11 @@ class TestResolvedContent:
     def test_T22_explain(self, single_root):
         fsm = FileSpaceManager(roots=[str(single_root)])
         trace = fsm.explain(
-            space="plan", type_="main", name="task_preamble",
-            master_version="aggregation", version="create_role",
+            space="plan",
+            type_="main",
+            name="task_preamble",
+            master_version="aggregation",
+            version="create_role",
         )
         assert len(trace) > 0
         assert any(found for _, _, found in trace)
@@ -502,6 +558,7 @@ class TestResolvedContent:
 # T23-T24: multi-root priority
 # ---------------------------------------------------------------------------
 
+
 class TestMultiRootPriority:
     def test_T23_specificity_beats_proximity(self, two_roots):
         """root2 L1 match beats root1 L2 match (version specificity beats proximity)."""
@@ -510,7 +567,9 @@ class TestMultiRootPriority:
         # Consumer has aggregation at space level (L2)
         # Framework has aggregation at type level (L1)
         r = fsm.resolve(
-            space="plan", type_="main", name="task_preamble",
+            space="plan",
+            type_="main",
+            name="task_preamble",
             version="aggregation",
         )
         assert r is not None
@@ -522,7 +581,9 @@ class TestMultiRootPriority:
         consumer, framework = two_roots
         fsm = FileSpaceManager(roots=[str(consumer), str(framework)])
         r = fsm.resolve(
-            space="plan", type_="main", name="task_preamble",
+            space="plan",
+            type_="main",
+            name="task_preamble",
         )
         assert r is not None
         assert r.read() == "CONSUMER_DEFAULT"
@@ -531,6 +592,7 @@ class TestMultiRootPriority:
 # ---------------------------------------------------------------------------
 # T25-T26: prefix equivalence
 # ---------------------------------------------------------------------------
+
 
 class TestPrefixEquivalence:
     def test_T25_underscore_preferred(self, tmp_path):
@@ -565,6 +627,7 @@ class TestPrefixEquivalence:
 # T27: .config.yaml LOCAL-only
 # ---------------------------------------------------------------------------
 
+
 class TestConfigYamlLocalOnly:
     def test_T27_no_cascade(self, tmp_path):
         """.config.yaml in folder A does NOT affect sibling folder B."""
@@ -590,6 +653,7 @@ class TestConfigYamlLocalOnly:
 # T28-T30: backend protocol
 # ---------------------------------------------------------------------------
 
+
 class TestBackendProtocol:
     def test_T28_file_backend_can_resolve(self, single_root):
         backend = FileBackend()
@@ -605,8 +669,13 @@ class TestBackendProtocol:
         mock_backend = MagicMock(spec=FieldBackend)
         mock_backend.scheme = "mock"
         mock_backend.resolve.return_value = ResolvedContent(
-            name="v", kind="field", uri="mock://v", path=folder,
-            field="v", mime=None, _backend=mock_backend,
+            name="v",
+            kind="field",
+            uri="mock://v",
+            path=folder,
+            field="v",
+            mime=None,
+            _backend=mock_backend,
         )
 
         fsm = FileSpaceManager(
@@ -626,8 +695,13 @@ class TestBackendProtocol:
         mock_backend = MagicMock()
         mock_backend.scheme = "mock"
         mock_resolved = ResolvedContent(
-            name="v", kind="field", uri="mock://v", path=folder,
-            field="v", mime=None, _backend=mock_backend,
+            name="v",
+            kind="field",
+            uri="mock://v",
+            path=folder,
+            field="v",
+            mime=None,
+            _backend=mock_backend,
         )
         mock_backend.resolve.return_value = mock_resolved
 
@@ -644,14 +718,18 @@ class TestBackendProtocol:
 # T31-T32: subdirectory fallback (Constraint H)
 # ---------------------------------------------------------------------------
 
+
 class TestSubdirFallback:
     def test_T31_when_master_unset(self, single_root):
         """Subdir fallback: version='aggregation' with master_version=None finds
         aggregation/default.jinja2 after migration (transparent to callers)."""
         fsm = FileSpaceManager(roots=[str(single_root)])
         r = fsm.resolve(
-            space="plan", type_="main", name="task_preamble",
-            version="aggregation", master_version=None,
+            space="plan",
+            type_="main",
+            name="task_preamble",
+            version="aggregation",
+            master_version=None,
         )
         assert r is not None
         assert r.read() == "AGGREGATION_PREAMBLE"
@@ -661,8 +739,11 @@ class TestSubdirFallback:
         (Constraint A: flat search disabled)."""
         fsm = FileSpaceManager(roots=[str(single_root)])
         r = fsm.resolve(
-            space="plan", type_="main", name="task_preamble",
-            version="aggregation", master_version="aggregation",
+            space="plan",
+            type_="main",
+            name="task_preamble",
+            version="aggregation",
+            master_version="aggregation",
         )
         # master_version="aggregation" -> search in aggregation/ folder
         # version="aggregation" -> look for aggregation.jinja2 inside aggregation/

@@ -7,7 +7,6 @@ can be lazy. Regression: the legacy ``*_factory`` suffix path still works.
 """
 
 from omegaconf import OmegaConf
-
 from rich_python_utils.config_utils import instantiate
 from rich_python_utils.config_utils._lazy_config_factory import LazyConfigFactory
 

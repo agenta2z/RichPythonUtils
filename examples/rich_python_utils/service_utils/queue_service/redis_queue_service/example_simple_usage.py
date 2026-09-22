@@ -16,9 +16,12 @@ Usage:
 """
 
 from resolve_path import resolve_path
+
 resolve_path()  # Add project src to sys.path
 
-from rich_python_utils.service_utils.queue_service.redis_queue_service import RedisQueueService
+from rich_python_utils.service_utils.queue_service.redis_queue_service import (
+    RedisQueueService,
+)
 
 
 def main():
@@ -30,12 +33,12 @@ def main():
 
     # 1. Create service instance
     print("1. Creating RedisQueueService...")
-    service = RedisQueueService(host='localhost', port=6379)
+    service = RedisQueueService(host="localhost", port=6379)
     print(f"   [OK] Connected: {service}")
 
     # 2. Create a queue
     print("\n2. Creating a queue...")
-    queue_id = 'my_example_queue'
+    queue_id = "my_example_queue"
     service.create_queue(queue_id)
     print(f"   [OK] Queue created: {queue_id}")
 
@@ -48,26 +51,18 @@ def main():
         "Hello, Redis Queue!",
         3.14159,
         True,
-
         # Collections
         [1, 2, 3, 4, 5],
-        {'name': 'Alice', 'age': 30, 'city': 'Seattle'},
-        ('tuple', 'data', 123),
-
+        {"name": "Alice", "age": 30, "city": "Seattle"},
+        ("tuple", "data", 123),
         # Nested structures
         {
-            'user': {
-                'id': 1,
-                'profile': {
-                    'name': 'Bob',
-                    'interests': ['coding', 'music', 'reading']
-                }
+            "user": {
+                "id": 1,
+                "profile": {"name": "Bob", "interests": ["coding", "music", "reading"]},
             },
-            'metadata': {
-                'timestamp': '2025-01-05T12:00:00',
-                'version': '1.0'
-            }
-        }
+            "metadata": {"timestamp": "2025-01-05T12:00:00", "version": "1.0"},
+        },
     ]
 
     for i, obj in enumerate(objects_to_put, 1):
@@ -124,12 +119,12 @@ def main():
     service.close()
     print(f"   [OK] Connection closed")
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("[OK] Example completed successfully!")
-    print("="*80 + "\n")
+    print("=" * 80 + "\n")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         main()
     except Exception as e:

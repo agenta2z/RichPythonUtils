@@ -8,9 +8,9 @@ def bitflip_bytes(data: bytes) -> bytes:
 
 def encrypt_file(input_path: str, output_path: str) -> None:
     """Encrypt a file using bit flip algorithm."""
-    with open(input_path, 'rb') as f:
+    with open(input_path, "rb") as f:
         data = f.read()
-    with open(output_path, 'wb') as f:
+    with open(output_path, "wb") as f:
         f.write(bitflip_bytes(data))
 
 

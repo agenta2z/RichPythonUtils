@@ -25,16 +25,18 @@ from pathlib import Path
 
 # Add src to path
 project_root = Path(__file__).parent.parent.parent.parent.parent
-sys.path.insert(0, str(project_root / 'src'))
+sys.path.insert(0, str(project_root / "src"))
 
-from rich_python_utils.service_utils.queue_service.thread_queue_service import ThreadQueueService
+from rich_python_utils.service_utils.queue_service.thread_queue_service import (
+    ThreadQueueService,
+)
 
 
 def test_initialization():
     """Test service initialization."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 1: Service Initialization")
-    print("="*80)
+    print("=" * 80)
 
     try:
         service = ThreadQueueService()
@@ -54,14 +56,14 @@ def test_initialization():
 
 def test_create_queue():
     """Test creating queues."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 2: Create Queue")
-    print("="*80)
+    print("=" * 80)
 
     service = ThreadQueueService()
 
     # Create queue
-    queue_id = 'test_queue_1'
+    queue_id = "test_queue_1"
     created = service.create_queue(queue_id)
     print(f"[OK] Created queue: {queue_id} (created={created})")
     assert created, "Should return True for new queue"
@@ -84,27 +86,27 @@ def test_create_queue():
 
 def test_put_get():
     """Test putting and getting objects."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 3: Put and Get Objects")
-    print("="*80)
+    print("=" * 80)
 
     service = ThreadQueueService()
-    queue_id = 'test_queue_2'
+    queue_id = "test_queue_2"
 
     # Test different object types
     test_objects = [
         42,
         "hello world",
         [1, 2, 3],
-        {'key': 'value', 'number': 123},
-        ('tuple', 'data'),
-        {'nested': {'dict': {'with': ['list', 'inside']}}},
+        {"key": "value", "number": 123},
+        ("tuple", "data"),
+        {"nested": {"dict": {"with": ["list", "inside"]}}},
     ]
 
     print(f"\nPutting {len(test_objects)} objects onto queue '{queue_id}':")
     for i, obj in enumerate(test_objects):
         service.put(queue_id, obj)
-        print(f"  [{i+1}] Put: {obj}")
+        print(f"  [{i + 1}] Put: {obj}")
 
     # Check size
     size = service.size(queue_id)
@@ -115,7 +117,7 @@ def test_put_get():
     print(f"\nGetting objects from queue:")
     for i in range(len(test_objects)):
         obj = service.get(queue_id, blocking=False)
-        print(f"  [{i+1}] Got: {obj}")
+        print(f"  [{i + 1}] Got: {obj}")
         assert obj == test_objects[i], f"Expected {test_objects[i]}, got {obj}"
 
     print(f"\n[OK] All objects retrieved correctly")
@@ -138,12 +140,12 @@ def test_put_get():
 
 def test_blocking_get():
     """Test blocking get with timeout."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 4: Blocking Get with Timeout")
-    print("="*80)
+    print("=" * 80)
 
     service = ThreadQueueService()
-    queue_id = 'test_queue_3'
+    queue_id = "test_queue_3"
 
     # Create the queue first
     service.create_queue(queue_id)
@@ -151,6 +153,7 @@ def test_blocking_get():
     # Get from empty queue with timeout
     print(f"Getting from empty queue with 2 second timeout...")
     import time
+
     start = time.time()
     obj = service.get(queue_id, blocking=True, timeout=2.0)
     elapsed = time.time() - start
@@ -175,15 +178,15 @@ def test_blocking_get():
 
 def test_peek():
     """Test peeking at queue without removing items."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 5: Peek Operation")
-    print("="*80)
+    print("=" * 80)
 
     service = ThreadQueueService()
-    queue_id = 'test_queue_4'
+    queue_id = "test_queue_4"
 
     # Put multiple items
-    items = ['first', 'second', 'third']
+    items = ["first", "second", "third"]
     for item in items:
         service.put(queue_id, item)
 
@@ -192,17 +195,17 @@ def test_peek():
     # Peek at tail (last item in queue)
     tail = service.peek(queue_id, index=-1)
     print(f"[OK] Peek at tail (index=-1): {tail}")
-    assert tail == 'third', f"Expected 'third', got {tail}"
+    assert tail == "third", f"Expected 'third', got {tail}"
 
     # Peek at head (first item in queue)
     head = service.peek(queue_id, index=0)
     print(f"[OK] Peek at head (index=0): {head}")
-    assert head == 'first', f"Expected 'first', got {head}"
+    assert head == "first", f"Expected 'first', got {head}"
 
     # Peek at middle
     middle = service.peek(queue_id, index=1)
     print(f"[OK] Peek at middle (index=1): {middle}")
-    assert middle == 'second', f"Expected 'second', got {middle}"
+    assert middle == "second", f"Expected 'second', got {middle}"
 
     # Check size didn't change
     size = service.size(queue_id)
@@ -232,17 +235,17 @@ def test_peek():
 
 def test_multiple_queues():
     """Test multiple independent queues."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 6: Multiple Independent Queues")
-    print("="*80)
+    print("=" * 80)
 
     service = ThreadQueueService()
 
     # Create multiple queues
     queues = {
-        'queue_a': [1, 2, 3],
-        'queue_b': ['a', 'b', 'c'],
-        'queue_c': [{'key': 'value'}]
+        "queue_a": [1, 2, 3],
+        "queue_b": ["a", "b", "c"],
+        "queue_c": [{"key": "value"}],
     }
 
     # Put items
@@ -287,12 +290,12 @@ def test_multiple_queues():
 
 def test_clear_and_delete():
     """Test clearing and deleting queues."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 7: Clear and Delete Operations")
-    print("="*80)
+    print("=" * 80)
 
     service = ThreadQueueService()
-    queue_id = 'test_queue_5'
+    queue_id = "test_queue_5"
 
     # Put items
     for i in range(5):
@@ -331,11 +334,11 @@ def test_clear_and_delete():
 
 def test_context_manager():
     """Test using service as context manager."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 8: Context Manager")
-    print("="*80)
+    print("=" * 80)
 
-    queue_id = 'test_queue_6'
+    queue_id = "test_queue_6"
 
     with ThreadQueueService() as service:
         service.put(queue_id, "test_data")
@@ -350,12 +353,12 @@ def test_context_manager():
 
 def test_auto_create_queue():
     """Test automatic queue creation on put."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 9: Auto-Create Queue on Put")
-    print("="*80)
+    print("=" * 80)
 
     service = ThreadQueueService()
-    queue_id = 'test_queue_auto'
+    queue_id = "test_queue_auto"
 
     # Put to non-existent queue (should auto-create)
     print(f"Putting to non-existent queue '{queue_id}'...")
@@ -379,50 +382,52 @@ def test_auto_create_queue():
 
 def test_get_stats():
     """Test getting statistics."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 10: Get Statistics")
-    print("="*80)
+    print("=" * 80)
 
     service = ThreadQueueService()
 
     # Create queues with different sizes
-    service.put('queue_1', 'item1')
-    service.put('queue_2', 'item1')
-    service.put('queue_2', 'item2')
-    service.put('queue_3', 'item1')
-    service.put('queue_3', 'item2')
-    service.put('queue_3', 'item3')
+    service.put("queue_1", "item1")
+    service.put("queue_2", "item1")
+    service.put("queue_2", "item2")
+    service.put("queue_3", "item1")
+    service.put("queue_3", "item2")
+    service.put("queue_3", "item3")
 
     # Get stats for specific queue
-    stats_q2 = service.get_stats('queue_2')
+    stats_q2 = service.get_stats("queue_2")
     print(f"[OK] Stats for queue_2: {stats_q2}")
-    assert stats_q2['size'] == 2, f"Expected size 2, got {stats_q2['size']}"
-    assert stats_q2['exists'], "Queue should exist"
+    assert stats_q2["size"] == 2, f"Expected size 2, got {stats_q2['size']}"
+    assert stats_q2["exists"], "Queue should exist"
 
     # Get stats for all queues
     stats_all = service.get_stats()
     print(f"[OK] Stats for all queues: {stats_all}")
-    assert stats_all['total_queues'] == 3, f"Expected 3 queues, got {stats_all['total_queues']}"
-    assert 'queue_1' in stats_all['queues'], "queue_1 should be in stats"
-    assert 'queue_2' in stats_all['queues'], "queue_2 should be in stats"
-    assert 'queue_3' in stats_all['queues'], "queue_3 should be in stats"
+    assert stats_all["total_queues"] == 3, (
+        f"Expected 3 queues, got {stats_all['total_queues']}"
+    )
+    assert "queue_1" in stats_all["queues"], "queue_1 should be in stats"
+    assert "queue_2" in stats_all["queues"], "queue_2 should be in stats"
+    assert "queue_3" in stats_all["queues"], "queue_3 should be in stats"
 
     # Clean up
-    service.delete('queue_1')
-    service.delete('queue_2')
-    service.delete('queue_3')
+    service.delete("queue_1")
+    service.delete("queue_2")
+    service.delete("queue_3")
     service.close()
     return True
 
 
 def test_closed_service():
     """Test operations on closed service."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 11: Operations on Closed Service")
-    print("="*80)
+    print("=" * 80)
 
     service = ThreadQueueService()
-    queue_id = 'test_queue_closed'
+    queue_id = "test_queue_closed"
 
     # Close the service
     service.close()
@@ -481,13 +486,14 @@ def run_all_tests():
         except Exception as e:
             print(f"\n[X] Test failed with exception: {e}")
             import traceback
+
             traceback.print_exc()
             results.append((name, False))
 
     # Summary
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST SUMMARY")
-    print("="*80)
+    print("=" * 80)
 
     for name, success in results:
         status = "[OK] PASS" if success else "[X] FAIL"
@@ -506,6 +512,6 @@ def run_all_tests():
         return False
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     success = run_all_tests()
     sys.exit(0 if success else 1)

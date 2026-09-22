@@ -6,18 +6,20 @@ Covers:
 - Bidirectional edges correct after insert mode rewiring
 - Post-wiring cycle check catches cross-boundary cycles
 """
+
 import os
 import shutil
 import tempfile
 
 import pytest
-
-from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode, WorkGraph
 from rich_python_utils.common_objects.workflow.common.expansion import (
     GraphExpansionResult,
     SubgraphSpec,
 )
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
+)
+from rich_python_utils.common_objects.workflow.workgraph import WorkGraph, WorkGraphNode
 
 
 class _TestNode(WorkGraphNode):
@@ -34,8 +36,11 @@ class _TestNode(WorkGraphNode):
 
 def _make_node(name, fn, save_dir, pass_down=ResultPassDownMode.ResultAsFirstArg, **kw):
     return _TestNode(
-        name=name, value=fn, save_dir=save_dir,
-        result_pass_down_mode=pass_down, **kw,
+        name=name,
+        value=fn,
+        save_dir=save_dir,
+        result_pass_down_mode=pass_down,
+        **kw,
     )
 
 
@@ -55,12 +60,20 @@ class TestInsertMode:
 
         # Build: root → downstream
         root = _make_node("root", lambda x: x, save_dir)
-        downstream = _make_node("downstream", lambda x: (call_log.append("downstream"), x + 100)[1], save_dir)
+        downstream = _make_node(
+            "downstream",
+            lambda x: (call_log.append("downstream"), x + 100)[1],
+            save_dir,
+        )
         root.add_next(downstream)
 
         # Subgraph: sub_a → sub_b
-        sub_a = _make_node("sub_a", lambda x: (call_log.append("sub_a"), x + 10)[1], save_dir)
-        sub_b = _make_node("sub_b", lambda x: (call_log.append("sub_b"), x + 20)[1], save_dir)
+        sub_a = _make_node(
+            "sub_a", lambda x: (call_log.append("sub_a"), x + 10)[1], save_dir
+        )
+        sub_b = _make_node(
+            "sub_b", lambda x: (call_log.append("sub_b"), x + 20)[1], save_dir
+        )
         sub_a.add_next(sub_b)
 
         # Set expansion limits
@@ -90,7 +103,9 @@ class TestInsertMode:
         call_log = []
 
         root = _make_node("root", lambda x: x, save_dir)
-        sub_a = _make_node("sub_a", lambda x: (call_log.append("sub_a"), x + 10)[1], save_dir)
+        sub_a = _make_node(
+            "sub_a", lambda x: (call_log.append("sub_a"), x + 10)[1], save_dir
+        )
 
         root._max_expansion_depth = 5
         root._max_total_nodes = 200
@@ -99,7 +114,7 @@ class TestInsertMode:
             return GraphExpansionResult(
                 result=x,
                 subgraph=SubgraphSpec(nodes=[sub_a], entry_nodes=[sub_a]),
-                attach_mode='insert',
+                attach_mode="insert",
             )
 
         root.value = emitter
@@ -148,7 +163,7 @@ class TestInsertMode:
 
     def test_post_wiring_cycle_check_catches_cross_boundary_cycles(self, save_dir):
         """Cross-boundary cycle through existing graph topology is detected.
-        
+
         Setup: root → downstream, downstream → root (existing back-edge)
         After insert mode: root → sub_a → sub_b → downstream → root (cycle!)
         """

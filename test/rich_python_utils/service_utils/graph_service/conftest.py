@@ -16,8 +16,10 @@ import string
 
 import pytest
 from hypothesis import strategies as st
-
-from rich_python_utils.service_utils.graph_service.graph_node import GraphEdge, GraphNode
+from rich_python_utils.service_utils.graph_service.graph_node import (
+    GraphEdge,
+    GraphNode,
+)
 from rich_python_utils.service_utils.graph_service.memory_graph_service import (
     MemoryGraphService,
 )
@@ -84,10 +86,16 @@ def graph_service(request, tmp_path):
     if backend == "memory":
         svc = MemoryGraphService()
     elif backend == "file":
-        from rich_python_utils.service_utils.graph_service.file_graph_service import FileGraphService
+        from rich_python_utils.service_utils.graph_service.file_graph_service import (
+            FileGraphService,
+        )
+
         svc = FileGraphService(base_dir=str(tmp_path / "graph_store"))
     elif backend == "networkx":
-        from rich_python_utils.service_utils.graph_service.networkx_graph_service import NetworkxGraphService
+        from rich_python_utils.service_utils.graph_service.networkx_graph_service import (
+            NetworkxGraphService,
+        )
+
         svc = NetworkxGraphService()
     else:
         raise ValueError(f"Unknown backend: {backend}")

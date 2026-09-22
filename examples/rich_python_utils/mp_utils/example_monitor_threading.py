@@ -22,22 +22,26 @@ Usage:
 """
 
 from resolve_path import resolve_path
+
 resolve_path()
 
 import os
-import time
-import threading
 import tempfile
+import threading
+import time
 from pathlib import Path
 
-from rich_python_utils.mp_utils.task import Task
 from rich_python_utils.mp_utils.queued_executor import QueuedThreadPoolExecutor
-from rich_python_utils.service_utils.queue_service.thread_queue_service import ThreadQueueService
+from rich_python_utils.mp_utils.task import Task
+from rich_python_utils.service_utils.queue_service.thread_queue_service import (
+    ThreadQueueService,
+)
 
 
 # =============================================================================
 # Counter Thread (Simulates a long-running process)
 # =============================================================================
+
 
 class CounterThread(threading.Thread):
     """Background thread that increments a counter in a file every 2 seconds."""
@@ -67,6 +71,7 @@ class CounterThread(threading.Thread):
 # =============================================================================
 # Monitor Tasks (Wrapper Mode - returns (result, next_tasks) tuple)
 # =============================================================================
+
 
 def create_monitor_task(counter_file: Path, target_divisor: int = 20):
     """
@@ -100,18 +105,20 @@ def create_monitor_task(counter_file: Path, target_divisor: int = 20):
         # Check if milestone reached
         if current_count > 0 and current_count % target_divisor == 0:
             # Condition met! Return action task as next_task
-            print(f"   [Monitor] Milestone reached: count={current_count} (divisible by {target_divisor})")
+            print(
+                f"   [Monitor] Milestone reached: count={current_count} (divisible by {target_divisor})"
+            )
 
             milestone_result = {
-                'status': 'milestone_reached',
-                'count': current_count,
-                'divisor': target_divisor
+                "status": "milestone_reached",
+                "count": current_count,
+                "divisor": target_divisor,
             }
 
             # Create action task to handle the milestone
             action_task = Task(
                 callable=create_action_task(current_count),
-                task_id=f"action_{current_count}"
+                task_id=f"action_{current_count}",
             )
 
             return (milestone_result, [action_task])
@@ -120,15 +127,12 @@ def create_monitor_task(counter_file: Path, target_divisor: int = 20):
             # Condition not met - continue monitoring
             time.sleep(poll_interval)
 
-            status_result = {
-                'status': 'monitoring',
-                'count': current_count
-            }
+            status_result = {"status": "monitoring", "count": current_count}
 
             # Re-queue self to continue monitoring (self-loop pattern)
             self_task = Task(
                 callable=monitor_iteration,  # Closure - works in threads!
-                task_id=f"monitor_{current_count + 1}"
+                task_id=f"monitor_{current_count + 1}",
             )
 
             return (status_result, [self_task])
@@ -143,15 +147,18 @@ def create_action_task(count: int):
     This could be: sending a notification, triggering another job,
     updating a dashboard, etc.
     """
+
     def action():
         print(f"   [Action] Processing milestone at count={count}")
-        print(f"   [Action] Simulating work (e.g., send notification, update dashboard)...")
+        print(
+            f"   [Action] Simulating work (e.g., send notification, update dashboard)..."
+        )
         time.sleep(0.5)  # Simulate some work
 
         result = {
-            'action': 'milestone_processed',
-            'count': count,
-            'timestamp': time.time()
+            "action": "milestone_processed",
+            "count": count,
+            "timestamp": time.time(),
         }
         print(f"   [Action] Completed!")
 
@@ -164,6 +171,7 @@ def create_action_task(count: int):
 # =============================================================================
 # Main Example
 # =============================================================================
+
 
 def main():
     print("""
@@ -197,11 +205,11 @@ Using wrapper mode (router=None):
     executor = QueuedThreadPoolExecutor(
         input_queue_service=queue_service,
         output_queue_service=queue_service,
-        input_queue_id='monitor_in',
-        output_queue_id='monitor_out',
+        input_queue_id="monitor_in",
+        output_queue_id="monitor_out",
         num_workers=2,
-        name='MonitorPool',
-        verbose=False
+        name="MonitorPool",
+        verbose=False,
     )
 
     print("   [OK] Executor created with 2 worker threads")
@@ -214,7 +222,7 @@ Using wrapper mode (router=None):
     counter_thread = CounterThread(
         counter_file=counter_file,
         interval=2.0,
-        max_count=25  # Will reach 20 milestone
+        max_count=25,  # Will reach 20 milestone
     )
     counter_thread.start()
     print("   [OK] Counter thread started (incrementing every 2 seconds)")
@@ -229,7 +237,7 @@ Using wrapper mode (router=None):
     # Create initial monitor task
     monitor_task = Task(
         callable=create_monitor_task(counter_file, target_divisor=20),
-        task_id="monitor_start"
+        task_id="monitor_start",
     )
 
     start_time = time.time()
@@ -237,7 +245,7 @@ Using wrapper mode (router=None):
     # Run the monitor - it will self-loop until condition is met
     result = executor.run_async(
         [monitor_task],
-        depth_first=True  # Process next iteration before other tasks
+        depth_first=True,  # Process next iteration before other tasks
     )
 
     elapsed = time.time() - start_time
@@ -277,12 +285,14 @@ Key Takeaways:
 """)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         main()
     except Exception as e:
         print(f"\n[X] Error: {e}")
         import traceback
+
         traceback.print_exc()
         import sys
+
         sys.exit(1)

@@ -45,7 +45,7 @@ Usage:
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from attr import attrs, attrib
+from attr import attrib, attrs
 
 from .document import Document
 from .filter_utils import matches_filters
@@ -129,7 +129,9 @@ class MemoryRetrievalService(RetrievalServiceBase):
         self._store[ns][doc.doc_id] = doc
         return doc.doc_id
 
-    def get_by_id(self, doc_id: str, namespace: Optional[str] = None) -> Optional[Document]:
+    def get_by_id(
+        self, doc_id: str, namespace: Optional[str] = None
+    ) -> Optional[Document]:
         """
         Retrieve a document by its ID.
 
@@ -266,8 +268,7 @@ class MemoryRetrievalService(RetrievalServiceBase):
             return list(ns_store.values())
 
         return [
-            doc for doc in ns_store.values()
-            if matches_filters(doc.metadata, filters)
+            doc for doc in ns_store.values() if matches_filters(doc.metadata, filters)
         ]
 
     def size(self, namespace: Optional[str] = None) -> int:
@@ -345,9 +346,7 @@ class MemoryRetrievalService(RetrievalServiceBase):
                 "backend": "memory",
                 "namespace_count": len(self._store),
                 "total_documents": total_docs,
-                "namespaces": {
-                    ns: len(store) for ns, store in self._store.items()
-                },
+                "namespaces": {ns: len(store) for ns, store in self._store.items()},
             }
 
     def ping(self) -> bool:

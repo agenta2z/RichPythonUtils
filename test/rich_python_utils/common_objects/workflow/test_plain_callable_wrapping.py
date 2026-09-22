@@ -5,17 +5,19 @@ Covers:
 - Lambda gets synthetic name via wrapping
 - StepWrapper instances keep their existing name
 """
+
 import os
 import shutil
 import tempfile
 
 import pytest
 from attr import attrs
-
-from rich_python_utils.common_objects.workflow.workflow import Workflow
 from rich_python_utils.common_objects.workflow.common.expansion import ExpansionResult
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
+)
 from rich_python_utils.common_objects.workflow.common.step_wrapper import StepWrapper
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
+from rich_python_utils.common_objects.workflow.workflow import Workflow
 
 
 @attrs(slots=False)
@@ -43,6 +45,7 @@ class TestPlainCallableWrapping:
 
     def test_plain_function_gets_synthetic_name(self):
         """A plain function (no 'name' attr) gets wrapped with a synthetic name."""
+
         def emitter(x):
             return ExpansionResult(
                 result=x,

@@ -19,7 +19,7 @@ from pathlib import Path
 
 # Add src to path
 project_root = Path(__file__).parent.parent.parent.parent
-sys.path.insert(0, str(project_root / 'src'))
+sys.path.insert(0, str(project_root / "src"))
 
 from rich_python_utils.mp_utils.task import Task, TaskState, TaskStatus
 
@@ -28,6 +28,7 @@ from rich_python_utils.mp_utils.task import Task, TaskState, TaskStatus
 # TaskStatus Tests
 # =============================================================================
 
+
 def test_task_status_values():
     """Test TaskStatus enum values."""
     print("\n" + "=" * 80)
@@ -35,20 +36,20 @@ def test_task_status_values():
     print("=" * 80)
 
     # Check all expected values exist
-    assert TaskStatus.PENDING.value == 'pending', "PENDING should be 'pending'"
+    assert TaskStatus.PENDING.value == "pending", "PENDING should be 'pending'"
     print(f"[OK] TaskStatus.PENDING = '{TaskStatus.PENDING.value}'")
 
-    assert TaskStatus.RUNNING.value == 'running', "RUNNING should be 'running'"
+    assert TaskStatus.RUNNING.value == "running", "RUNNING should be 'running'"
     print(f"[OK] TaskStatus.RUNNING = '{TaskStatus.RUNNING.value}'")
 
-    assert TaskStatus.COMPLETED.value == 'completed', "COMPLETED should be 'completed'"
+    assert TaskStatus.COMPLETED.value == "completed", "COMPLETED should be 'completed'"
     print(f"[OK] TaskStatus.COMPLETED = '{TaskStatus.COMPLETED.value}'")
 
-    assert TaskStatus.FAILED.value == 'failed', "FAILED should be 'failed'"
+    assert TaskStatus.FAILED.value == "failed", "FAILED should be 'failed'"
     print(f"[OK] TaskStatus.FAILED = '{TaskStatus.FAILED.value}'")
 
     # Check READY status (added for queue-based execution)
-    assert TaskStatus.READY.value == 'ready', "READY should be 'ready'"
+    assert TaskStatus.READY.value == "ready", "READY should be 'ready'"
     print(f"[OK] TaskStatus.READY = '{TaskStatus.READY.value}'")
 
     # Check enum count (5 statuses: PENDING, READY, RUNNING, COMPLETED, FAILED)
@@ -75,7 +76,7 @@ def test_task_status_comparison():
     print(f"[OK] TaskStatus.COMPLETED != TaskStatus.FAILED")
 
     # Test lookup by value
-    assert TaskStatus('completed') == TaskStatus.COMPLETED
+    assert TaskStatus("completed") == TaskStatus.COMPLETED
     print(f"[OK] TaskStatus('completed') == TaskStatus.COMPLETED")
 
     return True
@@ -84,6 +85,7 @@ def test_task_status_comparison():
 # =============================================================================
 # Task Tests
 # =============================================================================
+
 
 def test_task_creation_simple():
     """Test simple task creation."""
@@ -109,7 +111,7 @@ def test_task_creation_simple():
         return False
 
     # Check name is extracted from function
-    assert task.name == 'simple_func', f"Expected 'simple_func', got {task.name}"
+    assert task.name == "simple_func", f"Expected 'simple_func', got {task.name}"
     print(f"[OK] Name extracted from callable: {task.name}")
 
     # Check default args and kwargs
@@ -129,16 +131,12 @@ def test_task_creation_with_args():
     def add(a, b, c=0):
         return a + b + c
 
-    task = Task(
-        callable=add,
-        args=(1, 2),
-        kwargs={'c': 3}
-    )
+    task = Task(callable=add, args=(1, 2), kwargs={"c": 3})
 
     assert task.args == (1, 2), f"Expected (1, 2), got {task.args}"
     print(f"[OK] Args stored: {task.args}")
 
-    assert task.kwargs == {'c': 3}, f"Expected {{'c': 3}}, got {task.kwargs}"
+    assert task.kwargs == {"c": 3}, f"Expected {{'c': 3}}, got {task.kwargs}"
     print(f"[OK] Kwargs stored: {task.kwargs}")
 
     return True
@@ -153,16 +151,14 @@ def test_task_creation_custom_id_and_name():
     def my_func():
         pass
 
-    task = Task(
-        callable=my_func,
-        task_id='custom-task-123',
-        name='My Custom Task'
-    )
+    task = Task(callable=my_func, task_id="custom-task-123", name="My Custom Task")
 
-    assert task.task_id == 'custom-task-123', f"Expected 'custom-task-123', got {task.task_id}"
+    assert task.task_id == "custom-task-123", (
+        f"Expected 'custom-task-123', got {task.task_id}"
+    )
     print(f"[OK] Custom task_id: {task.task_id}")
 
-    assert task.name == 'My Custom Task', f"Expected 'My Custom Task', got {task.name}"
+    assert task.name == "My Custom Task", f"Expected 'My Custom Task', got {task.name}"
     print(f"[OK] Custom name: {task.name}")
 
     return True
@@ -210,17 +206,13 @@ def test_task_execute_with_kwargs():
     print("TEST 8: Task Execution (With Kwargs)")
     print("=" * 80)
 
-    def greet(name, greeting='Hello'):
+    def greet(name, greeting="Hello"):
         return f"{greeting}, {name}!"
 
-    task = Task(
-        callable=greet,
-        args=('World',),
-        kwargs={'greeting': 'Hi'}
-    )
+    task = Task(callable=greet, args=("World",), kwargs={"greeting": "Hi"})
     result = task.execute()
 
-    assert result == 'Hi, World!', f"Expected 'Hi, World!', got {result}"
+    assert result == "Hi, World!", f"Expected 'Hi, World!', got {result}"
     print(f"[OK] Task executed with kwargs, result: {result}")
 
     return True
@@ -232,7 +224,7 @@ def test_task_execute_lambda():
     print("TEST 9: Task Execution (Lambda)")
     print("=" * 80)
 
-    task = Task(callable=lambda x: x ** 2, args=(5,))
+    task = Task(callable=lambda x: x**2, args=(5,))
     result = task.execute()
 
     assert result == 25, f"Expected 25, got {result}"
@@ -304,11 +296,11 @@ def test_task_repr():
     def my_func():
         pass
 
-    task = Task(callable=my_func, task_id='test-id', name='Test Task')
+    task = Task(callable=my_func, task_id="test-id", name="Test Task")
     repr_str = repr(task)
 
-    assert 'test-id' in repr_str, f"task_id should be in repr: {repr_str}"
-    assert 'Test Task' in repr_str, f"name should be in repr: {repr_str}"
+    assert "test-id" in repr_str, f"task_id should be in repr: {repr_str}"
+    assert "Test Task" in repr_str, f"name should be in repr: {repr_str}"
     print(f"[OK] repr(task): {repr_str}")
 
     return True
@@ -342,6 +334,7 @@ def test_task_callable_class():
 # TaskResult Tests
 # =============================================================================
 
+
 def test_task_result_creation():
     """Test TaskResult creation."""
     print("\n" + "=" * 80)
@@ -349,16 +342,16 @@ def test_task_result_creation():
     print("=" * 80)
 
     result = TaskState(
-        task_id='task-123',
+        task_id="task-123",
         result=42,
         status=TaskStatus.COMPLETED,
         worker_id=0,
         start_time=1000.0,
         end_time=1001.5,
-        execution_time=1.5
+        execution_time=1.5,
     )
 
-    assert result.task_id == 'task-123'
+    assert result.task_id == "task-123"
     print(f"[OK] task_id: {result.task_id}")
 
     assert result.result == 42
@@ -388,7 +381,7 @@ def test_task_result_defaults():
     print("TEST 15: TaskResult Default Values")
     print("=" * 80)
 
-    result = TaskState(task_id='task-456')
+    result = TaskState(task_id="task-456")
 
     assert result.result is None, f"Expected None, got {result.result}"
     print(f"[OK] Default result: {result.result}")
@@ -433,35 +426,25 @@ def test_task_result_is_success():
 
     # Successful result
     success_result = TaskState(
-        task_id='task-success',
-        result=42,
-        status=TaskStatus.COMPLETED
+        task_id="task-success", result=42, status=TaskStatus.COMPLETED
     )
     assert success_result.is_success() is True
     print(f"[OK] COMPLETED result.is_success() = True")
 
     # Failed result
     failed_result = TaskState(
-        task_id='task-failed',
-        status=TaskStatus.FAILED,
-        exception=ValueError("Error")
+        task_id="task-failed", status=TaskStatus.FAILED, exception=ValueError("Error")
     )
     assert failed_result.is_success() is False
     print(f"[OK] FAILED result.is_success() = False")
 
     # Pending result
-    pending_result = TaskState(
-        task_id='task-pending',
-        status=TaskStatus.PENDING
-    )
+    pending_result = TaskState(task_id="task-pending", status=TaskStatus.PENDING)
     assert pending_result.is_success() is False
     print(f"[OK] PENDING result.is_success() = False")
 
     # Running result
-    running_result = TaskState(
-        task_id='task-running',
-        status=TaskStatus.RUNNING
-    )
+    running_result = TaskState(task_id="task-running", status=TaskStatus.RUNNING)
     assert running_result.is_success() is False
     print(f"[OK] RUNNING result.is_success() = False")
 
@@ -476,10 +459,10 @@ def test_task_result_with_exception():
 
     exception = ValueError("Something went wrong")
     result = TaskState(
-        task_id='task-error',
+        task_id="task-error",
         status=TaskStatus.FAILED,
         exception=exception,
-        execution_time=0.1
+        execution_time=0.1,
     )
 
     assert result.status == TaskStatus.FAILED
@@ -504,17 +487,17 @@ def test_task_result_repr():
     print("=" * 80)
 
     result = TaskState(
-        task_id='task-repr-test',
+        task_id="task-repr-test",
         status=TaskStatus.COMPLETED,
         worker_id=5,
-        execution_time=1.2345
+        execution_time=1.2345,
     )
     repr_str = repr(result)
 
-    assert 'task-repr-test' in repr_str
-    assert 'completed' in repr_str
-    assert 'worker_id=5' in repr_str
-    assert '1.2345' in repr_str
+    assert "task-repr-test" in repr_str
+    assert "completed" in repr_str
+    assert "worker_id=5" in repr_str
+    assert "1.2345" in repr_str
     print(f"[OK] repr(result): {repr_str}")
 
     return True
@@ -531,15 +514,17 @@ def test_task_result_various_result_types():
         ("integer", 42),
         ("float", 3.14159),
         ("list", [1, 2, 3]),
-        ("dict", {'key': 'value'}),
+        ("dict", {"key": "value"}),
         ("tuple", (1, 2, 3)),
         ("None", None),
-        ("nested", {'nested': {'data': [1, 2, {'x': 'y'}]}}),
+        ("nested", {"nested": {"data": [1, 2, {"x": "y"}]}}),
     ]
 
     for name, value in test_cases:
-        result = TaskState(task_id=f'task-{name}', result=value)
-        assert result.result == value, f"Failed for {name}: expected {value}, got {result.result}"
+        result = TaskState(task_id=f"task-{name}", result=value)
+        assert result.result == value, (
+            f"Failed for {name}: expected {value}, got {result.result}"
+        )
         print(f"[OK] {name}: {value}")
 
     return True
@@ -548,6 +533,7 @@ def test_task_result_various_result_types():
 # =============================================================================
 # Integration Tests
 # =============================================================================
+
 
 def test_task_result_integration():
     """Test Task and TaskResult integration."""
@@ -562,9 +548,7 @@ def test_task_result_integration():
 
     # Create and execute task
     task = Task(
-        callable=compute_sum,
-        task_id='integration-test',
-        args=([1, 2, 3, 4, 5],)
+        callable=compute_sum, task_id="integration-test", args=([1, 2, 3, 4, 5],)
     )
 
     start_time = time.time()
@@ -579,7 +563,7 @@ def test_task_result_integration():
         worker_id=0,
         start_time=start_time,
         end_time=end_time,
-        execution_time=end_time - start_time
+        execution_time=end_time - start_time,
     )
 
     assert result.task_id == task.task_id
@@ -601,6 +585,7 @@ def test_task_result_integration():
 # Test Runner
 # =============================================================================
 
+
 def run_all_tests():
     """Run all tests."""
     print("""
@@ -613,7 +598,6 @@ def run_all_tests():
         # TaskStatus tests
         ("TaskStatus Enum Values", test_task_status_values),
         ("TaskStatus Comparison", test_task_status_comparison),
-
         # Task tests
         ("Simple Task Creation", test_task_creation_simple),
         ("Task Creation with Args", test_task_creation_with_args),
@@ -626,7 +610,6 @@ def run_all_tests():
         ("Task Validation (Non-Callable)", test_task_validation_non_callable),
         ("Task __repr__", test_task_repr),
         ("Task with Callable Class", test_task_callable_class),
-
         # TaskResult tests
         ("TaskResult Creation", test_task_result_creation),
         ("TaskResult Default Values", test_task_result_defaults),
@@ -634,7 +617,6 @@ def run_all_tests():
         ("TaskResult with Exception", test_task_result_with_exception),
         ("TaskResult __repr__", test_task_result_repr),
         ("TaskResult Various Result Types", test_task_result_various_result_types),
-
         # Integration tests
         ("Task and TaskResult Integration", test_task_result_integration),
     ]
@@ -648,6 +630,7 @@ def run_all_tests():
         except Exception as e:
             print(f"\n[X] Test failed with exception: {e}")
             import traceback
+
             traceback.print_exc()
             results.append((name, False))
 
@@ -673,6 +656,6 @@ def run_all_tests():
         return False
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     success = run_all_tests()
     sys.exit(0 if success else 1)

@@ -26,6 +26,7 @@ After `expander` fires with DynamicExpansion of [W0, W1]:
 
 Run: python 03_insert_mode_preserves_downstream.py
 """
+
 from __future__ import annotations
 
 import os
@@ -38,20 +39,20 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from resolve_path import resolve_path
+
 resolve_path()
 
-from rich_python_utils.common_objects.workflow import (
-    GraphExpansionResult, SubgraphSpec,
-)
-from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode, WorkGraph
+from rich_python_utils.common_objects.workflow import GraphExpansionResult, SubgraphSpec
 from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
     ResultPassDownMode,
 )
+from rich_python_utils.common_objects.workflow.workgraph import WorkGraph, WorkGraphNode
 
 
 # =============================================================
 # CORE CODE
 # =============================================================
+
 
 class SavingNode(WorkGraphNode):
     def __init__(self, save_dir=None, **kwargs):
@@ -65,7 +66,9 @@ class SavingNode(WorkGraphNode):
 
 def _make(name, fn, save_dir):
     return SavingNode(
-        name=name, value=fn, save_dir=save_dir,
+        name=name,
+        value=fn,
+        save_dir=save_dir,
         result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
     )
 
@@ -82,7 +85,7 @@ def build_graph(save_dir):
         return GraphExpansionResult(
             result=x,
             subgraph=SubgraphSpec(nodes=[w0, w1], entry_nodes=[w0, w1]),
-            attach_mode='insert',
+            attach_mode="insert",
         )
 
     expander = _make("expander", expander_fn, save_dir)
@@ -90,16 +93,21 @@ def build_graph(save_dir):
     expander.add_next(child_b)
     expander.add_next(child_c)
 
-    return WorkGraph(
-        start_nodes=[expander],
-        max_expansion_depth=1,
-        max_total_nodes=50,
-    ), expander, [child_a, child_b, child_c]
+    return (
+        WorkGraph(
+            start_nodes=[expander],
+            max_expansion_depth=1,
+            max_total_nodes=50,
+        ),
+        expander,
+        [child_a, child_b, child_c],
+    )
 
 
 # =============================================================
 # DRIVER
 # =============================================================
+
 
 def main():
     tmp = Path(tempfile.mkdtemp(prefix="wg_example03_"))
@@ -124,6 +132,7 @@ def main():
 # =============================================================
 # NARRATION
 # =============================================================
+
 
 def banner(text):
     print(f"\n{'=' * 60}\n  {text}\n{'=' * 60}")

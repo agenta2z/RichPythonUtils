@@ -4,17 +4,23 @@ import functools
 
 import pytest
 from omegaconf import OmegaConf
-
 from rich_python_utils.config_utils import instantiate, register_alias, register_class
-
-from test_helpers import PlainClass, SimpleAttrs, SimpleDataclass, ParentAttrs, create_simple
+from test_helpers import (
+    create_simple,
+    ParentAttrs,
+    PlainClass,
+    SimpleAttrs,
+    SimpleDataclass,
+)
 
 _MOD = "test_helpers"
 
 
 class TestDataclass:
     def test_from_full_path(self):
-        cfg = OmegaConf.create({"_target_": f"{_MOD}.SimpleDataclass", "x": 10, "y": 20})
+        cfg = OmegaConf.create(
+            {"_target_": f"{_MOD}.SimpleDataclass", "x": 10, "y": 20}
+        )
         obj = instantiate(cfg)
         assert isinstance(obj, SimpleDataclass)
         assert obj.x == 10 and obj.y == 20
@@ -29,7 +35,9 @@ class TestDataclass:
 
 class TestPlainClass:
     def test_from_target(self):
-        cfg = OmegaConf.create({"_target_": f"{_MOD}.PlainClass", "name": "hi", "value": 7})
+        cfg = OmegaConf.create(
+            {"_target_": f"{_MOD}.PlainClass", "name": "hi", "value": 7}
+        )
         obj = instantiate(cfg)
         assert isinstance(obj, PlainClass)
         assert obj.name == "hi" and obj.value == 7
@@ -37,7 +45,9 @@ class TestPlainClass:
 
 class TestFactoryFunction:
     def test_function_as_target(self):
-        cfg = OmegaConf.create({"_target_": f"{_MOD}.create_simple", "name": "fn", "count": 99})
+        cfg = OmegaConf.create(
+            {"_target_": f"{_MOD}.create_simple", "name": "fn", "count": 99}
+        )
         obj = instantiate(cfg)
         assert isinstance(obj, SimpleAttrs)
         assert obj.name == "fn" and obj.count == 99
@@ -46,11 +56,13 @@ class TestFactoryFunction:
 class TestNestedRecursive:
     def test_parent_with_nested_child(self):
         register_alias("SA", f"{_MOD}.SimpleAttrs")
-        cfg = OmegaConf.create({
-            "_target_": f"{_MOD}.ParentAttrs",
-            "child": {"_target_": "SA", "name": "nested", "count": 3},
-            "label": "parent",
-        })
+        cfg = OmegaConf.create(
+            {
+                "_target_": f"{_MOD}.ParentAttrs",
+                "child": {"_target_": "SA", "name": "nested", "count": 3},
+                "label": "parent",
+            }
+        )
         obj = instantiate(cfg)
         assert isinstance(obj, ParentAttrs)
         assert isinstance(obj.child, SimpleAttrs)
@@ -67,10 +79,12 @@ class TestFullPathWithoutRegistration:
 
 class TestConvertAll:
     def test_produces_native_types(self):
-        cfg = OmegaConf.create({
-            "_target_": f"{_MOD}.SimpleAttrs",
-            "name": "test",
-        })
+        cfg = OmegaConf.create(
+            {
+                "_target_": f"{_MOD}.SimpleAttrs",
+                "name": "test",
+            }
+        )
         obj = instantiate(cfg)
         assert isinstance(obj, SimpleAttrs)
 
@@ -86,21 +100,25 @@ class TestStringShorthand:
     def test_expands_alias_to_target(self):
         register_alias("SA", f"{_MOD}.SimpleAttrs")
         register_alias("PA", f"{_MOD}.ParentAttrs")
-        cfg = OmegaConf.create({
-            "_target_": "PA",
-            "child": "SA",  # shorthand
-            "label": "test",
-        })
+        cfg = OmegaConf.create(
+            {
+                "_target_": "PA",
+                "child": "SA",  # shorthand
+                "label": "test",
+            }
+        )
         obj = instantiate(cfg)
         assert isinstance(obj, ParentAttrs)
         assert isinstance(obj.child, SimpleAttrs)
 
     def test_non_alias_string_stays(self):
         register_alias("SA", f"{_MOD}.SimpleAttrs")
-        cfg = OmegaConf.create({
-            "_target_": "SA",
-            "name": "hello",  # not an alias
-        })
+        cfg = OmegaConf.create(
+            {
+                "_target_": "SA",
+                "name": "hello",  # not an alias
+            }
+        )
         obj = instantiate(cfg)
         assert obj.name == "hello"
 
@@ -114,11 +132,13 @@ class TestStringShorthand:
     def test_mixed_shorthand_and_full(self):
         register_alias("SA", f"{_MOD}.SimpleAttrs")
         register_alias("PA", f"{_MOD}.ParentAttrs")
-        cfg = OmegaConf.create({
-            "_target_": "PA",
-            "child": {"_target_": "SA", "name": "full_syntax", "count": 5},
-            "label": "mixed",
-        })
+        cfg = OmegaConf.create(
+            {
+                "_target_": "PA",
+                "child": {"_target_": "SA", "name": "full_syntax", "count": 5},
+                "label": "mixed",
+            }
+        )
         obj = instantiate(cfg)
         assert obj.child.name == "full_syntax"
         assert obj.child.count == 5

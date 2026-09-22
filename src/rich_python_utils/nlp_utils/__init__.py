@@ -5,11 +5,10 @@ from pathlib import Path
 _IS_NLTK_LOADED = False
 _IS_FLAIR_LOADED = False
 
-ENV_PATH_NLTK_DATA = 'NLTK_DATA_PATH'
-ENV_PATH_FLAIR_CACHE = 'FLAIR_CACHE_PATH'
+ENV_PATH_NLTK_DATA = "NLTK_DATA_PATH"
+ENV_PATH_FLAIR_CACHE = "FLAIR_CACHE_PATH"
 
 if ENV_PATH_NLTK_DATA in environ and environ[ENV_PATH_NLTK_DATA]:
-
     try:
         import nltk
 

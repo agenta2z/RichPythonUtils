@@ -24,6 +24,7 @@ import tempfile
 import time
 
 from resolve_path import resolve_path
+
 resolve_path()
 
 from rich_python_utils.service_utils.keyvalue_service.memory_keyvalue_service import (
@@ -121,8 +122,10 @@ def main():
             print(f"    All {len(sample_keys)} retrieved values match across backends!")
         else:
             print(f"    Mismatch detected in retrieved values")
-        print(f"    Sample -- '{sample_key}': researcher={sample['researcher']}, "
-              f"temp={sample['temperature_K']}K")
+        print(
+            f"    Sample -- '{sample_key}': researcher={sample['researcher']}, "
+            f"temp={sample['temperature_K']}K"
+        )
 
         print("\n" + "=" * 70)
         print("Tutorial 5 complete -- batch operations across backends!")
@@ -138,4 +141,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n[X] Error: {e}")
         import traceback
+
         traceback.print_exc()

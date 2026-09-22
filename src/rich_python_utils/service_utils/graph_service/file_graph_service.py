@@ -57,11 +57,11 @@ import os
 from collections import deque
 from typing import Any, Dict, List, Optional, Tuple
 
-from attr import attrs, attrib
+from attr import attrib, attrs
+from rich_python_utils.nlp_utils.semantic_search import term_overlap_search, tokenize
 
 from .graph_node import GraphEdge, GraphNode
 from .graph_service_base import GraphServiceBase
-from rich_python_utils.nlp_utils.semantic_search import tokenize, term_overlap_search
 
 logger = logging.getLogger(__name__)
 
@@ -91,8 +91,7 @@ def _encode_key(key: str) -> str:
         A filesystem-safe encoded key string.
     """
     return (
-        key
-        .replace("%", "%25")
+        key.replace("%", "%25")
         .replace(":", "%3A")
         .replace("/", "%2F")
         .replace("\\", "%5C")
@@ -127,8 +126,7 @@ def _decode_key(encoded_key: str) -> str:
         The original key string.
     """
     return (
-        encoded_key
-        .replace("%2A", "*")
+        encoded_key.replace("%2A", "*")
         .replace("%3F", "?")
         .replace("%22", '"')
         .replace("%3E", ">")
@@ -202,7 +200,9 @@ class FileGraphService(GraphServiceBase):
         encoded = _encode_key(node_id)
         return os.path.join(self._nodes_dir(namespace), f"{encoded}.json")
 
-    def _edge_path(self, namespace: str, source_id: str, target_id: str, edge_type: str) -> str:
+    def _edge_path(
+        self, namespace: str, source_id: str, target_id: str, edge_type: str
+    ) -> str:
         """Return the file path for an edge."""
         key = _edge_key(source_id, target_id, edge_type)
         encoded = _encode_key(key)
@@ -277,7 +277,9 @@ class FileGraphService(GraphServiceBase):
         path = self._node_path(ns, node.node_id)
         self._write_json(path, node.to_dict())
 
-    def get_node(self, node_id: str, namespace: Optional[str] = None) -> Optional[GraphNode]:
+    def get_node(
+        self, node_id: str, namespace: Optional[str] = None
+    ) -> Optional[GraphNode]:
         """
         Retrieve a node by its ID by reading its JSON file.
 
@@ -333,7 +335,10 @@ class FileGraphService(GraphServiceBase):
                 edge_path = os.path.join(edges_dir, filename)
                 data = self._read_json(edge_path)
                 if data is not None:
-                    if data.get("source_id") == node_id or data.get("target_id") == node_id:
+                    if (
+                        data.get("source_id") == node_id
+                        or data.get("target_id") == node_id
+                    ):
                         os.remove(edge_path)
 
         self._cleanup_empty_dirs(ns)
@@ -358,13 +363,11 @@ class FileGraphService(GraphServiceBase):
 
         if not self._node_exists(ns, edge.source_id):
             raise ValueError(
-                f"Source node '{edge.source_id}' does not exist "
-                f"in namespace '{ns}'"
+                f"Source node '{edge.source_id}' does not exist in namespace '{ns}'"
             )
         if not self._node_exists(ns, edge.target_id):
             raise ValueError(
-                f"Target node '{edge.target_id}' does not exist "
-                f"in namespace '{ns}'"
+                f"Target node '{edge.target_id}' does not exist in namespace '{ns}'"
             )
 
         path = self._edge_path(ns, edge.source_id, edge.target_id, edge.edge_type)
@@ -401,7 +404,11 @@ class FileGraphService(GraphServiceBase):
                 continue
             if direction == "incoming" and e.target_id != node_id:
                 continue
-            if direction == "both" and e.source_id != node_id and e.target_id != node_id:
+            if (
+                direction == "both"
+                and e.source_id != node_id
+                and e.target_id != node_id
+            ):
                 continue
             # Check edge type filter
             if edge_type is not None and e.edge_type != edge_type:
@@ -635,11 +642,13 @@ class FileGraphService(GraphServiceBase):
             edges_dir = self._edges_dir(ns)
             node_count = (
                 sum(1 for f in os.listdir(nodes_dir) if f.endswith(".json"))
-                if os.path.isdir(nodes_dir) else 0
+                if os.path.isdir(nodes_dir)
+                else 0
             )
             edge_count = (
                 sum(1 for f in os.listdir(edges_dir) if f.endswith(".json"))
-                if os.path.isdir(edges_dir) else 0
+                if os.path.isdir(edges_dir)
+                else 0
             )
             return {
                 "backend": "file",
@@ -658,11 +667,13 @@ class FileGraphService(GraphServiceBase):
                 edges_dir = self._edges_dir(ns)
                 nc = (
                     sum(1 for f in os.listdir(nodes_dir) if f.endswith(".json"))
-                    if os.path.isdir(nodes_dir) else 0
+                    if os.path.isdir(nodes_dir)
+                    else 0
                 )
                 ec = (
                     sum(1 for f in os.listdir(edges_dir) if f.endswith(".json"))
-                    if os.path.isdir(edges_dir) else 0
+                    if os.path.isdir(edges_dir)
+                    else 0
                 )
                 total_nodes += nc
                 total_edges += ec
@@ -697,13 +708,11 @@ class FileGraphService(GraphServiceBase):
             # Check if namespace has any nodes or edges
             nodes_dir = os.path.join(entry_path, "nodes")
             edges_dir = os.path.join(entry_path, "edges")
-            has_nodes = (
-                os.path.isdir(nodes_dir)
-                and any(f.endswith(".json") for f in os.listdir(nodes_dir))
+            has_nodes = os.path.isdir(nodes_dir) and any(
+                f.endswith(".json") for f in os.listdir(nodes_dir)
             )
-            has_edges = (
-                os.path.isdir(edges_dir)
-                and any(f.endswith(".json") for f in os.listdir(edges_dir))
+            has_edges = os.path.isdir(edges_dir) and any(
+                f.endswith(".json") for f in os.listdir(edges_dir)
             )
             if has_nodes or has_edges:
                 result.append(entry)
@@ -796,9 +805,7 @@ class FileGraphService(GraphServiceBase):
         """String representation of the service."""
         all_ns = self.namespaces()
         total_nodes = sum(self.size(namespace=ns) for ns in all_ns)
-        total_edges = sum(
-            len(self._load_all_edges(ns)) for ns in all_ns
-        )
+        total_edges = sum(len(self._load_all_edges(ns)) for ns in all_ns)
         return (
             f"FileGraphService("
             f"base_dir='{self.base_dir}', "

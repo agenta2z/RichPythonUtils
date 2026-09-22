@@ -5,13 +5,10 @@ Tests that the new modular implementation produces identical results
 to the legacy implementation across all input formats and features.
 """
 
-import pytest
 from argparse import Namespace
 
-from rich_python_utils.common_utils.arg_utils.arg_parse import (
-    get_parsed_args,
-    ArgInfo,
-)
+import pytest
+from rich_python_utils.common_utils.arg_utils.arg_parse import ArgInfo, get_parsed_args
 
 
 class TestBackwardCompatibility:
@@ -28,9 +25,7 @@ class TestBackwardCompatibility:
         verbose = kwargs.pop("verbose", False)
 
         # Run new implementation
-        new_result = get_parsed_args(
-            **kwargs, argv=argv, verbose=verbose, legacy=False
-        )
+        new_result = get_parsed_args(**kwargs, argv=argv, verbose=verbose, legacy=False)
 
         # Run legacy implementation
         legacy_result = get_parsed_args(
@@ -46,9 +41,7 @@ class TestBackwardCompatibility:
             )
         elif isinstance(new_result, list):
             # List preset case
-            match = all(
-                vars(n) == vars(l) for n, l in zip(new_result, legacy_result)
-            )
+            match = all(vars(n) == vars(l) for n, l in zip(new_result, legacy_result))
         else:
             match = vars(new_result) == vars(legacy_result)
 
@@ -277,7 +270,9 @@ class TestBackwardCompatibility:
             legacy=False,
         )
         assert isinstance(new_result, tuple)
-        assert new_result[1] == ["para1"]  # Correctly identifies seen args from provided argv
+        assert new_result[1] == [
+            "para1"
+        ]  # Correctly identifies seen args from provided argv
 
     # Short name with separator
     def test_short_name_separator(self):

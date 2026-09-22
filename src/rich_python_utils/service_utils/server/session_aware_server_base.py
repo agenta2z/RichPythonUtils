@@ -1,5 +1,3 @@
-
-
 """Abstract session-aware server base using template method pattern.
 
 Subclasses implement _create_session_manager(), _create_message_handlers(),
@@ -234,9 +232,7 @@ class SessionAwareServerBase(ABC):
             conv = getattr(session, "active_conversation", None) if session else None
             if conv is not None and not conv.done():
                 # Re-queue: message stays for the next poll cycle
-                await asyncio.to_thread(
-                    self._queue_service.put, queue_id, message
-                )
+                await asyncio.to_thread(self._queue_service.put, queue_id, message)
                 return
 
         # Dispatch directly in the event loop thread (not via to_thread).
@@ -267,7 +263,9 @@ class SessionAwareServerBase(ABC):
             # memory so it can be reused when the same WebUI session reconnects
             # (page refresh, tab switch, network hiccup). Actual cleanup
             # happens via idle timeout (default 30 min).
-            logger.info("Session deregistered: %s (session preserved for reconnect)", session_id)
+            logger.info(
+                "Session deregistered: %s (session preserved for reconnect)", session_id
+            )
 
     def _signal_handler(self) -> None:
         """Handle shutdown signals."""

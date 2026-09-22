@@ -4,10 +4,10 @@ TOML preset loader for get_parsed_args.
 Loads preset configurations from TOML files (.toml).
 """
 
-from typing import Dict, Any, List, Optional, Tuple
-from pathlib import Path
 import os
 import sys
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 from .base import PresetLoader
 
@@ -38,7 +38,7 @@ class TomlPresetLoader(PresetLoader):
     @property
     def supported_extensions(self) -> Tuple[str, ...]:
         """Returns supported file extensions."""
-        return ('.toml',)
+        return (".toml",)
 
     def can_handle(self, file_path: str) -> bool:
         """
@@ -50,7 +50,7 @@ class TomlPresetLoader(PresetLoader):
         Returns:
             True if file has .toml extension
         """
-        return file_path.endswith('.toml')
+        return file_path.endswith(".toml")
 
     def resolve_path(self, file_path: str) -> Optional[str]:
         """
@@ -67,8 +67,8 @@ class TomlPresetLoader(PresetLoader):
             return os.path.abspath(file_path)
 
         # If no extension, try adding .toml
-        if not file_path.endswith('.toml'):
-            candidate = file_path + '.toml'
+        if not file_path.endswith(".toml"):
+            candidate = file_path + ".toml"
             if os.path.exists(candidate):
                 return os.path.abspath(candidate)
 
@@ -113,7 +113,7 @@ class TomlPresetLoader(PresetLoader):
             raise FileNotFoundError(f"TOML preset file not found: {file_path}")
 
         # Load TOML file (binary mode required)
-        with open(resolved, 'rb') as f:
+        with open(resolved, "rb") as f:
             try:
                 data = tomllib.load(f)
             except Exception as e:
@@ -123,7 +123,9 @@ class TomlPresetLoader(PresetLoader):
             return {}
 
         if not isinstance(data, dict):
-            raise ValueError(f"TOML file must contain a table/dict, got {type(data).__name__}")
+            raise ValueError(
+                f"TOML file must contain a table/dict, got {type(data).__name__}"
+            )
 
         # Extract nested keys if specified
         if keys:

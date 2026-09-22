@@ -1,11 +1,23 @@
 from collections import deque
 from collections.abc import Callable
-from typing import List, Dict, Tuple, Sequence, TypeVar, Iterable, Set, Union, Mapping, Any, Hashable
+from typing import (
+    Any,
+    Dict,
+    Hashable,
+    Iterable,
+    List,
+    Mapping,
+    Sequence,
+    Set,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 from rich_python_utils.algorithms.tree.trie import build_trie
 from rich_python_utils.string_utils import join_
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 def shortest_circular_path(graph: List[List[int]]) -> int:
@@ -101,12 +113,18 @@ def shortest_circular_path(graph: List[List[int]]) -> int:
     full_mask = (1 << n) - 1  # All cities have been visited when mask == full_mask
 
     for mask in range(1, full_mask + 1):  # iterates through all induced subgraphs
-        for u in range(n):  # trying out each of the vertex on the subgraph as start vertex
+        for u in range(
+            n
+        ):  # trying out each of the vertex on the subgraph as start vertex
             if not (mask & (1 << u)):
                 continue
-            prev_mask = mask ^ (1 << u)  # xor operator to remove vertex u from mask to obtain the prev_mask
+            prev_mask = mask ^ (
+                1 << u
+            )  # xor operator to remove vertex u from mask to obtain the prev_mask
 
-            for v in range(n):  # try to find the minimal cost to reach vertex u from any vertex other v in the subgraph
+            for v in range(
+                n
+            ):  # try to find the minimal cost to reach vertex u from any vertex other v in the subgraph
                 if v == u or not (mask & (1 << v)):
                     continue
                 if (prev_mask, v) in dp:
@@ -118,7 +136,7 @@ def shortest_circular_path(graph: List[List[int]]) -> int:
                         dp[(mask, u)] = new_cost
 
     # Find the minimal cost to complete the tour and return to the starting city
-    min_cost = float('inf')
+    min_cost = float("inf")
     for u in range(n):
         if u == start or (full_mask, u) not in dp:
             continue
@@ -130,14 +148,11 @@ def shortest_circular_path(graph: List[List[int]]) -> int:
 
 
 def grid_search(
-        grid: Sequence[Sequence[T]],
-        query: Sequence[T],
-        visited: List[Tuple[int, int]] = None,
-        return_visited: bool = False
-) -> Union[
-    bool,
-    Tuple[bool, List[Tuple[int, int]]]
-]:
+    grid: Sequence[Sequence[T]],
+    query: Sequence[T],
+    visited: List[Tuple[int, int]] = None,
+    return_visited: bool = False,
+) -> Union[bool, Tuple[bool, List[Tuple[int, int]]]]:
     """
     Determines if the `query` sequence exists in the `grid` by constructing it from sequentially adjacent cells.
     Adjacent cells are horizontally or vertically neighboring. The same cell may not be used more than once.
@@ -198,26 +213,26 @@ def grid_search(
                 return True
             else:
                 result = (
-                        (
-                                i > 0
-                                and (i - 1, j) not in _visited
-                                and dfs(i - 1, j, k, _visited)
-                        ) or
-                        (
-                                i < grid_height - 1
-                                and (i + 1, j) not in _visited
-                                and dfs(i + 1, j, k, _visited)
-                        ) or
-                        (
-                                j > 0
-                                and (i, j - 1) not in _visited
-                                and dfs(i, j - 1, k, _visited)
-                        ) or
-                        (
-                                j < grid_width - 1
-                                and (i, j + 1) not in _visited
-                                and dfs(i, j + 1, k, _visited)
-                        )
+                    (
+                        i > 0
+                        and (i - 1, j) not in _visited
+                        and dfs(i - 1, j, k, _visited)
+                    )
+                    or (
+                        i < grid_height - 1
+                        and (i + 1, j) not in _visited
+                        and dfs(i + 1, j, k, _visited)
+                    )
+                    or (
+                        j > 0
+                        and (i, j - 1) not in _visited
+                        and dfs(i, j - 1, k, _visited)
+                    )
+                    or (
+                        j < grid_width - 1
+                        and (i, j + 1) not in _visited
+                        and dfs(i, j + 1, k, _visited)
+                    )
                 )
                 if not result:
                     # in depth-first search, visited flag set needs to roll back when the branch fails
@@ -244,11 +259,11 @@ def grid_search(
 
 
 def grid_search_trie(
-        grid: Sequence[Sequence[T]],
-        trie: Mapping,
-        visited: List[Tuple[int, int]] = None,
-        concat: Callable[[Sequence[T]], Any] = None,
-        eos_label: Hashable = chr(31)
+    grid: Sequence[Sequence[T]],
+    trie: Mapping,
+    visited: List[Tuple[int, int]] = None,
+    concat: Callable[[Sequence[T]], Any] = None,
+    eos_label: Hashable = chr(31),
 ) -> Sequence[Sequence[T]]:
     """
     Searches for all sequences from a Trie (prefix tree) within a 2D grid. The function
@@ -301,7 +316,7 @@ def grid_search_trie(
 
     def _add_result(result):
         if concat is None:
-            this_result = join_(*result, sep='')
+            this_result = join_(*result, sep="")
         else:
             this_result = concat(tuple(result))
         if this_result not in results:
@@ -316,28 +331,16 @@ def grid_search_trie(
                 if not _child_trie:
                     _add_result((grid[i][j] for i, j in _visited))
                 else:
-                    if (
-                            i > 0
-                            and (i - 1, j) not in _visited
-                    ):
+                    if i > 0 and (i - 1, j) not in _visited:
                         dfs(i - 1, j, _child_trie, _visited)
 
-                    if (
-                            i < grid_height - 1
-                            and (i + 1, j) not in _visited
-                    ):
+                    if i < grid_height - 1 and (i + 1, j) not in _visited:
                         dfs(i + 1, j, _child_trie, _visited)
 
-                    if (
-                            j > 0
-                            and (i, j - 1) not in _visited
-                    ):
+                    if j > 0 and (i, j - 1) not in _visited:
                         dfs(i, j - 1, _child_trie, _visited)
 
-                    if (
-                            j < grid_width - 1
-                            and (i, j + 1) not in _visited
-                    ):
+                    if j < grid_width - 1 and (i, j + 1) not in _visited:
                         dfs(i, j + 1, _child_trie, _visited)
                 _visited.pop()
 
@@ -351,10 +354,10 @@ def grid_search_trie(
 
 
 def grid_search_multiple(
-        grid: Sequence[Sequence[T]],
-        queries: Sequence[Sequence[T]],
-        visited: List[Tuple[int, int]] = None,
-        eos_label: Hashable = chr(31)
+    grid: Sequence[Sequence[T]],
+    queries: Sequence[Sequence[T]],
+    visited: List[Tuple[int, int]] = None,
+    eos_label: Hashable = chr(31),
 ) -> Sequence[Sequence[T]]:
     """
     Searches for multiple sequences in a 2D grid by building a Trie from the given queries

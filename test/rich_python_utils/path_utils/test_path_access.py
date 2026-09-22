@@ -1,7 +1,6 @@
 """Tests for PathAccess and AllowedPath."""
 
 import pytest
-
 from rich_python_utils.path_utils import AllowedPath, PathAccess
 from rich_python_utils.path_utils.path_access import (
     AllowedPath as _AllowedPathDirect,

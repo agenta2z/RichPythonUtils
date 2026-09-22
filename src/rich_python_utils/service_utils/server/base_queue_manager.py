@@ -1,5 +1,3 @@
-
-
 """Queue lifecycle management for session-aware services."""
 
 from __future__ import annotations
@@ -63,9 +61,7 @@ class QueueManager:
         self._run_log_dir = self._server_dir / "logs" / "runs" / f"run_{run_timestamp}"
         self._run_log_dir.mkdir(parents=True, exist_ok=True)
 
-        self._queue_service = StorageBasedQueueService(
-            root_path=str(self._queue_root)
-        )
+        self._queue_service = StorageBasedQueueService(root_path=str(self._queue_root))
         return self._queue_service
 
     def create_queues(self, queue_ids: list[str]) -> None:

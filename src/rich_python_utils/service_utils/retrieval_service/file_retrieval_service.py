@@ -59,7 +59,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from attr import attrs, attrib
+from attr import attrib, attrs
 
 from .document import Document
 from .filter_utils import matches_filters
@@ -96,10 +96,7 @@ def _encode_namespace(namespace: str) -> str:
         A filesystem-safe path component (may contain os.sep for nesting).
     """
     return (
-        namespace
-        .replace("%", "%25")
-        .replace("\\", "%5C")
-        .replace(":", os.sep)
+        namespace.replace("%", "%25").replace("\\", "%5C").replace(":", os.sep)
         # '/' left as-is — it creates nested dirs (desired behavior)
     )
 
@@ -114,12 +111,7 @@ def _decode_namespace(encoded: str) -> str:
     Returns:
         The original namespace string with ':' restored.
     """
-    return (
-        encoded
-        .replace(os.sep, ":")
-        .replace("%5C", "\\")
-        .replace("%25", "%")
-    )
+    return encoded.replace(os.sep, ":").replace("%5C", "\\").replace("%25", "%")
 
 
 # ── Percent-encoding helpers (same scheme as FileKeyValueService) ────────
@@ -141,8 +133,7 @@ def _encode_doc_id(doc_id: str) -> str:
         A filesystem-safe encoded string.
     """
     return (
-        doc_id
-        .replace("%", "%25")
+        doc_id.replace("%", "%25")
         .replace(":", "%3A")
         .replace("/", "%2F")
         .replace("\\", "%5C")
@@ -165,18 +156,14 @@ def _decode_doc_id(encoded: str) -> str:
         The original doc_id string.
     """
     return (
-        encoded
-        .replace("%5C", "\\")
+        encoded.replace("%5C", "\\")
         .replace("%2F", "/")
         .replace("%3A", ":")
         .replace("%25", "%")
     )
 
 
-from rich_python_utils.nlp_utils.semantic_search import (
-    tokenize,
-    term_overlap_search,
-)
+from rich_python_utils.nlp_utils.semantic_search import term_overlap_search, tokenize
 
 
 # ── FileRetrievalService ────────────────────────────────────────────────
@@ -392,7 +379,9 @@ class FileRetrievalService(RetrievalServiceBase):
 
         return doc.doc_id
 
-    def get_by_id(self, doc_id: str, namespace: Optional[str] = None) -> Optional[Document]:
+    def get_by_id(
+        self, doc_id: str, namespace: Optional[str] = None
+    ) -> Optional[Document]:
         """
         Retrieve a document by its ID.
 
@@ -647,9 +636,7 @@ class FileRetrievalService(RetrievalServiceBase):
                 "bm25_available": _HAS_BM25,
                 "namespace_count": len(all_ns),
                 "total_documents": total_docs,
-                "namespaces": {
-                    ns: self.size(namespace=ns) for ns in all_ns
-                },
+                "namespaces": {ns: self.size(namespace=ns) for ns in all_ns},
             }
 
     def ping(self) -> bool:

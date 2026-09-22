@@ -5,10 +5,11 @@ Test TOML preset loading functionality.
 import os
 import sys
 import tempfile
+
 import pytest
 
 # Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../../src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../../src"))
 
 from rich_python_utils.common_utils.arg_utils.arg_parse import get_parsed_args
 
@@ -23,7 +24,7 @@ learning_rate = 0.01
 batch_size = 64
 model_name = "resnet50"
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.toml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
             f.write(toml_content)
             toml_file = f.name
 
@@ -56,7 +57,7 @@ activation = "relu"
 learning_rate = 0.01
 batch_size = 64
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.toml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
             f.write(toml_content)
             toml_file = f.name
 
@@ -69,12 +70,12 @@ batch_size = 64
             )
 
             # Nested tables should become dict attributes
-            assert hasattr(args, 'model')
-            assert hasattr(args, 'training')
+            assert hasattr(args, "model")
+            assert hasattr(args, "training")
             # Access as dict (TOML loader returns dicts)
-            assert args.model['hidden_size'] == 256
-            assert args.model['num_layers'] == 4
-            assert args.training['learning_rate'] == 0.01
+            assert args.model["hidden_size"] == 256
+            assert args.model["num_layers"] == 4
+            assert args.training["learning_rate"] == 0.01
         finally:
             os.unlink(toml_file)
 
@@ -93,7 +94,7 @@ num_layers = 4
 hidden_size = 512
 num_layers = 8
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.toml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
             f.write(toml_content)
             toml_file = f.name
 
@@ -107,8 +108,8 @@ num_layers = 8
 
             assert args.hidden_size == 256
             assert args.num_layers == 4
-            assert not hasattr(args, 'small')
-            assert not hasattr(args, 'large')
+            assert not hasattr(args, "small")
+            assert not hasattr(args, "large")
         finally:
             os.unlink(toml_file)
 
@@ -125,7 +126,7 @@ debug = false
 lr = 0.001
 momentum = 0.9
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.toml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
             f.write(toml_content)
             toml_file = f.name
 
@@ -138,10 +139,10 @@ momentum = 0.9
 
             assert args.layers == [64, 128, 256, 512]
             assert args.dropout_rates == [0.1, 0.2, 0.3]
-            assert args.names == ['train', 'val', 'test']
+            assert args.names == ["train", "val", "test"]
             # Access nested table values
-            assert args.config['lr'] == 0.001
-            assert args.config['momentum'] == 0.9
+            assert args.config["lr"] == 0.001
+            assert args.config["momentum"] == 0.9
             assert args.enabled is True
             assert args.debug is False
         finally:
@@ -153,7 +154,7 @@ momentum = 0.9
 learning_rate = 0.01
 batch_size = 64
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.toml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
             f.write(toml_content)
             toml_file = f.name
 
@@ -186,13 +187,13 @@ batch_size = 64
 learning_rate = 0.01
 batch_size = 64
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.toml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
             f.write(toml_content)
             toml_file = f.name
 
         try:
             # Remove extension from path
-            base_path = toml_file[:-5] if toml_file.endswith('.toml') else toml_file
+            base_path = toml_file[:-5] if toml_file.endswith(".toml") else toml_file
 
             args = get_parsed_args(
                 ("learning_rate", 0.001),
@@ -212,7 +213,7 @@ timestamp = 2024-01-15T10:30:00
 date_only = 2024-01-15
 time_only = 10:30:00
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.toml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
             f.write(toml_content)
             toml_file = f.name
 
@@ -225,6 +226,7 @@ time_only = 10:30:00
 
             # TOML parses these as datetime objects
             import datetime
+
             assert isinstance(args.timestamp, datetime.datetime)
             assert isinstance(args.date_only, datetime.date)
             assert isinstance(args.time_only, datetime.time)
@@ -235,4 +237,5 @@ time_only = 10:30:00
 if __name__ == "__main__":
     # Run tests
     import subprocess
+
     subprocess.run([sys.executable, "-m", "pytest", __file__, "-v"])

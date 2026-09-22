@@ -1,14 +1,13 @@
-from collections import defaultdict
-from typing import Optional, Iterable, Callable, Tuple, List, Union, Mapping
-from rich_python_utils.string_utils.common import OccurrenceOptions
-from rich_python_utils.string_utils.regex import sub_last, sub_first, sub
 import re
+from collections import defaultdict
+from typing import Callable, Iterable, List, Mapping, Optional, Tuple, Union
+
+from rich_python_utils.string_utils.common import OccurrenceOptions
+from rich_python_utils.string_utils.regex import sub, sub_first, sub_last
 
 
 def get_human_int_str(
-        num: int,
-        num_digits: int = 3,
-        magnitude_letters=('K', 'M', 'B', 'T')
+    num: int, num_digits: int = 3, magnitude_letters=("K", "M", "B", "T")
 ) -> str:
     """
     Gets a concise human-readable string to represent an integer, usually large integer.
@@ -25,20 +24,18 @@ def get_human_int_str(
         '28.23m'
     """
     num = int(num)
-    num = float(f'{{:.{num_digits}g}}'.format(num))
+    num = float(f"{{:.{num_digits}g}}".format(num))
     magnitude = 0
     while abs(num) >= 1000:
         magnitude += 1
         num /= 1000.0
-    return '{}{}'.format(
-        '{:f}'.format(num).rstrip('0').rstrip('.'), ['', *magnitude_letters][magnitude]
+    return "{}{}".format(
+        "{:f}".format(num).rstrip("0").rstrip("."), ["", *magnitude_letters][magnitude]
     )
 
 
 def adjust_num_in_str(
-        string: str,
-        adjust: int = 1,
-        occurrence: OccurrenceOptions = OccurrenceOptions.Last
+    string: str, adjust: int = 1, occurrence: OccurrenceOptions = OccurrenceOptions.Last
 ):
     """
     Adjusts numbers in the string by the quantity specified in argument `adjust`.
@@ -68,25 +65,33 @@ def adjust_num_in_str(
     """
     if occurrence == occurrence.Last:
         return sub_last(
-            pattern='[0-9]+',
-            repl=lambda x: '{{:0{}d}}'.format(len(x.group(0))).format(int(x.group(0)) + adjust),
-            string=string
+            pattern="[0-9]+",
+            repl=lambda x: "{{:0{}d}}".format(len(x.group(0))).format(
+                int(x.group(0)) + adjust
+            ),
+            string=string,
         )
     elif occurrence == occurrence.First:
         return sub_first(
-            pattern='[0-9]+',
-            repl=lambda x: '{{:0{}d}}'.format(len(x.group(0))).format(int(x.group(0)) + adjust),
-            string=string
+            pattern="[0-9]+",
+            repl=lambda x: "{{:0{}d}}".format(len(x.group(0))).format(
+                int(x.group(0)) + adjust
+            ),
+            string=string,
         )
     else:
         return sub(
-            pattern='[0-9]+',
-            repl=lambda x: '{{:0{}d}}'.format(len(x.group(0))).format(int(x.group(0)) + adjust),
-            string=string
+            pattern="[0-9]+",
+            repl=lambda x: "{{:0{}d}}".format(len(x.group(0))).format(
+                int(x.group(0)) + adjust
+            ),
+            string=string,
         )
 
 
-def increment_num_in_str(s: str, occurrence: OccurrenceOptions = OccurrenceOptions.Last):
+def increment_num_in_str(
+    s: str, occurrence: OccurrenceOptions = OccurrenceOptions.Last
+):
     """
     Increments the number(s) in the string by 1.
 
@@ -110,7 +115,7 @@ def increment_num_in_str(s: str, occurrence: OccurrenceOptions = OccurrenceOptio
     return adjust_num_in_str(s, adjust=1, occurrence=occurrence)
 
 
-def get_domain_from_name(name: str, domain_separator: str = '.') -> Optional[str]:
+def get_domain_from_name(name: str, domain_separator: str = ".") -> Optional[str]:
     """
     Extracts the domain (the substring before the first occurrence of the domain separator) from a given name.
 
@@ -169,7 +174,9 @@ def camel_to_snake_case(camel_str):
         'http_server_error'
     """
     # Match uppercase sequences followed by lowercase letters, adding underscores
-    snake_str = re.sub(r'(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])', '_', camel_str).lower()
+    snake_str = re.sub(
+        r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "_", camel_str
+    ).lower()
     return snake_str
 
 
@@ -190,17 +197,17 @@ def snake_to_camel_case(snake_str):
         >>> snake_to_camel_case("ExampleString")
         'ExampleString'
     """
-    camel_str = ''.join((word[0].upper() + word[1:]) for word in snake_str.split('_'))
+    camel_str = "".join((word[0].upper() + word[1:]) for word in snake_str.split("_"))
     return camel_str
 
 
 def get_processed_strings_and_map(
-        strs: Iterable[str],
-        str_proc: Callable,
-        filter: Callable = None,
-        keep_the_identical_in_map: bool = False,
-        allow_duplicates_in_map: bool = False,
-        **kwargs
+    strs: Iterable[str],
+    str_proc: Callable,
+    filter: Callable = None,
+    keep_the_identical_in_map: bool = False,
+    allow_duplicates_in_map: bool = False,
+    **kwargs,
 ) -> Tuple[List[str], Union[Mapping[str, str], Mapping[str, List[str]]]]:
     """
     Applies string processing function `str_proc` to `strs`, returns the processed strings
@@ -245,7 +252,9 @@ def get_processed_strings_and_map(
     """
 
     processed_strs = []
-    process_str_to_original_str_map = defaultdict(list) if allow_duplicates_in_map else {}
+    process_str_to_original_str_map = (
+        defaultdict(list) if allow_duplicates_in_map else {}
+    )
     for s in strs:
         s_processed = str_proc(s, **kwargs)
         if filter is None or filter(s):

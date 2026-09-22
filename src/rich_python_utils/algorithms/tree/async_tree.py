@@ -15,9 +15,9 @@ class AsyncTree(AsyncNode, Tree):
     """
 
     async def async_num_nodes(
-            self,
-            send_timeout: float = 5.0,
-            receive_timeout: float = 5.0,
+        self,
+        send_timeout: float = 5.0,
+        receive_timeout: float = 5.0,
     ) -> int:
         """Count nodes using async send/receive. Dead nodes are excluded.
 
@@ -69,9 +69,7 @@ class AsyncTree(AsyncNode, Tree):
             for _ in range(expected):
                 try:
                     start = asyncio.get_event_loop().time()
-                    result = await asyncio.wait_for(
-                        self.receive(), timeout=remaining
-                    )
+                    result = await asyncio.wait_for(self.receive(), timeout=remaining)
                     if isinstance(result, int):
                         count += result
                     elapsed = asyncio.get_event_loop().time() - start
@@ -103,7 +101,7 @@ class AsyncTree(AsyncNode, Tree):
                 for parent in parents:
                     if isinstance(parent, AsyncNode) and parent._queue is not None:
                         await self.send(self._num_nodes_result, target=parent)
-                        
+
     async def on_receive(self, message: Any):
         """Handle incoming messages. Processes tree protocol messages.
 

@@ -2,22 +2,25 @@
 
 Validates: Requirements 26.1, 26.2, 26.3, 26.4, 26.5
 """
+
 import os
 import shutil
 import tempfile
 
 import pytest
-from attr import attrs, attrib
-
-from rich_python_utils.common_objects.workflow.workflow import Workflow
+from attr import attrib, attrs
 from rich_python_utils.common_objects.workflow.common.expansion import ExpansionResult
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
+)
 from rich_python_utils.common_objects.workflow.common.step_wrapper import StepWrapper
+from rich_python_utils.common_objects.workflow.workflow import Workflow
 
 
 # ---------------------------------------------------------------------------
 # Concrete Workflow subclass for testing
 # ---------------------------------------------------------------------------
+
 
 @attrs(slots=False)
 class _TestWorkflow(Workflow):
@@ -36,6 +39,7 @@ class _TestWorkflow(Workflow):
 # ---------------------------------------------------------------------------
 # Module-level factory for seed-based reconstruction (needed for resume tests)
 # ---------------------------------------------------------------------------
+
 
 def _splice_seed_factory(seed):
     """Module-level factory for splice mode reconstruction."""
@@ -65,7 +69,7 @@ class TestFollowMode:
             return ExpansionResult(
                 result="emitter_output",
                 new_steps=[StepWrapper(lambda v: v + "_done", name="added")],
-                mode='follow',
+                mode="follow",
             )
 
         wf = _TestWorkflow(
@@ -107,7 +111,7 @@ class TestSpliceModeSkipsSave:
             return ExpansionResult(
                 result="emitter_output_should_not_save",
                 new_steps=[StepWrapper(lambda v: v + "_done", name="added")],
-                mode='splice',
+                mode="splice",
             )
 
         wf = _TestWorkflow(
@@ -147,7 +151,7 @@ class TestSpliceModeInputPassThrough:
             return ExpansionResult(
                 result="emitter_result_ignored_for_input",
                 new_steps=[StepWrapper(expanded_step, name="expanded")],
-                mode='splice',
+                mode="splice",
             )
 
         wf = _TestWorkflow(
@@ -185,7 +189,7 @@ class TestSpliceModeInputPassThrough:
                     StepWrapper(step_a, name="exp_a"),
                     StepWrapper(step_b, name="exp_b"),
                 ],
-                mode='splice',
+                mode="splice",
             )
 
         wf = _TestWorkflow(
@@ -219,7 +223,7 @@ class TestSpliceCheckpointResume:
                 new_steps=[
                     StepWrapper(lambda v: v + "_expanded", name="expanded_step"),
                 ],
-                mode='splice',
+                mode="splice",
                 seed={"key": "val"},
                 reconstruct_from_seed=_splice_seed_factory,
             )

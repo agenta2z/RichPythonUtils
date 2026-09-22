@@ -1,20 +1,19 @@
-from enum import Enum
-from typing import Tuple, Optional, List, Callable, Union
-
-from attr import attrs, attrib
 import re
+from enum import Enum
+from typing import Callable, List, Optional, Tuple, Union
 
+from attr import attrib, attrs
 from rich_python_utils.common_utils import dedup_sequence
 from rich_python_utils.string_utils.regex import contains_whole_word
 
 
 class CompareMethod(str, Enum):
-    ExactMatch = 'exact_match'
-    Contains = 'contains'
-    StartsWith = 'starts_with'
-    EndsWith = 'ends_with'
-    LowerLexicalOrder = '<'
-    HigherLexicalOrder = '>'
+    ExactMatch = "exact_match"
+    Contains = "contains"
+    StartsWith = "starts_with"
+    EndsWith = "ends_with"
+    LowerLexicalOrder = "<"
+    HigherLexicalOrder = ">"
 
 
 @attrs(slots=True)
@@ -28,22 +27,22 @@ class CompareOption:
 
 
 def solve_compare_option(
-        s: str,
-        contains_indicator='*',
-        starts_with_indicator='^',
-        ends_with_indicator='$',
-        lower_lexical_order_indicator='<',
-        higher_lexical_order_indicator='>',
-        regular_expression_indicator='@',
-        negation_indicators='!~',
-        case_insensitive_indicator='/',
-        ignore_null_indicator='?',
-        space_as_option_break=True,
-        option_at_start=True,
-        option_at_end=False,
-        other_option_indicators=None,
-        return_none_if_no_option_available: bool = False,
-        compile_regex: bool = False
+    s: str,
+    contains_indicator="*",
+    starts_with_indicator="^",
+    ends_with_indicator="$",
+    lower_lexical_order_indicator="<",
+    higher_lexical_order_indicator=">",
+    regular_expression_indicator="@",
+    negation_indicators="!~",
+    case_insensitive_indicator="/",
+    ignore_null_indicator="?",
+    space_as_option_break=True,
+    option_at_start=True,
+    option_at_end=False,
+    other_option_indicators=None,
+    return_none_if_no_option_available: bool = False,
+    compile_regex: bool = False,
 ) -> Tuple[Optional[CompareOption], Union[str, re.Pattern]]:
     """
     Solves a string comparison directive and optionally compiles regex patterns.
@@ -291,12 +290,18 @@ def solve_compare_option(
     other_options = []
 
     def _get_options():
-        nonlocal i, compare_method, is_regular_expression, case_sensitive, ignore_null, negation
+        nonlocal \
+            i, \
+            compare_method, \
+            is_regular_expression, \
+            case_sensitive, \
+            ignore_null, \
+            negation
         last_processed_i = -1
         for i in idxes:
             c = s[i]
             if negation_indicators and c in negation_indicators:
-                negation = (not negation)
+                negation = not negation
                 last_processed_i = i
             elif contains_indicator and c == contains_indicator:
                 compare_method = CompareMethod.Contains
@@ -336,19 +341,22 @@ def solve_compare_option(
         last_i = _get_options()
         if last_i != -1:
             s = s[:last_i]  # Slice up to (not including) the last processed option
-        has_option_at_end = (last_i != -1)
+        has_option_at_end = last_i != -1
         if space_as_option_break:
             s = s.rstrip()
     if option_at_start:
         i = 0
         idxes = range(len(s))
         last_i = _get_options()
-        s = s[(last_i + 1):]  # Slice from position after last processed option
-        has_option_at_start = (last_i != -1)
+        s = s[(last_i + 1) :]  # Slice from position after last processed option
+        has_option_at_start = last_i != -1
         if space_as_option_break:
             s = s.lstrip()
 
-    if not (has_option_at_start or has_option_at_end) and return_none_if_no_option_available:
+    if (
+        not (has_option_at_start or has_option_at_end)
+        and return_none_if_no_option_available
+    ):
         return None, s
     else:
         compare_option = CompareOption(
@@ -357,7 +365,7 @@ def solve_compare_option(
             case_sensitive=case_sensitive,
             ignore_null=ignore_null,
             negation=negation,
-            other_options=(''.join(other_options) if other_options else None)
+            other_options=("".join(other_options) if other_options else None),
         )
 
         # Compile regex pattern if requested and return it instead of string
@@ -367,9 +375,9 @@ def solve_compare_option(
                 # Build the regex pattern with appropriate flags and anchors
                 pattern = s
                 if compare_method == CompareMethod.StartsWith:
-                    pattern = f'^{pattern}'
+                    pattern = f"^{pattern}"
                 elif compare_method == CompareMethod.EndsWith:
-                    pattern = f'{pattern}$'
+                    pattern = f"{pattern}$"
                 # For ExactMatch, we don't add anchors here because
                 # string_compare will use fullmatch which handles it
 
@@ -383,7 +391,9 @@ def solve_compare_option(
         return compare_option, pattern_result
 
 
-def string_compare(src: str, trg: Union[str, re.Pattern], option: CompareOption) -> bool:
+def string_compare(
+    src: str, trg: Union[str, re.Pattern], option: CompareOption
+) -> bool:
     """
     Compare a source string against a target pattern using specified comparison options.
 
@@ -584,8 +594,12 @@ def string_compare(src: str, trg: Union[str, re.Pattern], option: CompareOption)
     # - Contains/StartsWith/EndsWith with empty pattern should return True
     #   (every string contains/starts-with/ends-with an empty string)
     # - ExactMatch uses normal comparison (handled below)
-    if isinstance(trg, str) and not option.is_regular_expression and trg == '':
-        if option.compare_method in (CompareMethod.Contains, CompareMethod.StartsWith, CompareMethod.EndsWith):
+    if isinstance(trg, str) and not option.is_regular_expression and trg == "":
+        if option.compare_method in (
+            CompareMethod.Contains,
+            CompareMethod.StartsWith,
+            CompareMethod.EndsWith,
+        ):
             result = True
             return result != option.negation
 
@@ -601,14 +615,14 @@ def string_compare(src: str, trg: Union[str, re.Pattern], option: CompareOption)
         # Runtime regex compilation (original behavior for string patterns)
         if option.compare_method == CompareMethod.ExactMatch:
             result = (
-                    re.fullmatch(trg, src, (0 if option.case_sensitive else re.IGNORECASE))
-                    is not None
+                re.fullmatch(trg, src, (0 if option.case_sensitive else re.IGNORECASE))
+                is not None
             )
         else:
             if option.compare_method == CompareMethod.StartsWith:
-                trg = f'^{trg}'
+                trg = f"^{trg}"
             elif option.compare_method == CompareMethod.EndsWith:
-                trg = f'{trg}$'
+                trg = f"{trg}$"
             elif option.compare_method == CompareMethod.Contains:
                 # No modification needed - search() naturally does contains matching
                 pass
@@ -619,27 +633,27 @@ def string_compare(src: str, trg: Union[str, re.Pattern], option: CompareOption)
             result = (
                 # ! must use `search` rather than `match`,
                 # because `re.match` only matches from the beginning of the string
-                    re.search(trg, src, (0 if option.case_sensitive else re.IGNORECASE))
-                    is not None
+                re.search(trg, src, (0 if option.case_sensitive else re.IGNORECASE))
+                is not None
             )
     else:
         if not option.case_sensitive:
             src = src.lower()
             trg = trg.lower()
         if option.compare_method == CompareMethod.ExactMatch:
-            result = (src == trg)
+            result = src == trg
         elif option.compare_method == CompareMethod.Contains:
-            result = (trg in src)
+            result = trg in src
         elif option.compare_method == CompareMethod.StartsWith:
-            result = (src.startswith(trg))
+            result = src.startswith(trg)
         elif option.compare_method == CompareMethod.EndsWith:
-            result = (src.endswith(trg))
+            result = src.endswith(trg)
         elif option.compare_method == CompareMethod.LowerLexicalOrder:
-            result = (src < trg)
+            result = src < trg
         elif option.compare_method == CompareMethod.HigherLexicalOrder:
-            result = (src > trg)
+            result = src > trg
         else:
-            result = (src == trg)
+            result = src == trg
 
     return result != option.negation
 
@@ -703,7 +717,7 @@ def string_check(s: str, pattern: str, **kwargs) -> bool:
     """
     # Shortcut: A single '*' wildcard matches any string (including empty strings)
     # This is handled generically in string_compare, but we can short-circuit here for performance
-    if pattern.strip() == '*':
+    if pattern.strip() == "*":
         return True
 
     option, pattern = solve_compare_option(pattern, **kwargs)
@@ -711,8 +725,8 @@ def string_check(s: str, pattern: str, **kwargs) -> bool:
 
 
 def dedup_string_list(
-        _list: List[str],
-        duplicate_checker: Callable[[str, str], bool] = contains_whole_word
+    _list: List[str],
+    duplicate_checker: Callable[[str, str], bool] = contains_whole_word,
 ) -> List[str]:
     """Deduplicate a list of strings using both exact matches and a custom checker function.
 

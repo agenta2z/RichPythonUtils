@@ -1,8 +1,6 @@
 from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Union
 
-from rich_python_utils.common_utils.arg_utils.param_parse import (
-    solve_args_with_params,
-)
+from rich_python_utils.common_utils.arg_utils.param_parse import solve_args_with_params
 
 
 def generate_response(
@@ -12,9 +10,9 @@ def generate_response(
     response_func: Optional[Callable] = None,
     include_params_in_response: bool = False,
     raise_exception: bool = False,
-    response_field_name='result',
-    success_flag_field_name='success',
-    params_field_name='params',
+    response_field_name="result",
+    success_flag_field_name="success",
+    params_field_name="params",
 ) -> Any:
     """
     Generic function to process request data and generate a response with parameter validation.
@@ -232,10 +230,7 @@ def generate_response(
     }
 
     # Call the generate function with the extracted parameters plus any additional kwargs
-    all_params = {
-        **extracted_params,
-        **additional_kwargs
-    }
+    all_params = {**extracted_params, **additional_kwargs}
 
     if raise_exception:
         generated_result = generate_response_func(**all_params)
@@ -251,7 +246,7 @@ def generate_response(
     # Build response with all parameters used
     response_data = {
         response_field_name: generated_result,
-        success_flag_field_name: success
+        success_flag_field_name: success,
     }
 
     if include_params_in_response:

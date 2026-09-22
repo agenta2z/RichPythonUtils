@@ -26,8 +26,8 @@ Run this example:
 from pathlib import Path
 
 from rich_python_utils.common_objects import (
-    FileBasedVariableManager,
     CircularReferenceError,
+    FileBasedVariableManager,
 )
 
 
@@ -70,8 +70,12 @@ def main():
     print("    database_host.txt     -> 'localhost'")
     print("    database_port.txt     -> '5432'")
     print("    database.txt          -> 'mydb'")
-    print("    connection_string.txt -> 'postgresql://{{database_host}}:{{database_port}}/{{database}}'")
-    print("    full_config.txt       -> 'Connection: {{connection_string}}\\nTimeout: 30s\\n...'")
+    print(
+        "    connection_string.txt -> 'postgresql://{{database_host}}:{{database_port}}/{{database}}'"
+    )
+    print(
+        "    full_config.txt       -> 'Connection: {{connection_string}}\\nTimeout: 30s\\n...'"
+    )
 
     print("\n[2] Simple composition: {{connection_string}}")
     print("-" * 50)
@@ -79,8 +83,8 @@ def main():
 
     print("\n[3] Multi-level composition: {{full_config}}")
     print("-" * 50)
-    result = multi.get('full_config', '')
-    for line in result.strip().split('\n'):
+    result = multi.get("full_config", "")
+    for line in result.strip().split("\n"):
         print(f"    {line}")
 
     print("\n[4] Circular reference detection")

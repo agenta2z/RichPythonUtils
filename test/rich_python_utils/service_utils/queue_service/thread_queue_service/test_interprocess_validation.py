@@ -5,16 +5,18 @@ This test specifically validates whether queues are actually shared across proce
 We'll count the exact number of items produced and consumed to verify sharing.
 """
 
-import sys
-from pathlib import Path
-import time
 import multiprocessing as mp
+import sys
+import time
+from pathlib import Path
 
 # Add src to path
 project_root = Path(__file__).parent.parent.parent.parent.parent
-sys.path.insert(0, str(project_root / 'src'))
+sys.path.insert(0, str(project_root / "src"))
 
-from rich_python_utils.service_utils.queue_service.thread_queue_service import ThreadQueueService
+from rich_python_utils.service_utils.queue_service.thread_queue_service import (
+    ThreadQueueService,
+)
 
 
 def producer_with_count(queue_id: str, num_items: int, result_queue):
@@ -23,11 +25,11 @@ def producer_with_count(queue_id: str, num_items: int, result_queue):
 
     produced = 0
     for i in range(num_items):
-        service.put(queue_id, f'item_{i}')
+        service.put(queue_id, f"item_{i}")
         produced += 1
 
     service.close()
-    result_queue.put(('produced', produced))
+    result_queue.put(("produced", produced))
     print(f"Producer: Successfully produced {produced} items")
 
 
@@ -51,7 +53,7 @@ def consumer_with_count(queue_id: str, timeout: float, result_queue):
             break
 
     service.close()
-    result_queue.put(('consumed', consumed))
+    result_queue.put(("consumed", consumed))
     print(f"Consumer: Successfully consumed {consumed} items")
 
 
@@ -65,11 +67,11 @@ def test_interprocess_sharing():
     - If consumed == produced, then queues are truly shared
     - If consumed == 0, then queues are NOT shared (each process has its own)
     """
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("INTER-PROCESS QUEUE SHARING VALIDATION TEST")
-    print("="*80)
+    print("=" * 80)
 
-    queue_id = 'validation_queue'
+    queue_id = "validation_queue"
     num_items = 10
 
     # Use a simple multiprocessing Queue for results (this definitely works)
@@ -81,14 +83,18 @@ def test_interprocess_sharing():
     print(f"  - We'll check if consumer gets the items\n")
 
     # Start consumer first (so it's ready to receive)
-    consumer_proc = mp.Process(target=consumer_with_count, args=(queue_id, 8.0, result_queue))
+    consumer_proc = mp.Process(
+        target=consumer_with_count, args=(queue_id, 8.0, result_queue)
+    )
     consumer_proc.start()
 
     # Give consumer time to start
     time.sleep(1)
 
     # Start producer
-    producer_proc = mp.Process(target=producer_with_count, args=(queue_id, num_items, result_queue))
+    producer_proc = mp.Process(
+        target=producer_with_count, args=(queue_id, num_items, result_queue)
+    )
     producer_proc.start()
 
     # Wait for both to finish
@@ -101,12 +107,12 @@ def test_interprocess_sharing():
         key, value = result_queue.get()
         results[key] = value
 
-    produced = results.get('produced', 0)
-    consumed = results.get('consumed', 0)
+    produced = results.get("produced", 0)
+    consumed = results.get("consumed", 0)
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST RESULTS")
-    print("="*80)
+    print("=" * 80)
     print(f"Items produced: {produced}")
     print(f"Items consumed: {consumed}")
     print()
@@ -133,17 +139,17 @@ def test_single_process_control():
     Control test: Verify that the queue service works correctly within a single process.
     This should always work.
     """
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("SINGLE-PROCESS CONTROL TEST")
-    print("="*80)
+    print("=" * 80)
 
     service = ThreadQueueService()
-    queue_id = 'control_queue'
+    queue_id = "control_queue"
 
     # Produce items
     num_items = 10
     for i in range(num_items):
-        service.put(queue_id, f'item_{i}')
+        service.put(queue_id, f"item_{i}")
 
     print(f"\nProduced {num_items} items in same process")
 
@@ -159,22 +165,24 @@ def test_single_process_control():
 
     service.close()
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("CONTROL TEST RESULTS")
-    print("="*80)
+    print("=" * 80)
 
     if consumed == num_items:
-        print(f"[SUCCESS] Single-process queue works correctly ({consumed}/{num_items})")
+        print(
+            f"[SUCCESS] Single-process queue works correctly ({consumed}/{num_items})"
+        )
         return True
     else:
         print(f"[FAILED] Single-process queue failed ({consumed}/{num_items})")
         return False
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Set up multiprocessing for Windows
-    if sys.platform == 'win32':
-        mp.set_start_method('spawn', force=True)
+    if sys.platform == "win32":
+        mp.set_start_method("spawn", force=True)
 
     print("""
 ================================================================================
@@ -192,9 +200,9 @@ inter-process communication, or if each process has its own isolated queues.
     # Run the critical inter-process test
     interprocess_passed = test_interprocess_sharing()
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("FINAL SUMMARY")
-    print("="*80)
+    print("=" * 80)
     print(f"Single-process test: {'PASS' if control_passed else 'FAIL'}")
     print(f"Inter-process test:  {'PASS' if interprocess_passed else 'FAIL'}")
     print()
@@ -203,7 +211,9 @@ inter-process communication, or if each process has its own isolated queues.
         print("CONCLUSION:")
         print("ThreadQueueService works for single-process scenarios but")
         print("does NOT support true inter-process communication on this platform.")
-        print("\nRECOMMENDATION: Use RedisQueueService for inter-process communication.")
+        print(
+            "\nRECOMMENDATION: Use RedisQueueService for inter-process communication."
+        )
     elif control_passed and interprocess_passed:
         print("CONCLUSION:")
         print("ThreadQueueService works for both single-process and")
@@ -212,6 +222,6 @@ inter-process communication, or if each process has its own isolated queues.
         print("CONCLUSION:")
         print("ThreadQueueService has fundamental issues.")
 
-    print("="*80 + "\n")
+    print("=" * 80 + "\n")
 
     sys.exit(0 if (control_passed and interprocess_passed) else 1)

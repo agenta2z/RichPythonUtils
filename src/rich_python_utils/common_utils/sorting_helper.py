@@ -1,16 +1,18 @@
+import heapq
+from collections import Counter
 from enum import Enum
 from functools import partial
-from typing import Union, Iterable, Callable, Optional
+from typing import Callable, Iterable, Optional, Union
+
 from rich_python_utils.common_utils.iter_helper import unzip
 from rich_python_utils.common_utils.map_helper import get_
 from rich_python_utils.common_utils.typing_helper import iterable
-import heapq
-from collections import Counter
+
 
 class SortOptions(str, Enum):
-    NoSorting = 'none',
-    Descending = 'desc'
-    Ascending = 'asc'
+    NoSorting = ("none",)
+    Descending = "desc"
+    Ascending = "asc"
 
 
 def _get_sort_key(key: Union[str, Iterable[str], Callable]) -> Optional[Callable]:
@@ -33,18 +35,20 @@ def _get_sort_key(key: Union[str, Iterable[str], Callable]) -> Optional[Callable
     elif callable(key):
         return key
     else:
-        raise ValueError("the sorting 'key' must be a callable, "
-                         "or a string, "
-                         "or a list/tuple of strings; "
-                         f"got '{key}'")
+        raise ValueError(
+            "the sorting 'key' must be a callable, "
+            "or a string, "
+            "or a list/tuple of strings; "
+            f"got '{key}'"
+        )
 
 
 def sorted_(
-        _iterable,
-        key: Union[str, Iterable[str], Callable] = None,
-        reverse: bool = False,
-        no_sort_if_key_is_none: bool = False,
-        sort_option: Union[str, SortOptions] = None
+    _iterable,
+    key: Union[str, Iterable[str], Callable] = None,
+    reverse: bool = False,
+    no_sort_if_key_is_none: bool = False,
+    sort_option: Union[str, SortOptions] = None,
 ):
     """
     Performs the same sorting operation as the system function `sorted`,
@@ -63,8 +67,8 @@ def sorted_(
         no_sort_if_key_is_none: True to perform no sorting if `key` is set None, instead of
             the default behavior of sorting in the ascending order.
         sort_option: one convenient option to control whether we perform no soring,
-            or sort in the ascending order, or sort in the descending order; 
-            the purpose is to use one argument to control this frequently used behavior option 
+            or sort in the ascending order, or sort in the descending order;
+            the purpose is to use one argument to control this frequently used behavior option
             instead of using two arguments from `reverse` and `no_sort_if_key_is_none`.
             If specified, this parameter has higher priority.
 
@@ -102,13 +106,16 @@ def sorted_(
     if sort_option is not None:
         if sort_option == SortOptions.NoSorting:
             if reverse:
-                raise ValueError("'reverse is set True' but 'sort_option' "
-                                 "asks for no sorting")
+                raise ValueError(
+                    "'reverse is set True' but 'sort_option' asks for no sorting"
+                )
             return _iterable
         elif sort_option == SortOptions.Ascending:
             if reverse:
-                raise ValueError("'reverse is set True' but 'sort_option' "
-                                 "asks for soring in the ascending order")
+                raise ValueError(
+                    "'reverse is set True' but 'sort_option' "
+                    "asks for soring in the ascending order"
+                )
             reverse = False
         elif sort_option == SortOptions.Descending:
             reverse = True
@@ -124,13 +131,13 @@ def sorted_(
 
 
 def sorted_with_transform(
-        _iterable,
-        key: Union[str, Iterable[str], Callable] = None,
-        reverse: bool = False,
-        element_transform: Callable = None,
-        sort_before_transform: bool = True,
-        no_sort_if_key_is_none: bool = False,
-        sort_option: Union[str, SortOptions] = None
+    _iterable,
+    key: Union[str, Iterable[str], Callable] = None,
+    reverse: bool = False,
+    element_transform: Callable = None,
+    sort_before_transform: bool = True,
+    no_sort_if_key_is_none: bool = False,
+    sort_option: Union[str, SortOptions] = None,
 ):
     """
     Sorts an iterable with optional element transformation, either before or after sorting.
@@ -180,7 +187,7 @@ def sorted_with_transform(
             key=key,
             reverse=reverse,
             no_sort_if_key_is_none=no_sort_if_key_is_none,
-            sort_option=sort_option
+            sort_option=sort_option,
         )
     else:
         if sort_before_transform:
@@ -191,8 +198,8 @@ def sorted_with_transform(
                     key=key,
                     reverse=reverse,
                     no_sort_if_key_is_none=no_sort_if_key_is_none,
-                    sort_option=sort_option
-                )
+                    sort_option=sort_option,
+                ),
             )
         else:
             return sorted_(
@@ -200,17 +207,17 @@ def sorted_with_transform(
                 key=key,
                 reverse=reverse,
                 no_sort_if_key_is_none=no_sort_if_key_is_none,
-                sort_option=sort_option
+                sort_option=sort_option,
             )
 
 
 def sorted__(
-        _iterable,
-        key: Union[str, Iterable[str], Callable] = None,
-        reverse: bool = False,
-        return_tuple: bool = False,
-        return_values: bool = True,
-        return_indexes: bool = False
+    _iterable,
+    key: Union[str, Iterable[str], Callable] = None,
+    reverse: bool = False,
+    return_tuple: bool = False,
+    return_values: bool = True,
+    return_indexes: bool = False,
 ):
     """
     An enhanced alternative to the built-in `sorted` function.
@@ -296,7 +303,7 @@ def sorted__(
             key=_key,
             reverse=reverse,
             return_tuple=return_tuple,
-            return_indexes=False
+            return_indexes=False,
         )
         if return_values:
             return result
@@ -305,13 +312,13 @@ def sorted__(
                 return tuple(index for _, index in result)
             else:
                 return list(index for _, index in result)
-    elif return_indexes == 'labels':
+    elif return_indexes == "labels":
         sorted_tups = sorted__(
             ((x, i) for i, x in enumerate(_iterable)),
             key=key,
             reverse=reverse,
             return_tuple=True,
-            return_indexes=False
+            return_indexes=False,
         )
         labels = [0] * len(sorted_tups)
         for j, (x, i) in enumerate(sorted_tups):
@@ -330,10 +337,7 @@ def sorted__(
         return tuple(s) if return_tuple else s
     else:
         s = unzip(
-            unzip(
-                sorted(zip(key, enumerate(_iterable)), reverse=reverse),
-                1
-            ), 1
+            unzip(sorted(zip(key, enumerate(_iterable)), reverse=reverse), 1), 1
         )  # `enumerate(_iterable)` ensures the original order of the `_iterable` when keys are the same
         return s if return_tuple else list(s)
 

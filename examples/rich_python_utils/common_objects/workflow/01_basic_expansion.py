@@ -11,6 +11,7 @@ ExpansionResult whose `new_steps` gets spliced in.
 
 Run: python 01_basic_expansion.py
 """
+
 from __future__ import annotations
 
 import os
@@ -24,24 +25,26 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from resolve_path import resolve_path
+
 resolve_path()
 
-from attr import attrs, attrib
-
+from attr import attrib, attrs
 from rich_python_utils.common_objects.workflow import ExpansionResult, StepWrapper
-from rich_python_utils.common_objects.workflow.workflow import Workflow
 from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
     ResultPassDownMode,
 )
+from rich_python_utils.common_objects.workflow.workflow import Workflow
 
 
 # =======================================================================
 # CORE CODE — the pattern to copy
 # =======================================================================
 
+
 @attrs(slots=False)
 class ExampleWorkflow(Workflow):
     """Minimal concrete Workflow that stores step results in a directory."""
+
     _save_dir: str = attrib(default=None)
 
     def _get_result_path(self, result_id, *args, **kwargs) -> str:
@@ -59,13 +62,13 @@ def plan(input_text):
     In deterministic mode we re-run this on resume to rebuild the exact same
     new_steps; the function must be a pure function of its inputs.
     """
-    topics = ["summarize", "extract", "verify"]   # in real code: break down `input_text`
+    topics = ["summarize", "extract", "verify"]  # in real code: break down `input_text`
     new_steps = [
         StepWrapper(lambda prev, t=topic: worker(t, prev), name=f"work_{topic}")
         for topic in topics
     ]
     return ExpansionResult(
-        result=input_text,            # passed to first emitted step
+        result=input_text,  # passed to first emitted step
         new_steps=new_steps,
     )
 
@@ -82,14 +85,15 @@ def build_workflow(save_dir):
         ],
         save_dir=save_dir,
         result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
-        max_expansion_events=3,            # opt-in gate: >0 enables expansion
-        max_total_steps=20,                # hard cap against runaway emission
+        max_expansion_events=3,  # opt-in gate: >0 enables expansion
+        max_total_steps=20,  # hard cap against runaway emission
     )
 
 
 # =======================================================================
 # DRIVER — runs the example, captures results for narration
 # =======================================================================
+
 
 def main():
     tmp = Path(tempfile.mkdtemp(prefix="example01_"))
@@ -111,6 +115,7 @@ def main():
 # =======================================================================
 # NARRATION — all print/logging isolated here
 # =======================================================================
+
 
 def banner(text):
     print(f"\n{'=' * 60}\n  {text}\n{'=' * 60}")

@@ -1,16 +1,25 @@
+import re
 import warnings
 from enum import Enum
 from functools import partial, reduce
-from typing import Union, Mapping, Iterable, List, Optional, Callable
+from typing import Callable, Iterable, List, Mapping, Optional, Union
 
-from attr import attrs, attrib
+from attr import attrib, attrs
 from rich_python_utils.common_utils.function_helper import get_relevant_named_args
-from rich_python_utils.common_utils.typing_helper import solve_nested_singleton_tuple_list, is_str
+from rich_python_utils.common_utils.typing_helper import (
+    is_str,
+    solve_nested_singleton_tuple_list,
+)
 from rich_python_utils.nlp_utils.common import Languages
-from rich_python_utils.string_utils.prefix_suffix import remove_common_prefix_suffix, remove_prefix_suffix
-from rich_python_utils.nlp_utils.punctuations import remove_acronym_periods_and_spaces, remove_punctuation_except_for_hyphen
+from rich_python_utils.nlp_utils.punctuations import (
+    remove_acronym_periods_and_spaces,
+    remove_punctuation_except_for_hyphen,
+)
+from rich_python_utils.string_utils.prefix_suffix import (
+    remove_common_prefix_suffix,
+    remove_prefix_suffix,
+)
 from rich_python_utils.string_utils.tokenization import tokenize
-import re
 
 try:
     from unidecode import unidecode
@@ -19,52 +28,52 @@ except Exception as err:
 
 PREDEFINED_FUZZINESS_MAP = {
     Languages.English: {
-        'the': 'de',
-        'ich': 'ik',
-        'key': 'ki',
-        'ore': 'or',
-        'sch': 'sc',
-        'syd': 'si',
-        'buy': 'bai',
-        'guy': 'gai',
-        'kro': 'kra',
-        'cro': 'kra',
-        'lob': 'lab',
-        'cha': 'tra',
-        'che': 'tre',
-        'ah': 'a',
-        'ar': 'a',
-        'gh': 'g',
-        'ee': 'i',
-        'kw': 'w',
-        'nn': 'n',
-        'ng': 'n',
-        'kn': 'n',
-        'or': 'o',
-        'sp': 'p',
-        'ze': 's',
-        'ce': 's',
-        'sh': 's',
-        'oo': 'u',
-        'ho': 'fo',
-        'en': 'in',
-        'em': 'in',
-        'ev': 'iv',
-        'ga': 'ka',
-        'ro': 'no',
-        'ci': 'si',
-        'e': 'a',
-        'p': 'b',
-        't': 'd',
-        'v': 'f',
-        'y': 'i',
-        'c': 'k',
-        'g': 'k',
-        'q': 'k',
-        'm': 'n',
-        'l': 'n',
-        'x': 's',
-        'z': 's'
+        "the": "de",
+        "ich": "ik",
+        "key": "ki",
+        "ore": "or",
+        "sch": "sc",
+        "syd": "si",
+        "buy": "bai",
+        "guy": "gai",
+        "kro": "kra",
+        "cro": "kra",
+        "lob": "lab",
+        "cha": "tra",
+        "che": "tre",
+        "ah": "a",
+        "ar": "a",
+        "gh": "g",
+        "ee": "i",
+        "kw": "w",
+        "nn": "n",
+        "ng": "n",
+        "kn": "n",
+        "or": "o",
+        "sp": "p",
+        "ze": "s",
+        "ce": "s",
+        "sh": "s",
+        "oo": "u",
+        "ho": "fo",
+        "en": "in",
+        "em": "in",
+        "ev": "iv",
+        "ga": "ka",
+        "ro": "no",
+        "ci": "si",
+        "e": "a",
+        "p": "b",
+        "t": "d",
+        "v": "f",
+        "y": "i",
+        "c": "k",
+        "g": "k",
+        "q": "k",
+        "m": "n",
+        "l": "n",
+        "x": "s",
+        "z": "s",
     }
 }
 
@@ -79,25 +88,18 @@ def fuzz(s: str, fuzziness_map=Languages.English):
 
 def remove_common_tokens(*strings, tokenizer=None):
     strings = solve_nested_singleton_tuple_list(strings, atom_types=str)
-    tokens = [
-        tokenize(_s, tokenizer=tokenizer)
-        for _s in strings
-    ]
-    common_tokens = reduce(
-        lambda x, y: x & y,
-        (set(_tokens) for _tokens in tokens)
-    )
+    tokens = [tokenize(_s, tokenizer=tokenizer) for _s in strings]
+    common_tokens = reduce(lambda x, y: x & y, (set(_tokens) for _tokens in tokens))
 
     return [
-        ' '.join(_s for _s in _tokens if _s not in common_tokens)
-        for _tokens in tokens
+        " ".join(_s for _s in _tokens if _s not in common_tokens) for _tokens in tokens
     ]
 
 
 def remove_common_tokens_except_for_sub_tokens(
-        str1: Union[str, Iterable[str]],
-        str2: Union[str, Iterable[str]],
-        tokenizer: Optional[Callable] = None
+    str1: Union[str, Iterable[str]],
+    str2: Union[str, Iterable[str]],
+    tokenizer: Optional[Callable] = None,
 ):
     """
     Removes tokens that appear in both input strings, except for those tokens that are sub-tokens
@@ -125,19 +127,20 @@ def remove_common_tokens_except_for_sub_tokens(
     """
     if not str1 or not str2:
         return str1, str2
-    str1_tokens = tuple(tokenize(str1, tokenizer=tokenizer) if isinstance(str1, str) else str1)
-    str2_tokens = tuple(tokenize(str2, tokenizer=tokenizer) if isinstance(str2, str) else str2)
+    str1_tokens = tuple(
+        tokenize(str1, tokenizer=tokenizer) if isinstance(str1, str) else str1
+    )
+    str2_tokens = tuple(
+        tokenize(str2, tokenizer=tokenizer) if isinstance(str2, str) else str2
+    )
     str1_tokens_set = set(str1_tokens)
     str2_tokens_set = set(str2_tokens)
 
     def _clean_tokens(tokens, output_tokens, the_other_token_set):
         for x in tokens:
-            if (
-                    x not in output_tokens and
-                    (
-                            x not in the_other_token_set or
-                            any((x in y and x != y) for y in the_other_token_set)
-                    )
+            if x not in output_tokens and (
+                x not in the_other_token_set
+                or any((x in y and x != y) for y in the_other_token_set)
             ):
                 output_tokens.append(x)
 
@@ -145,18 +148,18 @@ def remove_common_tokens_except_for_sub_tokens(
     _clean_tokens(
         tokens=str1_tokens,
         output_tokens=str1_tokens_cleaned,
-        the_other_token_set=str2_tokens_set
+        the_other_token_set=str2_tokens_set,
     )
     str2_tokens_cleaned = []
     _clean_tokens(
         tokens=str2_tokens,
         output_tokens=str2_tokens_cleaned,
-        the_other_token_set=str1_tokens_set
+        the_other_token_set=str1_tokens_set,
     )
 
     return (
-        ' '.join(str1_tokens_cleaned),
-        ' '.join(str2_tokens_cleaned),
+        " ".join(str1_tokens_cleaned),
+        " ".join(str2_tokens_cleaned),
     )
 
 
@@ -193,7 +196,7 @@ def _lower(x: str):
 
 
 def _remove_spaces(x: str):
-    return ''.join(x.split())
+    return "".join(x.split())
 
 
 def _replace_method(x, replacement: Mapping):
@@ -203,29 +206,29 @@ def _replace_method(x, replacement: Mapping):
 
 
 def _sort_tokens(x: str, tokenizer=None, reverse=False):
-    return ' '.join(sorted(tokenize(x, tokenizer=tokenizer), reverse=reverse))
+    return " ".join(sorted(tokenize(x, tokenizer=tokenizer), reverse=reverse))
 
 
 def string_sanitize(
-        *strings: str,
-        config: Union[Iterable[StringSanitizationOptions], StringSanitizationConfig],
-        tokenizer=None,
-        language: Languages = Languages.English,
-        # region sanitization methods
-        remove_acronym_periods_and_spaces_method=remove_acronym_periods_and_spaces,
-        remove_case_method=_lower,
-        remove_prefix_suffix_method=remove_prefix_suffix,
-        remove_common_prefix_suffix_method=remove_common_prefix_suffix,
-        remove_punctuation_except_for_hyphen_method=remove_punctuation_except_for_hyphen,
-        remove_spaces_method=_remove_spaces,
-        replace_method=_replace_method,
-        sort_tokens_method=_sort_tokens,
-        make_fuzzy_method=fuzz,
-        remove_common_tokens_method=remove_common_tokens,
-        # endregion
-        unpack_single_result=True,
-        return_intermediate_results_before_actions=None,
-        **kwargs
+    *strings: str,
+    config: Union[Iterable[StringSanitizationOptions], StringSanitizationConfig],
+    tokenizer=None,
+    language: Languages = Languages.English,
+    # region sanitization methods
+    remove_acronym_periods_and_spaces_method=remove_acronym_periods_and_spaces,
+    remove_case_method=_lower,
+    remove_prefix_suffix_method=remove_prefix_suffix,
+    remove_common_prefix_suffix_method=remove_common_prefix_suffix,
+    remove_punctuation_except_for_hyphen_method=remove_punctuation_except_for_hyphen,
+    remove_spaces_method=_remove_spaces,
+    replace_method=_replace_method,
+    sort_tokens_method=_sort_tokens,
+    make_fuzzy_method=fuzz,
+    remove_common_tokens_method=remove_common_tokens,
+    # endregion
+    unpack_single_result=True,
+    return_intermediate_results_before_actions=None,
+    **kwargs,
 ):
     """
 
@@ -301,24 +304,24 @@ def string_sanitize(
     """
     strings = solve_nested_singleton_tuple_list(strings, atom_types=str)
     if tokenizer is not None:
-        strings = (' '.join(tokenize(s, tokenizer)) for s in strings)
+        strings = (" ".join(tokenize(s, tokenizer)) for s in strings)
 
     replacement_idx = 0
 
     if config and not isinstance(config, StringSanitizationConfig):
         config = StringSanitizationConfig(actions=config)
-    if 'prefixes' in kwargs:
+    if "prefixes" in kwargs:
         if not config.prefixes_to_sanitize:
-            config.prefixes_to_sanitize = kwargs['prefixes']
+            config.prefixes_to_sanitize = kwargs["prefixes"]
         if not config.common_prefixes_to_sanitize:
-            config.common_prefixes_to_sanitize = kwargs['prefixes']
-        del kwargs['prefixes']
-    if 'suffixes' in kwargs:
+            config.common_prefixes_to_sanitize = kwargs["prefixes"]
+        del kwargs["prefixes"]
+    if "suffixes" in kwargs:
         if not config.suffixes_to_sanitize:
-            config.suffixes_to_sanitize = kwargs['suffixes']
+            config.suffixes_to_sanitize = kwargs["suffixes"]
         if not config.common_suffixes_to_sanitize:
-            config.common_suffixes_to_sanitize = kwargs['suffixes']
-        del kwargs['suffixes']
+            config.common_suffixes_to_sanitize = kwargs["suffixes"]
+        del kwargs["suffixes"]
 
     actions = tuple(config.actions) if config.actions else ()
 
@@ -326,8 +329,8 @@ def string_sanitize(
 
     def _add_intermediate_results():
         if (
-                return_intermediate_results_before_actions and
-                action in return_intermediate_results_before_actions
+            return_intermediate_results_before_actions
+            and action in return_intermediate_results_before_actions
         ):
             nonlocal strings
             strings = list(strings)
@@ -339,9 +342,11 @@ def string_sanitize(
             strings = map(
                 partial(
                     remove_acronym_periods_and_spaces_method,
-                    **get_relevant_named_args(remove_acronym_periods_and_spaces_method, **kwargs)
+                    **get_relevant_named_args(
+                        remove_acronym_periods_and_spaces_method, **kwargs
+                    ),
                 ),
-                strings
+                strings,
             )
         elif action == StringSanitizationOptions.REMOVE_CASES:
             strings = map(remove_case_method, strings)
@@ -351,7 +356,8 @@ def string_sanitize(
                     s,
                     prefixes=config.prefixes_to_sanitize,
                     suffixes=None,
-                ) for s in strings
+                )
+                for s in strings
             )
         elif action == StringSanitizationOptions.REMOVE_SUFFIX:
             strings = (
@@ -359,7 +365,8 @@ def string_sanitize(
                     s,
                     prefixes=None,
                     suffixes=config.suffixes_to_sanitize,
-                ) for s in strings
+                )
+                for s in strings
             )
         elif action == StringSanitizationOptions.REMOVE_COMMON_PREFIX:
             strings = remove_common_prefix_suffix_method(
@@ -368,7 +375,7 @@ def string_sanitize(
                 suffixes=None,
                 remove_prefix=True,
                 remove_suffix=False,
-                **get_relevant_named_args(remove_common_prefix_suffix_method, **kwargs)
+                **get_relevant_named_args(remove_common_prefix_suffix_method, **kwargs),
             )
         elif action == StringSanitizationOptions.REMOVE_COMMON_SUFFIX:
             strings = remove_common_prefix_suffix_method(
@@ -377,21 +384,26 @@ def string_sanitize(
                 suffixes=config.common_suffixes_to_sanitize,
                 remove_prefix=False,
                 remove_suffix=True,
-                **get_relevant_named_args(remove_common_prefix_suffix_method, **kwargs)
+                **get_relevant_named_args(remove_common_prefix_suffix_method, **kwargs),
             )
         elif action == StringSanitizationOptions.REMOVE_PUNCTUATIONS_EXCEPT_FOR_HYPHEN:
             strings = map(
                 partial(
                     remove_punctuation_except_for_hyphen_method,
-                    **get_relevant_named_args(remove_punctuation_except_for_hyphen_method, **kwargs)
+                    **get_relevant_named_args(
+                        remove_punctuation_except_for_hyphen_method, **kwargs
+                    ),
                 ),
-                strings
+                strings,
             )
         elif action == StringSanitizationOptions.REMOVE_SPACES:
             strings = map(remove_spaces_method, strings)
         elif action == StringSanitizationOptions.REPLACEMENT:
             strings = map(
-                partial(replace_method, replacement=config.replacements[replacement_idx]), strings
+                partial(
+                    replace_method, replacement=config.replacements[replacement_idx]
+                ),
+                strings,
             )
             replacement_idx += 1
         elif action == StringSanitizationOptions.MAKE_FUZZY:
@@ -405,12 +417,8 @@ def string_sanitize(
         elif action == StringSanitizationOptions.SORT_TOKENS_BOTH_ORDERS:
             if i == len(actions) - 1:
                 return (
-                    list(
-                        map(partial(sort_tokens_method, reverse=False), strings)
-                    ),
-                    list(
-                        map(partial(sort_tokens_method, reverse=True), strings)
-                    )
+                    list(map(partial(sort_tokens_method, reverse=False), strings)),
+                    list(map(partial(sort_tokens_method, reverse=True), strings)),
                 )
             else:
                 raise ValueError(f"'{action}' can only the be last sanitization action")

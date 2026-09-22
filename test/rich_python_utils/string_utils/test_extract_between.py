@@ -24,30 +24,21 @@ class TestBasicExtraction:
     def test_extraction_with_keep_delimiters(self):
         """Test keeping delimiters in the result."""
         result = extract_between(
-            "Hello [world] test",
-            "[", "]",
-            keep_search1=True,
-            keep_search2=True
+            "Hello [world] test", "[", "]", keep_search1=True, keep_search2=True
         )
         assert result == "[world]"
 
     def test_extraction_keep_search1_only(self):
         """Test keeping only the start delimiter."""
         result = extract_between(
-            "Hello [world] test",
-            "[", "]",
-            keep_search1=True,
-            keep_search2=False
+            "Hello [world] test", "[", "]", keep_search1=True, keep_search2=False
         )
         assert result == "[world"
 
     def test_extraction_keep_search2_only(self):
         """Test keeping only the end delimiter."""
         result = extract_between(
-            "Hello [world] test",
-            "[", "]",
-            keep_search1=False,
-            keep_search2=True
+            "Hello [world] test", "[", "]", keep_search1=False, keep_search2=True
         )
         assert result == "world]"
 
@@ -58,18 +49,14 @@ class TestMultipleDelimiters:
     def test_multiple_search1_first_match(self):
         """Test that first matching search1 delimiter is used."""
         result = extract_between(
-            "abc startX content endX rest",
-            ["startY", "startX"],
-            "endX"
+            "abc startX content endX rest", ["startY", "startX"], "endX"
         )
         assert result == " content "
 
     def test_multiple_search2_first_match(self):
         """Test that first matching search2 delimiter is used."""
         result = extract_between(
-            "start content endX more endY",
-            "start",
-            ["endY", "endX"]
+            "start content endX more endY", "start", ["endY", "endX"]
         )
         assert result == " content endX more "
 
@@ -77,9 +64,7 @@ class TestMultipleDelimiters:
         """Test parallel delimiter lists where search1 index determines search2."""
         # When startX is found (index 1), use endX (index 1)
         result = extract_between(
-            "abc startX hello endX 999 endY",
-            ["startY", "startX"],
-            ["endY", "endX"]
+            "abc startX hello endX 999 endY", ["startY", "startX"], ["endY", "endX"]
         )
         assert result == " hello "
 
@@ -96,28 +81,24 @@ class TestFirstVsLastOccurrence:
     def test_last_occurrence_search1(self):
         """Test using last occurrence of search1."""
         text = "start first end middle start second end"
-        result = extract_between(
-            text, "start", "end",
-            search1_use_last_occurrence=True
-        )
+        result = extract_between(text, "start", "end", search1_use_last_occurrence=True)
         assert result == " second "
 
     def test_last_occurrence_search2(self):
         """Test using last occurrence of search2."""
         text = "start content end1 more end2"
-        result = extract_between(
-            text, "start", "end",
-            search2_use_last_occurrence=True
-        )
+        result = extract_between(text, "start", "end", search2_use_last_occurrence=True)
         assert result == " content end1 more "
 
     def test_last_occurrence_both(self):
         """Test using last occurrence for both delimiters."""
         text = "<tag>first</tag> middle <tag>second</tag>"
         result = extract_between(
-            text, "<tag>", "</tag>",
+            text,
+            "<tag>",
+            "</tag>",
             search1_use_last_occurrence=True,
-            search2_use_last_occurrence=True
+            search2_use_last_occurrence=True,
         )
         assert result == "second"
 
@@ -138,9 +119,11 @@ Example: <DirectResponse>First response</DirectResponse>
 
         # With last occurrence - gets the actual improved response
         result_last = extract_between(
-            text, "<DirectResponse>", "</DirectResponse>",
+            text,
+            "<DirectResponse>",
+            "</DirectResponse>",
             search1_use_last_occurrence=True,
-            search2_use_last_occurrence=True
+            search2_use_last_occurrence=True,
         )
         assert result_last == "Second response"
 
@@ -152,10 +135,7 @@ class TestReturnMatchingIndex:
         """Test returning the matching search1 index."""
         text = "abc startX content endX"
         result, idx = extract_between(
-            text,
-            ["startY", "startX"],
-            "endX",
-            return_matching_search1_index=True
+            text, ["startY", "startX"], "endX", return_matching_search1_index=True
         )
         assert result == " content "
         assert idx == 1  # startX is at index 1
@@ -164,10 +144,7 @@ class TestReturnMatchingIndex:
         """Test index when first delimiter matches."""
         text = "abc startY content endY"
         result, idx = extract_between(
-            text,
-            ["startY", "startX"],
-            "endY",
-            return_matching_search1_index=True
+            text, ["startY", "startX"], "endY", return_matching_search1_index=True
         )
         assert result == " content "
         assert idx == 0  # startY is at index 0
@@ -181,7 +158,7 @@ class TestReturnMatchingIndex:
             "endX",
             allow_search1_not_found=True,
             allow_search2_not_found=True,
-            return_matching_search1_index=True
+            return_matching_search1_index=True,
         )
         assert result == "abc content xyz"
         assert idx == -1  # No match
@@ -198,18 +175,14 @@ class TestEdgeCases:
     def test_allow_search1_not_found(self):
         """Test extraction from beginning when search1 not found."""
         result = extract_between(
-            "Hello world] test",
-            "[", "]",
-            allow_search1_not_found=True
+            "Hello world] test", "[", "]", allow_search1_not_found=True
         )
         assert result == "Hello world"
 
     def test_allow_search2_not_found(self):
         """Test extraction to end when search2 not found."""
         result = extract_between(
-            "Hello [world and more",
-            "[", "]",
-            allow_search2_not_found=True
+            "Hello [world and more", "[", "]", allow_search2_not_found=True
         )
         assert result == "world and more"
 
@@ -217,9 +190,10 @@ class TestEdgeCases:
         """Test extraction of entire string when both not found."""
         result = extract_between(
             "Hello world",
-            "[", "]",
+            "[",
+            "]",
             allow_search1_not_found=True,
-            allow_search2_not_found=True
+            allow_search2_not_found=True,
         )
         assert result == "Hello world"
 
@@ -250,8 +224,7 @@ class TestXMLUseCases:
     def test_xml_tag_extraction(self):
         """Test extracting content from XML tags."""
         result = extract_between(
-            "<response>Hello world</response>",
-            "<response>", "</response>"
+            "<response>Hello world</response>", "<response>", "</response>"
         )
         assert result == "Hello world"
 
@@ -265,17 +238,18 @@ class TestXMLUseCases:
         """Test extracting last XML tag content."""
         text = "<tag>first</tag><tag>second</tag>"
         result = extract_between(
-            text, "<tag>", "</tag>",
+            text,
+            "<tag>",
+            "</tag>",
             search1_use_last_occurrence=True,
-            search2_use_last_occurrence=True
+            search2_use_last_occurrence=True,
         )
         assert result == "second"
 
     def test_xml_with_attributes(self):
         """Test extraction with XML tags containing attributes."""
         result = extract_between(
-            '<div class="content">Hello</div>',
-            '<div class="content">', '</div>'
+            '<div class="content">Hello</div>', '<div class="content">', "</div>"
         )
         assert result == "Hello"
 
@@ -291,7 +265,7 @@ class TestAlternativeDelimiters:
             text,
             ("<DirectResponse>", "<StructuredResponse>"),
             ("</DirectResponse>", "</StructuredResponse>"),
-            return_matching_search1_index=True
+            return_matching_search1_index=True,
         )
         assert result == "Hello"
         assert idx == 0  # DirectResponse is first in the tuple
@@ -302,7 +276,7 @@ class TestAlternativeDelimiters:
             text,
             ("<DirectResponse>", "<StructuredResponse>"),
             ("</DirectResponse>", "</StructuredResponse>"),
-            return_matching_search1_index=True
+            return_matching_search1_index=True,
         )
         assert result == "<Answer>42</Answer>"
         assert idx == 1  # StructuredResponse is second in the tuple
@@ -331,9 +305,10 @@ Thought: The user said "hello".
         # Extract the actual improved response (last occurrence)
         result = extract_between(
             text,
-            "<DirectResponse>", "</DirectResponse>",
+            "<DirectResponse>",
+            "</DirectResponse>",
             search1_use_last_occurrence=True,
-            search2_use_last_occurrence=True
+            search2_use_last_occurrence=True,
         )
         assert "Hello! I'm here to help you" in result
         assert "Example greeting" not in result
@@ -372,9 +347,11 @@ class TestPerformance:
         # Create large text with tag at end
         large_text = "filler " * 10000 + "<tag>target</tag>"
         result = extract_between(
-            large_text, "<tag>", "</tag>",
+            large_text,
+            "<tag>",
+            "</tag>",
             search1_use_last_occurrence=True,
-            search2_use_last_occurrence=True
+            search2_use_last_occurrence=True,
         )
         assert result == "target"
 
@@ -388,27 +365,23 @@ class TestRegressions:
         # should find last occurrence AFTER start position
         text = "start content1 end middle start content2 end"
         result = extract_between(
-            text, "start", "end",
+            text,
+            "start",
+            "end",
             search1_use_last_occurrence=True,
-            search2_use_last_occurrence=True
+            search2_use_last_occurrence=True,
         )
         assert result == " content2 "
 
     def test_empty_delimiter_list(self):
         """Test behavior with empty delimiter options."""
         # Empty search1 should start from beginning
-        result = extract_between(
-            "content end",
-            [], "end",
-            allow_search1_not_found=True
-        )
+        result = extract_between("content end", [], "end", allow_search1_not_found=True)
         assert result == "content "
 
         # Empty search2 should go to end
         result = extract_between(
-            "start content",
-            "start", [],
-            allow_search2_not_found=True
+            "start content", "start", [], allow_search2_not_found=True
         )
         assert result == " content"
 

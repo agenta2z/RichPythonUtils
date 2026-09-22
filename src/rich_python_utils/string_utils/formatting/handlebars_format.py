@@ -1,9 +1,10 @@
 import re
 from collections.abc import Mapping
-from typing import Callable, Dict, Optional, Tuple, Set, Union
+from typing import Callable, Dict, Optional, Set, Tuple, Union
 
 try:
     from pybars import Compiler
+
     PYBARS_AVAILABLE = True
 except ImportError:
     PYBARS_AVAILABLE = False
@@ -12,16 +13,19 @@ except ImportError:
 
 def _current_date_time_string(options=None, format_str: str = None):
     from rich_python_utils.datetime_utils.common import current_date_time_string
+
     return current_date_time_string(format_str)
 
 
 def _current_date_string(options=None, format_str: str = None):
     from rich_python_utils.datetime_utils.common import current_date_string
+
     return current_date_string(format_str)
 
 
 def _current_time_string(options=None, format_str: str = None):
     from rich_python_utils.datetime_utils.common import current_time_string
+
     return current_time_string(format_str)
 
 
@@ -33,15 +37,14 @@ def get_common_helpers() -> Dict[str, Callable]:
         Dict[str, Callable]: Dictionary mapping helper names to functions
     """
     return {
-        'currentDateTime': _current_date_time_string,
-        'currentDate': _current_date_string,
-        'currentTime': _current_time_string
+        "currentDateTime": _current_date_time_string,
+        "currentDate": _current_date_string,
+        "currentTime": _current_time_string,
     }
 
 
 def compile_template(
-        template: str,
-        return_variables: bool = False
+    template: str, return_variables: bool = False
 ) -> Union[object, Tuple[object, Set[str]]]:
     """
     Compile a Handlebars template string and optionally return variables found in it.
@@ -97,39 +100,46 @@ def extract_variables(template: str) -> Set[str]:
     variables = set()
 
     # Pattern for simple variables: {{variable}}
-    simple_var_pattern = r'\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)\s*\}\}'
+    simple_var_pattern = (
+        r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)\s*\}\}"
+    )
 
     # Pattern for block helpers: {{#if variable}} or {{#each items}}
-    block_helper_pattern = r'\{\{\s*#\s*\w+\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)'
+    block_helper_pattern = (
+        r"\{\{\s*#\s*\w+\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)"
+    )
 
     # Pattern for inline helpers with variables: {{helper variable}}
-    inline_helper_pattern = r'\{\{\s*\w+\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)'
+    inline_helper_pattern = (
+        r"\{\{\s*\w+\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)"
+    )
 
     # Find simple variables
     for match in re.finditer(simple_var_pattern, template):
-        var_name = match.group(1).split('.')[0]  # Get root variable name
+        var_name = match.group(1).split(".")[0]  # Get root variable name
         # Skip built-in helpers
-        if var_name not in ['currentDateTime', 'currentDate', 'currentTime']:
+        if var_name not in ["currentDateTime", "currentDate", "currentTime"]:
             variables.add(var_name)
 
     # Find variables in block helpers
     for match in re.finditer(block_helper_pattern, template):
-        var_name = match.group(1).split('.')[0]
+        var_name = match.group(1).split(".")[0]
         variables.add(var_name)
 
     # Find variables in inline helpers (excluding the helper name itself)
     for match in re.finditer(inline_helper_pattern, template):
-        var_name = match.group(1).split('.')[0]
+        var_name = match.group(1).split(".")[0]
 
     return variables
 
+
 def format_template(
-        template: str,
-        feed: Optional[Mapping] = None,
-        post_process: Optional[Callable[[str], str]] = None,
-        helpers: Optional[Mapping[str, Callable]] = None,
-        use_builtin_common_helpers: bool = True,
-        **default_feed
+    template: str,
+    feed: Optional[Mapping] = None,
+    post_process: Optional[Callable[[str], str]] = None,
+    helpers: Optional[Mapping[str, Callable]] = None,
+    use_builtin_common_helpers: bool = True,
+    **default_feed,
 ) -> str:
     """
     Renders a Handlebars template string with provided context and helpers.

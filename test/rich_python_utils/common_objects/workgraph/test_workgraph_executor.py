@@ -8,14 +8,20 @@ so we use module-level functions in tests instead of closures.
 """
 
 import uuid
-import pytest
 from typing import List
 
+import pytest
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
+)
+from rich_python_utils.common_objects.workflow.common.worknode_base import (
+    NextNodesSelector,
+)
 from rich_python_utils.common_objects.workflow.workgraph import WorkGraph, WorkGraphNode
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
-from rich_python_utils.common_objects.workflow.common.worknode_base import NextNodesSelector
 from rich_python_utils.mp_utils.queued_executor import SimulatedMultiThreadExecutor
-from rich_python_utils.service_utils.queue_service.thread_queue_service import ThreadQueueService
+from rich_python_utils.service_utils.queue_service.thread_queue_service import (
+    ThreadQueueService,
+)
 
 
 # =============================================================================
@@ -25,29 +31,30 @@ from rich_python_utils.service_utils.queue_service.thread_queue_service import T
 _test_counter = 0
 
 
-def unique_queue_ids(prefix='test'):
+def unique_queue_ids(prefix="test"):
     """Generate unique queue IDs to avoid test contamination."""
     global _test_counter
     _test_counter += 1
     unique = f"{_test_counter}_{uuid.uuid4().hex[:6]}"
-    return f'{prefix}_in_{unique}', f'{prefix}_out_{unique}'
+    return f"{prefix}_in_{unique}", f"{prefix}_out_{unique}"
 
 
 # =============================================================================
 # Test Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def executor():
     """Create a SimulatedMultiThreadExecutor for testing."""
     queue_service = ThreadQueueService()
-    input_id, output_id = unique_queue_ids('workgraph')
+    input_id, output_id = unique_queue_ids("workgraph")
     exec = SimulatedMultiThreadExecutor(
         input_queue_service=queue_service,
         output_queue_service=queue_service,
         input_queue_id=input_id,
         output_queue_id=output_id,
-        verbose=False
+        verbose=False,
     )
     yield exec
     exec.stop()
@@ -80,9 +87,21 @@ def test_linear_graph_with_executor(executor):
     global _linear_log
     _linear_log = []
 
-    a = WorkGraphNode(name="A", value=linear_node_a, result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg)
-    b = WorkGraphNode(name="B", value=linear_node_b, result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg)
-    c = WorkGraphNode(name="C", value=linear_node_c, result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg)
+    a = WorkGraphNode(
+        name="A",
+        value=linear_node_a,
+        result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
+    )
+    b = WorkGraphNode(
+        name="B",
+        value=linear_node_b,
+        result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
+    )
+    c = WorkGraphNode(
+        name="C",
+        value=linear_node_c,
+        result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
+    )
 
     a.add_next(b)
     b.add_next(c)
@@ -130,10 +149,26 @@ def test_diamond_graph_with_executor(executor):
     global _diamond_log
     _diamond_log = []
 
-    a = WorkGraphNode(name="A", value=diamond_node_a, result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg)
-    b = WorkGraphNode(name="B", value=diamond_node_b, result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg)
-    c = WorkGraphNode(name="C", value=diamond_node_c, result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg)
-    d = WorkGraphNode(name="D", value=diamond_node_d, result_pass_down_mode=ResultPassDownMode.NoPassDown)
+    a = WorkGraphNode(
+        name="A",
+        value=diamond_node_a,
+        result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
+    )
+    b = WorkGraphNode(
+        name="B",
+        value=diamond_node_b,
+        result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
+    )
+    c = WorkGraphNode(
+        name="C",
+        value=diamond_node_c,
+        result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
+    )
+    d = WorkGraphNode(
+        name="D",
+        value=diamond_node_d,
+        result_pass_down_mode=ResultPassDownMode.NoPassDown,
+    )
 
     a.add_next(b)
     a.add_next(c)
@@ -176,8 +211,16 @@ def test_multiple_start_nodes_with_executor(executor):
     global _multi_start_log
     _multi_start_log = []
 
-    a = WorkGraphNode(name="A", value=multi_start_a, result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg)
-    b = WorkGraphNode(name="B", value=multi_start_b, result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg)
+    a = WorkGraphNode(
+        name="A",
+        value=multi_start_a,
+        result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
+    )
+    b = WorkGraphNode(
+        name="B",
+        value=multi_start_b,
+        result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
+    )
 
     graph = WorkGraph(start_nodes=[a, b], executor=executor)
     result = graph.run(10)
@@ -210,8 +253,16 @@ def test_backward_compatibility_no_executor():
     global _compat_log
     _compat_log = []
 
-    a = WorkGraphNode(name="A", value=compat_node_a, result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg)
-    b = WorkGraphNode(name="B", value=compat_node_b, result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg)
+    a = WorkGraphNode(
+        name="A",
+        value=compat_node_a,
+        result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
+    )
+    b = WorkGraphNode(
+        name="B",
+        value=compat_node_b,
+        result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
+    )
 
     a.add_next(b)
 
@@ -237,13 +288,13 @@ def self_loop_monitor(x):
         return NextNodesSelector(
             include_self=False,
             include_others=True,
-            result=f"done_after_{_self_loop_counter[0]}"
+            result=f"done_after_{_self_loop_counter[0]}",
         )
     else:
         return NextNodesSelector(
             include_self=True,
             include_others=False,
-            result=f"iteration_{_self_loop_counter[0]}"
+            result=f"iteration_{_self_loop_counter[0]}",
         )
 
 
@@ -266,12 +317,12 @@ def test_self_loop_with_executor(executor):
     monitor = WorkGraphNode(
         name="monitor",
         value=self_loop_monitor,
-        result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+        result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
     )
     final = WorkGraphNode(
         name="final",
         value=self_loop_final,
-        result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg
+        result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
     )
 
     monitor.add_next(monitor)  # Self-edge
@@ -295,16 +346,10 @@ _no_pass_down_args = []
 def no_pass_down_monitor(driver_obj):
     _no_pass_down_args.append(driver_obj)
     if len(_no_pass_down_args) >= 3:
-        return NextNodesSelector(
-            include_self=False,
-            include_others=True,
-            result="done"
-        )
+        return NextNodesSelector(include_self=False, include_others=True, result="done")
     else:
         return NextNodesSelector(
-            include_self=True,
-            include_others=False,
-            result="continue"
+            include_self=True, include_others=False, result="continue"
         )
 
 
@@ -316,7 +361,7 @@ def test_self_loop_no_pass_down_with_executor(executor):
     monitor = WorkGraphNode(
         name="monitor",
         value=no_pass_down_monitor,
-        result_pass_down_mode=ResultPassDownMode.NoPassDown
+        result_pass_down_mode=ResultPassDownMode.NoPassDown,
     )
     monitor.add_next(monitor)
 
@@ -356,9 +401,21 @@ def test_branching_graph_with_executor(executor):
     global _branch_log
     _branch_log = []
 
-    a = WorkGraphNode(name="A", value=branch_node_a, result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg)
-    b = WorkGraphNode(name="B", value=branch_node_b, result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg)
-    c = WorkGraphNode(name="C", value=branch_node_c, result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg)
+    a = WorkGraphNode(
+        name="A",
+        value=branch_node_a,
+        result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
+    )
+    b = WorkGraphNode(
+        name="B",
+        value=branch_node_b,
+        result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
+    )
+    c = WorkGraphNode(
+        name="C",
+        value=branch_node_c,
+        result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
+    )
 
     a.add_next(b)
     a.add_next(c)
@@ -376,6 +433,7 @@ def test_branching_graph_with_executor(executor):
 # =============================================================================
 # Test: Single Node Graph
 # =============================================================================
+
 
 def single_node_func(x):
     return x * 2
