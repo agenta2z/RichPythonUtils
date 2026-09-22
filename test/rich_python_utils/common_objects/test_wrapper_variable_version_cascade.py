@@ -16,7 +16,6 @@ RichPythonUtils after the consolidation of ``_set_nested_key`` helpers.
 from pathlib import Path
 
 import pytest
-
 from rich_python_utils.common_objects.variable_manager import (
     FileBasedVariableManager,
     VariableManagerConfig,
@@ -53,9 +52,7 @@ def template_root(tmp_path: Path) -> Path:
     # Versioned task_preamble folder (production convention)
     tp = var_root / "task_preamble"
     tp.mkdir()
-    (tp / "default.jinja2").write_text(
-        "DEFAULT_PREAMBLE_MARKER", encoding="utf-8"
-    )
+    (tp / "default.jinja2").write_text("DEFAULT_PREAMBLE_MARKER", encoding="utf-8")
     (tp / "aggregation.jinja2").write_text(
         "AGGREGATION_PREAMBLE_MARKER", encoding="utf-8"
     )
@@ -68,9 +65,7 @@ def loader(template_root: Path) -> FileBasedVariableManager:
     # Use production-aligned config: variables live under ``_variables/``
     # (matching the OpenStartup / AgentFoundation template trees).
     config = VariableManagerConfig(variables_folder_name="_variables")
-    return FileBasedVariableManager(
-        base_path=str(template_root), config=config
-    )
+    return FileBasedVariableManager(base_path=str(template_root), config=config)
 
 
 # ---------------------------------------------------------------------------
@@ -123,22 +118,17 @@ class TestWrapperVariableVersionCascade:
         # to substitute; here we only verify the variable-resolution cascade.
         assert "{{ input }}" in wrapper
 
-    def test_wrapper_with_aggregation_version_yields_aggregation_nested(
-        self, loader
-    ):
+    def test_wrapper_with_aggregation_version_yields_aggregation_nested(self, loader):
         """The regression test: version="aggregation" MUST cascade into the
         wrapper body so the nested ``task_preamble`` resolves to
         ``aggregation.jinja2`` (NOT the default).
         """
         content = "{{ context.user_request_with_task_preamble }}"
-        resolved = loader.resolve_from_content(
-            content, version="aggregation"
-        )
+        resolved = loader.resolve_from_content(content, version="aggregation")
         wrapper = resolved.get("context.user_request_with_task_preamble", "")
         assert "AGGREGATION_PREAMBLE_MARKER" in wrapper, (
             "Wrapper should embed AGGREGATION preamble when version='aggregation'. "
-            "Bug: version did NOT cascade into the wrapper body. Got:\n"
-            + wrapper[:300]
+            "Bug: version did NOT cascade into the wrapper body. Got:\n" + wrapper[:300]
         )
         # Sanity: DEFAULT must NOT leak through
         assert "DEFAULT_PREAMBLE_MARKER" not in wrapper, (
@@ -152,9 +142,7 @@ class TestWrapperVariableVersionCascade:
         is the only differentiator — the underlying mechanism is sound.
         """
         content = "{{ task_preamble }}"
-        resolved = loader.resolve_from_content(
-            content, version="aggregation"
-        )
+        resolved = loader.resolve_from_content(content, version="aggregation")
         direct = resolved.get("task_preamble", "")
         assert "AGGREGATION_PREAMBLE_MARKER" in direct
         assert "DEFAULT_PREAMBLE_MARKER" not in direct
@@ -176,6 +164,5 @@ class TestUnknownVersionFallback:
         )
         wrapper = resolved.get("context.user_request_with_task_preamble", "")
         assert "DEFAULT_PREAMBLE_MARKER" in wrapper, (
-            "Unknown version should fall through to default. Got:\n"
-            + wrapper[:300]
+            "Unknown version should fall through to default. Got:\n" + wrapper[:300]
         )

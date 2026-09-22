@@ -179,7 +179,9 @@ class ValueConverter:
             attr_pairs = []
             for attr_name in dir(self.constants):
                 if attr_name[0] != "_":
-                    attr_pairs.append((attr_name, str(getattr(self.constants, attr_name))))
+                    attr_pairs.append(
+                        (attr_name, str(getattr(self.constants, attr_name)))
+                    )
             # Sort by length descending to replace longer names first
             attr_pairs.sort(key=lambda x: (len(x[0]), x[0]), reverse=True)
             for attr_name, attr_val in attr_pairs:

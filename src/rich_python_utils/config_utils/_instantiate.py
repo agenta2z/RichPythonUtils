@@ -49,6 +49,7 @@ class _ImportFactory(LazyConfigFactory):
 
     def __init__(self, config_dict: dict, injectables: dict | None = None) -> None:
         import warnings
+
         warnings.warn(
             "_ImportFactory is deprecated; use LazyConfigFactory instead.",
             DeprecationWarning,
@@ -211,7 +212,8 @@ def _expand_distribution(val: Any, n: int) -> list | None:
         # 0 < len(items) < n → pad the tail with the first element
         _logger.debug(
             "_repeat_ distribution: list of %d padded to %d (first element)",
-            len(items), n,
+            len(items),
+            n,
         )
         return items + [items[0]] * (n - len(items))
     if isinstance(val, dict) and val and all(isinstance(v, int) for v in val.values()):
@@ -225,7 +227,9 @@ def _expand_distribution(val: Any, n: int) -> list | None:
 
 
 def _collect_distributions(
-    node: Any, n: int, path: tuple = (),
+    node: Any,
+    n: int,
+    path: tuple = (),
 ) -> list[tuple[tuple, list]]:
     """Find all list/dict-with-counts values that match the repeat count."""
     results: list[tuple[tuple, list]] = []
@@ -241,7 +245,9 @@ def _collect_distributions(
 
 
 def _apply_distributions(
-    entry: dict, distributions: list[tuple[tuple, list]], index: int,
+    entry: dict,
+    distributions: list[tuple[tuple, list]],
+    index: int,
 ) -> None:
     """Replace distribution fields with scalar value for this index."""
     for path, assignments in distributions:
@@ -267,7 +273,11 @@ def _resolve_sibling_refs(node: Any, scope_chain: tuple = (), root: Any = None) 
     if isinstance(node, list):
         result: list = []
         for item in node:
-            if isinstance(item, str) and item.startswith("$") and not item.startswith("${"):
+            if (
+                isinstance(item, str)
+                and item.startswith("$")
+                and not item.startswith("${")
+            ):
                 ref_val = _lookup_scope_chain(item[1:], scope_chain, root)
                 result.append(copy.deepcopy(ref_val) if ref_val is not None else item)
             else:
@@ -277,7 +287,11 @@ def _resolve_sibling_refs(node: Any, scope_chain: tuple = (), root: Any = None) 
         child_scope = (node,) + scope_chain
         resolved: dict = {}
         for key, val in node.items():
-            if isinstance(val, str) and val.startswith("$") and not val.startswith("${"):
+            if (
+                isinstance(val, str)
+                and val.startswith("$")
+                and not val.startswith("${")
+            ):
                 ref_name = val[1:]
                 ref_val = _lookup_scope_chain(ref_name, child_scope, root)
                 if ref_val is not None:
@@ -309,7 +323,11 @@ def _has_repeat_or_ref(node: Any) -> bool:
                 return True
     elif isinstance(node, list):
         for item in node:
-            if isinstance(item, str) and item.startswith("$") and not item.startswith("${"):
+            if (
+                isinstance(item, str)
+                and item.startswith("$")
+                and not item.startswith("${")
+            ):
                 return True
             if _has_repeat_or_ref(item):
                 return True
@@ -356,8 +374,7 @@ def _resolve_inherits_(node, root_container, _resolution_stack=None):
 
     if isinstance(node, list):
         return [
-            _resolve_inherits_(item, root_container, _resolution_stack)
-            for item in node
+            _resolve_inherits_(item, root_container, _resolution_stack) for item in node
         ]
     if not isinstance(node, dict):
         return node
@@ -433,9 +450,7 @@ def _resolve_import_(node, current_yaml_dir: Path):
                 )
         from omegaconf import OmegaConf
 
-        ref_cfg = OmegaConf.to_container(
-            OmegaConf.load(str(ref_path)), resolve=False
-        )
+        ref_cfg = OmegaConf.to_container(OmegaConf.load(str(ref_path)), resolve=False)
         overrides = {k: v for k, v in node.items() if k != import_key}
         merged = _deep_merge(ref_cfg, overrides)
         merged = _resolve_import_(merged, ref_path.parent)
@@ -673,6 +688,7 @@ def _apply_config_defaults(container: Any, config_defaults: Dict[str, Any]) -> A
 # Config loading
 # ---------------------------------------------------------------------------
 
+
 def load_config(
     path: str,
     overrides: Optional[Dict[str, Any]] = None,
@@ -771,7 +787,10 @@ def merge_configs(*configs):
 # Instantiation
 # ---------------------------------------------------------------------------
 
-def instantiate(config, _convert_: str = "all", merge_dict_typed_attributes: bool = True, **kwargs) -> Any:
+
+def instantiate(
+    config, _convert_: str = "all", merge_dict_typed_attributes: bool = True, **kwargs
+) -> Any:
     """Instantiate a Python object from *config* using Hydra.
 
     This is a thin wrapper around ``hydra.utils.instantiate`` that first:
@@ -801,11 +820,15 @@ def instantiate(config, _convert_: str = "all", merge_dict_typed_attributes: boo
     )
     result = _hydra_instantiate(config, _convert_=_convert_, **kwargs)
     for owner_path, field_name, child_key, raw_config, injectables in factory_configs:
-        _apply_lazy_factory(result, owner_path, field_name, child_key, raw_config, injectables)
+        _apply_lazy_factory(
+            result, owner_path, field_name, child_key, raw_config, injectables
+        )
     return result
 
 
-def _apply_lazy_factory(root, owner_path, field_name, child_key, raw_config, injectables=None):
+def _apply_lazy_factory(
+    root, owner_path, field_name, child_key, raw_config, injectables=None
+):
     """Replace a Hydra-created partial with a ``LazyConfigFactory``.
 
     Navigates the instantiated object tree via *owner_path* (a dot-separated
@@ -834,6 +857,7 @@ def _apply_lazy_factory(root, owner_path, field_name, child_key, raw_config, inj
 # Internal: single-pass tree walk
 # ---------------------------------------------------------------------------
 
+
 def _resolve_and_preprocess(config, merge_dict_typed_attributes: bool = True):
     """Convert to plain dict, walk the tree, convert back to ``DictConfig``.
 
@@ -847,8 +871,11 @@ def _resolve_and_preprocess(config, merge_dict_typed_attributes: bool = True):
 
     raw = OmegaConf.to_container(config, resolve=False)
     factory_configs: List[tuple] = []
-    _walk(raw, _factory_configs=factory_configs,
-          _merge_dict_typed_attributes=merge_dict_typed_attributes)
+    _walk(
+        raw,
+        _factory_configs=factory_configs,
+        _merge_dict_typed_attributes=merge_dict_typed_attributes,
+    )
     return OmegaConf.create(raw), factory_configs
 
 
@@ -936,13 +963,17 @@ def _walk(
                 # registered alias with alternatives, pick the right
                 # candidate based on which unique fields appear in the node.
                 if target in _registry:
-                    node["_target_"] = _dispatch_alias(
-                        target, node["_target_"], node
-                    )
+                    node["_target_"] = _dispatch_alias(target, node["_target_"], node)
                 cls = _import_target(node["_target_"])
                 if cls is not None:
-                    _filter_attrs_keys(node, cls, _factory_configs, local_injectables, _owner_path=_owner_path,
-                                       merge_dict_typed_attributes=_merge_dict_typed_attributes)
+                    _filter_attrs_keys(
+                        node,
+                        cls,
+                        _factory_configs,
+                        local_injectables,
+                        _owner_path=_owner_path,
+                        merge_dict_typed_attributes=_merge_dict_typed_attributes,
+                    )
 
         # 1a. Remove injectable source keys that survived _filter_attrs_keys.
         #     _filter_attrs_keys already removed _-prefixed keys that ARE attrs
@@ -982,7 +1013,9 @@ def _walk(
             "disable_slot_defaults_", False
         ):
             for slot_path, defaults_obj in _collect_slot_defaults(cls).items():
-                _apply_at_path(node, slot_path.split("."), defaults_obj, parent_node=node)
+                _apply_at_path(
+                    node, slot_path.split("."), defaults_obj, parent_node=node
+                )
 
         # 2. String shorthand expansion
         for key, val in list(node.items()):
@@ -1014,11 +1047,7 @@ def _walk(
             # on the parent class first (highest precedence), then fall back to
             # type-based inference via _expected_cls.
             child_expected_cls = field_types.get(key)
-            if (
-                cls is not None
-                and isinstance(v, dict)
-                and "_target_" not in v
-            ):
+            if cls is not None and isinstance(v, dict) and "_target_" not in v:
                 nested_alias = _check_yaml_default_nested(cls, key)
                 if nested_alias is not None:
                     v["_target_"] = nested_alias
@@ -1034,13 +1063,20 @@ def _walk(
 
     elif isinstance(node, list):
         for item in node:
-            _walk(item, _injectables=_injectables, _factory_configs=_factory_configs, _expected_cls=None,
-                  _owner_path=_owner_path, _merge_dict_typed_attributes=_merge_dict_typed_attributes)
+            _walk(
+                item,
+                _injectables=_injectables,
+                _factory_configs=_factory_configs,
+                _expected_cls=None,
+                _owner_path=_owner_path,
+                _merge_dict_typed_attributes=_merge_dict_typed_attributes,
+            )
 
 
 # ---------------------------------------------------------------------------
 # D2: Optional _target_ inference from parent field type
 # ---------------------------------------------------------------------------
+
 
 def _infer_target(
     _expected_cls: Optional[type],
@@ -1123,6 +1159,7 @@ def _unwrap_to_concrete(tp: Any) -> Optional[type]:
     if not _is_union:
         try:
             import types as _types
+
             _is_union = isinstance(tp, _types.UnionType)
         except AttributeError:
             pass  # Python < 3.10, no UnionType
@@ -1166,6 +1203,7 @@ def _is_protocol(cls: type) -> bool:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _import_target(target_path: str) -> Optional[type]:
     """Import and return the class/callable at *target_path*.
@@ -1323,7 +1361,8 @@ def _dispatch_alias(alias: str, primary_fqn: str, node: dict) -> str:
         if cls is None:
             _logger.warning(
                 "alias %r: alternative %r could not be imported — skipping.",
-                alias, fqn,
+                alias,
+                fqn,
             )
             continue
         accepted[fqn] = _accepted_param_names(cls)
@@ -1342,13 +1381,12 @@ def _dispatch_alias(alias: str, primary_fqn: str, node: dict) -> str:
         _logger.info(
             "alias %r → default %s (no differentiator field). "
             "Variants differentiated by: %s",
-            alias, primary_fqn,
+            alias,
+            primary_fqn,
             {fqn: sorted(uniq) for fqn, uniq in unique.items() if uniq},
         )
         return primary_fqn
-    raise AliasResolutionError(
-        f"Alias {alias!r} is ambiguous — candidates: {matched}"
-    )
+    raise AliasResolutionError(f"Alias {alias!r} is ambiguous — candidates: {matched}")
 
 
 def _filter_attrs_keys(
@@ -1396,7 +1434,8 @@ def _filter_attrs_keys(
     # injectable sources or OmegaConf interpolation anchors.
     all_field_names = {a.name for a in attr.fields(cls)}
     invalid = [
-        k for k in node
+        k
+        for k in node
         if k not in valid_params
         and k not in _HYDRA_KEYS
         and not (k.startswith("_") and k not in all_field_names)
@@ -1422,10 +1461,13 @@ def _filter_attrs_keys(
         # naming convention) OR carries ``metadata={"lazy_config_factory": True}`` (the
         # explicit, name-independent opt-in — lets a clean field name like
         # ``worker_inferencers`` be lazy without a magic suffix).
-        if not (
-            a.name.endswith("_factory")
-            or a.metadata.get("lazy_config_factory", False)
-        ) or a.name not in node:
+        if (
+            not (
+                a.name.endswith("_factory")
+                or a.metadata.get("lazy_config_factory", False)
+            )
+            or a.name not in node
+        ):
             continue
         val = node[a.name]
         if not isinstance(val, dict):
@@ -1437,7 +1479,9 @@ def _filter_attrs_keys(
                 del raw[_FACTORY_MARKER]
                 del val[_FACTORY_MARKER]
             if _factory_configs is not None:
-                _factory_configs.append((_owner_path, a.name, None, raw, _injectables or {}))
+                _factory_configs.append(
+                    (_owner_path, a.name, None, raw, _injectables or {})
+                )
             val["_partial_"] = True
         else:
             # Dict of factories: worker_factory: {type1: {_target_: ...}, ...}
@@ -1450,7 +1494,9 @@ def _filter_attrs_keys(
                         del raw[_FACTORY_MARKER]
                         del v[_FACTORY_MARKER]
                     if _factory_configs is not None:
-                        _factory_configs.append((_owner_path, a.name, k, raw, _injectables or {}))
+                        _factory_configs.append(
+                            (_owner_path, a.name, k, raw, _injectables or {})
+                        )
                     v["_partial_"] = True
 
     if merge_dict_typed_attributes:

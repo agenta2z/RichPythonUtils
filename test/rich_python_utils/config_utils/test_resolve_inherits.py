@@ -15,6 +15,7 @@ Covers semantics defined in ``_instantiate.py:_resolve_inherits_``:
 * End-to-end through Hydra: distinct Python instances after instantiate().
 * Nested ``_inherits_`` resolves recursively inside an inherited dict.
 """
+
 from __future__ import annotations
 
 import textwrap
@@ -24,12 +25,11 @@ from typing import Any, Dict
 import attr
 import pytest
 from omegaconf import OmegaConf
-
+from rich_python_utils.config_utils import instantiate, load_config
 from rich_python_utils.config_utils._instantiate import (
     _resolve_inherits_,
     _resolve_path_in_root,
 )
-from rich_python_utils.config_utils import instantiate, load_config
 
 
 # ---------------------------------------------------------------------------

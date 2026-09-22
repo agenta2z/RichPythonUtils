@@ -1,4 +1,4 @@
-from collections.abc import Sequence, Callable
+from collections.abc import Callable, Sequence
 
 
 def make_valid_by_minimum_removal(seq: Sequence, left, right, concat: Callable = None):
@@ -78,12 +78,12 @@ def make_valid_by_minimum_removal(seq: Sequence, left, right, concat: Callable =
                 invalid_indexes.append(i)
 
     invalid_indexes = set(invalid_indexes + stack)
-    output = (x  for i, x in enumerate(seq) if i not in invalid_indexes)
+    output = (x for i, x in enumerate(seq) if i not in invalid_indexes)
     if concat is not None:
         return concat(output)
     else:
         if isinstance(seq, str):
-            return ''.join(output)
+            return "".join(output)
         else:
             return list(output)
 
@@ -164,6 +164,6 @@ def make_valid_by_minimum_add(seq: Sequence, left, right, concat: Callable = Non
         return concat(result)
     else:
         if isinstance(seq, str):
-            return ''.join(result)
+            return "".join(result)
         else:
             return result

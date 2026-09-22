@@ -30,61 +30,84 @@ except ImportError:
     sys.exit(0)
 
 from resolve_path import resolve_path
+
 resolve_path()
 
+from rich_python_utils.service_utils.retrieval_service.document import Document
 from rich_python_utils.service_utils.retrieval_service.lancedb_retrieval_service import (
     LanceDBRetrievalService,
 )
-from rich_python_utils.service_utils.retrieval_service.document import Document
 
 
 # -- Simple hash-based embedding for demonstration --
 # In production, use a real model (e.g. sentence-transformers).
 # This deterministic function maps text -> 16-dim vector via MD5 hash.
 
+
 def demo_embedding(text: str) -> list:
     """Hash-based embedding for demo purposes (16 dimensions)."""
     import hashlib
+
     h = hashlib.sha256(text.encode()).hexdigest()
-    return [int(h[i:i+2], 16) / 255.0 for i in range(0, 32, 2)]
+    return [int(h[i : i + 2], 16) / 255.0 for i in range(0, 32, 2)]
 
 
 PAPERS = [
     Document(
         doc_id="paper:quantum_ml",
         content="A novel quantum machine learning algorithm for molecular property "
-                "prediction using variational quantum circuits achieves state-of-the-art "
-                "accuracy on benchmark datasets.",
-        metadata={"authors": ["Alice Chen", "Bob Patel"], "year": 2024,
-                  "topics": ["quantum_computing", "machine_learning"], "open_access": True},
+        "prediction using variational quantum circuits achieves state-of-the-art "
+        "accuracy on benchmark datasets.",
+        metadata={
+            "authors": ["Alice Chen", "Bob Patel"],
+            "year": 2024,
+            "topics": ["quantum_computing", "machine_learning"],
+            "open_access": True,
+        },
     ),
     Document(
         doc_id="paper:crispr_delivery",
         content="Lipid nanoparticle delivery system for CRISPR-Cas9 gene editing in vivo "
-                "demonstrates efficient genome editing in liver cells.",
-        metadata={"authors": ["Diana Lee"], "year": 2024,
-                  "topics": ["gene_editing", "drug_delivery"], "open_access": False},
+        "demonstrates efficient genome editing in liver cells.",
+        metadata={
+            "authors": ["Diana Lee"],
+            "year": 2024,
+            "topics": ["gene_editing", "drug_delivery"],
+            "open_access": False,
+        },
     ),
     Document(
         doc_id="paper:climate_model",
         content="Improved climate model incorporating ocean-atmosphere coupling at "
-                "unprecedented resolution for temperature trend prediction.",
-        metadata={"authors": ["Carol Kim", "Eve Zhang"], "year": 2023,
-                  "topics": ["climate_science", "machine_learning"], "open_access": True},
+        "unprecedented resolution for temperature trend prediction.",
+        metadata={
+            "authors": ["Carol Kim", "Eve Zhang"],
+            "year": 2023,
+            "topics": ["climate_science", "machine_learning"],
+            "open_access": True,
+        },
     ),
     Document(
         doc_id="paper:protein_structure",
         content="Deep learning predicts protein tertiary structures with near-experimental "
-                "accuracy using a transformer architecture.",
-        metadata={"authors": ["Bob Patel", "Diana Lee"], "year": 2023,
-                  "topics": ["machine_learning", "structural_biology"], "open_access": False},
+        "accuracy using a transformer architecture.",
+        metadata={
+            "authors": ["Bob Patel", "Diana Lee"],
+            "year": 2023,
+            "topics": ["machine_learning", "structural_biology"],
+            "open_access": False,
+        },
     ),
     Document(
         doc_id="paper:battery_materials",
         content="High-throughput computational screening identifies solid-state electrolyte "
-                "materials for next-generation lithium batteries.",
-        metadata={"authors": ["Eve Zhang", "Frank Wu"], "year": 2024,
-                  "topics": ["materials_science", "energy_storage"], "open_access": True},
+        "materials for next-generation lithium batteries.",
+        metadata={
+            "authors": ["Eve Zhang", "Frank Wu"],
+            "year": 2024,
+            "topics": ["materials_science", "energy_storage"],
+            "open_access": True,
+        },
     ),
 ]
 
@@ -119,7 +142,9 @@ def main():
         results_crispr = svc.search("gene editing CRISPR delivery")
 
         # 5. Filters and stats (using the same service)
-        results_year2024 = svc.search("novel quantum algorithm prediction", filters={"year": 2024})
+        results_year2024 = svc.search(
+            "novel quantum algorithm prediction", filters={"year": 2024}
+        )
         docs_open_access = svc.list_all(filters={"open_access": True})
         stats = svc.get_stats()
 
@@ -137,7 +162,9 @@ def main():
 
         print("\n[1] Demo embedding function")
         print("-" * 50)
-        print(f"    demo_embedding('hello world') -> [{sample[0]:.3f}, {sample[1]:.3f}, ...]")
+        print(
+            f"    demo_embedding('hello world') -> [{sample[0]:.3f}, {sample[1]:.3f}, ...]"
+        )
         print(f"    (In production, use sentence-transformers or similar)")
 
         print("\n[2] Create LanceDBRetrievalService")
@@ -153,7 +180,9 @@ def main():
 
         print("\n[4] Hybrid search (vector + BM25)")
         print("-" * 50)
-        print(f"    'quantum machine learning algorithm' -> {len(results_quantum)} results:")
+        print(
+            f"    'quantum machine learning algorithm' -> {len(results_quantum)} results:"
+        )
         for doc, score in results_quantum:
             print(f"        {doc.doc_id:35s} score={score:.4f}")
         print(f"    'gene editing CRISPR delivery' -> {len(results_crispr)} results:")
@@ -180,4 +209,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n[X] Error: {e}")
         import traceback
+
         traceback.print_exc()

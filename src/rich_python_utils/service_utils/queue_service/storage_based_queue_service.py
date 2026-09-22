@@ -78,23 +78,23 @@ Usage (Context Manager):
         item = service.get('queue')
 """
 
-import os
-import sys
-import time
-import tempfile
-import pickle
 import base64
-from pathlib import Path
-from typing import Any, Optional, List, Dict, Callable
+import os
+import pickle
+import sys
+import tempfile
+import time
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
 
 # Platform-specific imports for file locking
-if sys.platform == 'win32':
+if sys.platform == "win32":
     import msvcrt
 else:
     import fcntl
 
-from attr import attrs, attrib, Factory
+from attr import attrib, attrs, Factory
 
 from ...io_utils.on_storage_lists import OnStorageLists
 from .queue_service_base import QueueServiceBase
@@ -131,7 +131,7 @@ class StorageBasedQueueService(QueueServiceBase):
 
     root_path: Optional[str] = attrib(default=None)
     archive_popped_items: bool = attrib(default=False)
-    archive_dir_name: str = attrib(default='_archive')
+    archive_dir_name: str = attrib(default="_archive")
     use_pickle: bool = attrib(default=False)
     """Use pickle serialization instead of JSON. Required for storing non-JSON-serializable objects like Task."""
     _temp_dir: bool = attrib(init=False, default=False)
@@ -150,7 +150,7 @@ class StorageBasedQueueService(QueueServiceBase):
         """
         if self.root_path is None:
             # Use temporary directory
-            self.root_path = tempfile.mkdtemp(prefix='storage_queue_')
+            self.root_path = tempfile.mkdtemp(prefix="storage_queue_")
             self._temp_dir = True
         else:
             self._temp_dir = False
@@ -163,38 +163,40 @@ class StorageBasedQueueService(QueueServiceBase):
             def pickle_load(f):
                 b64_str = f.read()
                 return pickle.loads(base64.b64decode(b64_str))
+
             def pickle_dump(obj, f):
-                b64_str = base64.b64encode(pickle.dumps(obj)).decode('ascii')
+                b64_str = base64.b64encode(pickle.dumps(obj)).decode("ascii")
                 f.write(b64_str)
+
             read_method = pickle_load
             write_method = pickle_dump
-            file_extension = '.pkl'
+            file_extension = ".pkl"
         else:
             read_method = None  # Use default JSON
             write_method = None
-            file_extension = '.json'
+            file_extension = ".json"
 
         # Create storage for queue data
         storage_kwargs = {
-            'root_path': os.path.join(self.root_path, 'queues'),
-            'default_list_key': 'default',
-            'archive_enabled': self.archive_popped_items,
-            'archive_dir_name': self.archive_dir_name,
+            "root_path": os.path.join(self.root_path, "queues"),
+            "default_list_key": "default",
+            "archive_enabled": self.archive_popped_items,
+            "archive_dir_name": self.archive_dir_name,
         }
         if self.use_pickle:
-            storage_kwargs['read_method'] = read_method
-            storage_kwargs['write_method'] = write_method
-            storage_kwargs['file_extension'] = file_extension
+            storage_kwargs["read_method"] = read_method
+            storage_kwargs["write_method"] = write_method
+            storage_kwargs["file_extension"] = file_extension
         self.storage = OnStorageLists(**storage_kwargs)
 
         # Create storage for metadata (always JSON for human-readability)
         self.metadata_storage = OnStorageLists(
-            root_path=os.path.join(self.root_path, 'metadata'),
-            default_list_key='default'
+            root_path=os.path.join(self.root_path, "metadata"),
+            default_list_key="default",
         )
 
         # Lock file for global operations
-        self._lock_path = os.path.join(self.root_path, '.lock')
+        self._lock_path = os.path.join(self.root_path, ".lock")
         self._lock_file = None
 
         # Service state
@@ -218,13 +220,13 @@ class StorageBasedQueueService(QueueServiceBase):
 
         # Open lock file
         if self._lock_file is None or self._lock_file.closed:
-            self._lock_file = open(self._lock_path, 'a')
+            self._lock_file = open(self._lock_path, "a")
 
         start_time = time.time()
         while True:
             try:
                 # Try to acquire exclusive lock (platform-specific)
-                if sys.platform == 'win32':
+                if sys.platform == "win32":
                     # Windows: use msvcrt
                     msvcrt.locking(self._lock_file.fileno(), msvcrt.LK_NBLCK, 1)
                 else:
@@ -244,7 +246,7 @@ class StorageBasedQueueService(QueueServiceBase):
         """Release global lock."""
         if self._lock_file and not self._lock_file.closed:
             try:
-                if sys.platform == 'win32':
+                if sys.platform == "win32":
                     # Windows: use msvcrt
                     msvcrt.locking(self._lock_file.fileno(), msvcrt.LK_UNLCK, 1)
                 else:
@@ -273,11 +275,11 @@ class StorageBasedQueueService(QueueServiceBase):
 
             # Create metadata entry
             metadata = {
-                'queue_id': queue_id,
-                'created_at': datetime.now().isoformat(),
-                'created': True
+                "queue_id": queue_id,
+                "created_at": datetime.now().isoformat(),
+                "created": True,
             }
-            self.metadata_storage.append(metadata, list_key=f'queue.{queue_id}.meta')
+            self.metadata_storage.append(metadata, list_key=f"queue.{queue_id}.meta")
 
             return True
         finally:
@@ -311,28 +313,24 @@ class StorageBasedQueueService(QueueServiceBase):
             # Auto-create queue if it doesn't exist
             if not self.exists(queue_id):
                 metadata = {
-                    'queue_id': queue_id,
-                    'created_at': datetime.now().isoformat(),
-                    'created': True
+                    "queue_id": queue_id,
+                    "created_at": datetime.now().isoformat(),
+                    "created": True,
                 }
-                self.metadata_storage.append(metadata, list_key=f'queue.{queue_id}.meta')
+                self.metadata_storage.append(
+                    metadata, list_key=f"queue.{queue_id}.meta"
+                )
 
             # Add item to queue
-            item_data = {
-                'data': obj,
-                'timestamp': datetime.now().isoformat()
-            }
-            self.storage.append(item_data, list_key=f'queue.{queue_id}.items')
+            item_data = {"data": obj, "timestamp": datetime.now().isoformat()}
+            self.storage.append(item_data, list_key=f"queue.{queue_id}.items")
 
             return True
         finally:
             self._release_lock()
 
     def get(
-        self,
-        queue_id: str,
-        blocking: bool = True,
-        timeout: Optional[float] = None
+        self, queue_id: str, blocking: bool = True, timeout: Optional[float] = None
     ) -> Optional[Any]:
         """
         Get an object from the queue (FIFO - first in, first out).
@@ -368,7 +366,7 @@ class StorageBasedQueueService(QueueServiceBase):
 
             try:
                 # Check if queue exists and has items
-                size = self.storage._get_list_size(list_key=f'queue.{queue_id}.items')
+                size = self.storage._get_list_size(list_key=f"queue.{queue_id}.items")
                 if size == 0:
                     if not blocking:
                         return None
@@ -379,9 +377,11 @@ class StorageBasedQueueService(QueueServiceBase):
                             return None
                 else:
                     # Pop first item (FIFO)
-                    item_data = self.storage.pop(index=0, list_key=f'queue.{queue_id}.items')
+                    item_data = self.storage.pop(
+                        index=0, list_key=f"queue.{queue_id}.items"
+                    )
                     if item_data is not None:
-                        return item_data.get('data')
+                        return item_data.get("data")
                     return None
             finally:
                 self._release_lock()
@@ -414,7 +414,7 @@ class StorageBasedQueueService(QueueServiceBase):
             raise TimeoutError("Could not acquire lock to peek")
 
         try:
-            size = self.storage._get_list_size(list_key=f'queue.{queue_id}.items')
+            size = self.storage._get_list_size(list_key=f"queue.{queue_id}.items")
             if size == 0:
                 return None
 
@@ -425,11 +425,15 @@ class StorageBasedQueueService(QueueServiceBase):
                 actual_index = index
 
             if actual_index < 0 or actual_index >= size:
-                raise IndexError(f"Index {index} out of range for queue with {size} items")
+                raise IndexError(
+                    f"Index {index} out of range for queue with {size} items"
+                )
 
-            item_data = self.storage.get(index=actual_index, list_key=f'queue.{queue_id}.items')
+            item_data = self.storage.get(
+                index=actual_index, list_key=f"queue.{queue_id}.items"
+            )
             if item_data is not None:
-                return item_data.get('data')
+                return item_data.get("data")
             return None
         finally:
             self._release_lock()
@@ -448,7 +452,7 @@ class StorageBasedQueueService(QueueServiceBase):
             return 0
 
         try:
-            return self.storage._get_list_size(list_key=f'queue.{queue_id}.items')
+            return self.storage._get_list_size(list_key=f"queue.{queue_id}.items")
         finally:
             self._release_lock()
 
@@ -463,7 +467,9 @@ class StorageBasedQueueService(QueueServiceBase):
             True if queue exists, False otherwise
         """
         # Check if metadata exists
-        meta_size = self.metadata_storage._get_list_size(list_key=f'queue.{queue_id}.meta')
+        meta_size = self.metadata_storage._get_list_size(
+            list_key=f"queue.{queue_id}.meta"
+        )
         return meta_size > 0
 
     def delete(self, queue_id: str) -> bool:
@@ -484,10 +490,10 @@ class StorageBasedQueueService(QueueServiceBase):
                 return False
 
             # Clear queue data
-            self.storage.clear(list_key=f'queue.{queue_id}.items')
+            self.storage.clear(list_key=f"queue.{queue_id}.items")
 
             # Clear metadata
-            self.metadata_storage.clear(list_key=f'queue.{queue_id}.meta')
+            self.metadata_storage.clear(list_key=f"queue.{queue_id}.meta")
 
             return True
         finally:
@@ -507,8 +513,8 @@ class StorageBasedQueueService(QueueServiceBase):
             raise TimeoutError("Could not acquire lock to clear queue")
 
         try:
-            size = self.storage._get_list_size(list_key=f'queue.{queue_id}.items')
-            self.storage.clear(list_key=f'queue.{queue_id}.items')
+            size = self.storage._get_list_size(list_key=f"queue.{queue_id}.items")
+            self.storage.clear(list_key=f"queue.{queue_id}.items")
             return size
         finally:
             self._release_lock()
@@ -525,15 +531,15 @@ class StorageBasedQueueService(QueueServiceBase):
 
         try:
             # List all directories under metadata/queue/
-            queues_dir = Path(self.root_path) / 'metadata' / 'queue'
+            queues_dir = Path(self.root_path) / "metadata" / "queue"
             if not queues_dir.exists():
                 return []
 
             queue_ids = []
             for queue_dir in queues_dir.iterdir():
-                if queue_dir.is_dir() and not queue_dir.name.startswith('.'):
+                if queue_dir.is_dir() and not queue_dir.name.startswith("."):
                     # Check if it has metadata (to confirm it's a real queue)
-                    meta_files = list(queue_dir.glob('meta/*.json'))
+                    meta_files = list(queue_dir.glob("meta/*.json"))
                     if meta_files:
                         queue_ids.append(queue_dir.name)
 
@@ -555,23 +561,23 @@ class StorageBasedQueueService(QueueServiceBase):
         if queue_id:
             # Stats for specific queue
             return {
-                'queue_id': queue_id,
-                'size': self.size(queue_id),
-                'exists': self.exists(queue_id),
-                'root_path': self.root_path
+                "queue_id": queue_id,
+                "size": self.size(queue_id),
+                "exists": self.exists(queue_id),
+                "root_path": self.root_path,
             }
         else:
             # Stats for all queues
             queues = self.list_queues()
             stats = {
-                'total_queues': len(queues),
-                'root_path': self.root_path,
-                'queues': {}
+                "total_queues": len(queues),
+                "root_path": self.root_path,
+                "queues": {},
             }
             for qid in queues:
-                stats['queues'][qid] = {
-                    'size': self.size(qid),
-                    'exists': self.exists(qid)
+                stats["queues"][qid] = {
+                    "size": self.size(qid),
+                    "exists": self.exists(qid),
                 }
             return stats
 
@@ -618,6 +624,7 @@ class StorageBasedQueueService(QueueServiceBase):
             # Clean up temp directory if created
             if self._temp_dir:
                 import shutil
+
                 try:
                     shutil.rmtree(self.root_path)
                 except:

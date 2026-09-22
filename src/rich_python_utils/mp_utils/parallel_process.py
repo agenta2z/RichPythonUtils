@@ -4,34 +4,35 @@ from itertools import islice
 from multiprocessing import get_context
 from multiprocessing.context import BaseContext
 from os import path
-from typing import Union, Iterator, Iterable, List, Callable, Tuple, Any, Sequence
-
-from tqdm import tqdm
+from typing import Any, Callable, Iterable, Iterator, List, Sequence, Tuple, Union
 
 from rich_python_utils.common_utils import split_list
 from rich_python_utils.console_utils import hprint_message
 from rich_python_utils.io_utils.pickle_io import pickle_load
-
-from rich_python_utils.mp_utils.common import dispatch_data, start_and_wait_jobs, get_suggested_num_workers, merge_results
+from rich_python_utils.mp_utils.common import (
+    dispatch_data,
+    get_suggested_num_workers,
+    merge_results,
+    start_and_wait_jobs,
+)
 from rich_python_utils.mp_utils.mp_target import MPTarget
+from tqdm import tqdm
 
 
 def parallel_process(
-        num_p,
-        data_iter: Union[Iterator, Iterable, List],
-        target: Callable, args: Tuple,
-        ctx: BaseContext = None,
-        verbose=__debug__
+    num_p,
+    data_iter: Union[Iterator, Iterable, List],
+    target: Callable,
+    args: Tuple,
+    ctx: BaseContext = None,
+    verbose=__debug__,
 ):
     if isinstance(target, MPTarget):
         target.use_queue = False
     if ctx is None:
-        ctx = get_context('spawn')
+        ctx = get_context("spawn")
     job_args = dispatch_data(
-        num_p=num_p,
-        data_iter=data_iter,
-        args=args,
-        verbose=verbose
+        num_p=num_p, data_iter=data_iter, args=args, verbose=verbose
     )
     jobs = [None] * num_p
     for i in range(num_p):
@@ -40,23 +41,23 @@ def parallel_process(
 
 
 def parallel_process_by_pool(
-        num_p: int,
-        data_iter: Union[Iterator, Iterable],
-        target: Union[List[Union[MPTarget, Callable]], Union[MPTarget, Callable]],
-        target_weights: List[Union[int, float]] = None,
-        args: Tuple = (),
-        verbose: bool = __debug__,
-        merge_output: bool = False,
-        mergers: Union[List, Tuple] = None,
-        vertical_merge: bool = True,
-        debug: bool = False,
-        return_job_splits: bool = False,
-        load_dumped_results: bool = False,
-        result_dump_load_method: Callable[[str], Any] = pickle_load,
-        wait_for_pool_close: bool = True,
-        start_method: str = None,
-        multiprocessing_module=multiprocessing,
-        pool_object=None,
+    num_p: int,
+    data_iter: Union[Iterator, Iterable],
+    target: Union[List[Union[MPTarget, Callable]], Union[MPTarget, Callable]],
+    target_weights: List[Union[int, float]] = None,
+    args: Tuple = (),
+    verbose: bool = __debug__,
+    merge_output: bool = False,
+    mergers: Union[List, Tuple] = None,
+    vertical_merge: bool = True,
+    debug: bool = False,
+    return_job_splits: bool = False,
+    load_dumped_results: bool = False,
+    result_dump_load_method: Callable[[str], Any] = pickle_load,
+    wait_for_pool_close: bool = True,
+    start_method: str = None,
+    multiprocessing_module=multiprocessing,
+    pool_object=None,
 ):
     """
     Parallelizes a given function or callable using a multiprocessing pool.
@@ -95,9 +96,11 @@ def parallel_process_by_pool(
         [[2, 4, 6], [8, 10]]
     """
     if debug == 1 and merge_output:
-        raise ValueError('debug is set True or 1, '
-                         'in this case the result merge will not work; '
-                         'change debug to an integer higher than 2')
+        raise ValueError(
+            "debug is set True or 1, "
+            "in this case the result merge will not work; "
+            "change debug to an integer higher than 2"
+        )
 
     if num_p is None or num_p <= 0:
         num_p = get_suggested_num_workers(num_p)
@@ -115,10 +118,12 @@ def parallel_process_by_pool(
             if isinstance(rst, str) and path.isfile(rst):
                 rst = result_dump_load_method(rst)
             else:
-                warnings.warn(f'Expected to load results from dumped files; '
-                              f'in this case the returned result from each process '
-                              f'must be a file path; '
-                              f'got {type(rst)}')
+                warnings.warn(
+                    f"Expected to load results from dumped files; "
+                    f"in this case the returned result from each process "
+                    f"must be a file path; "
+                    f"got {type(rst)}"
+                )
         return rst
 
     if multiprocessing_module is None:
@@ -126,10 +131,10 @@ def parallel_process_by_pool(
 
     curr_start_method = multiprocessing_module.get_start_method(allow_none=True)
     if start_method is not None and start_method != curr_start_method:
-        if start_method == 'spawn':
+        if start_method == "spawn":
             multiprocessing_module.freeze_support()
         multiprocessing_module.set_start_method(start_method, force=True)
-    elif curr_start_method == 'spawn':
+    elif curr_start_method == "spawn":
         multiprocessing_module.freeze_support()
 
     if pool_object is None:
@@ -140,10 +145,7 @@ def parallel_process_by_pool(
         data_iter = islice(data_iter, 1000)
 
     job_args = dispatch_data(
-        num_p=num_p,
-        data_iter=data_iter,
-        args=args,
-        verbose=verbose
+        num_p=num_p, data_iter=data_iter, args=args, verbose=verbose
     )
 
     if debug is True or debug == 1:
@@ -156,18 +158,23 @@ def parallel_process_by_pool(
             else:
                 job_args_splits = split_list(job_args, target_weights or len(target))
                 hprint_message(
-                    'num_jobs', len(job_args),
-                    'num_targets', len(target),
-                    'num_jobj_splits', len(job_args_splits)
+                    "num_jobs",
+                    len(job_args),
+                    "num_targets",
+                    len(target),
+                    "num_jobj_splits",
+                    len(job_args_splits),
                 )
 
                 len_job_args_splits = len(job_args_splits)
                 len_target = len(target)
 
                 if len_job_args_splits < len_target:
-                    target = target[:len(job_args_splits)]
+                    target = target[: len(job_args_splits)]
                 elif len_job_args_splits > len_target:
-                    raise ValueError(f"Number of job splits must be less than or equal to the number of targets; got {job_args_splits} job splits but {target} targets")
+                    raise ValueError(
+                        f"Number of job splits must be less than or equal to the number of targets; got {job_args_splits} job splits but {target} targets"
+                    )
 
                 async_results = []
                 for _target, _job_args in zip(target, job_args_splits):
@@ -179,34 +186,43 @@ def parallel_process_by_pool(
         except Exception as err:
             pool.close()
             if wait_for_pool_close:
-                warnings.warn(f"waiting for multi-process pool of size {num_p} to close "
-                              f"due to error '{err}'")
+                warnings.warn(
+                    f"waiting for multi-process pool of size {num_p} to close "
+                    f"due to error '{err}'"
+                )
                 pool.join()
             raise err
         finally:
             pool.close()
             if wait_for_pool_close:
-                hprint_message(f"waiting for multi-process pool of size {num_p} to close")
+                hprint_message(
+                    f"waiting for multi-process pool of size {num_p} to close"
+                )
                 pool.join()
 
     if load_dumped_results:
         if isinstance(rst[0], str) and path.isfile(rst[0]):
             rst = [
                 result_dump_load_method(file_path)
-                for file_path in tqdm(rst, desc='loading dumped files')
+                for file_path in tqdm(rst, desc="loading dumped files")
             ]
         else:
-            warnings.warn(f'Expected to load results from dumped files; '
-                          f'in this case the returned result from each process must be a file path; '
-                          f'got {type(rst[0])}')
+            warnings.warn(
+                f"Expected to load results from dumped files; "
+                f"in this case the returned result from each process must be a file path; "
+                f"got {type(rst[0])}"
+            )
 
     if merge_output:
         rst = list(zip(*rst)) if vertical_merge else [rst]
 
         hprint_message(
-            'mergers', mergers,
-            'result types', [type(x) for x in rst],
-            'result size', [(len(x) if hasattr(x, '__len__') else 'n/a') for x in rst]
+            "mergers",
+            mergers,
+            "result types",
+            [type(x) for x in rst],
+            "result size",
+            [(len(x) if hasattr(x, "__len__") else "n/a") for x in rst],
         )
         rst = merge_results(result_collection=rst, mergers=mergers)
         if not vertical_merge:

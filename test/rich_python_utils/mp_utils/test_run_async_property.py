@@ -16,20 +16,22 @@ Usage:
 
 import sys
 import uuid
-from pathlib import Path
-from typing import Any, List, Dict, Set
 from collections import defaultdict
+from pathlib import Path
+from typing import Any, Dict, List, Set
 
 import pytest
-from hypothesis import given, strategies as st, settings, assume
+from hypothesis import assume, given, settings, strategies as st
 
 # Add src to path
 project_root = Path(__file__).parent.parent.parent.parent
-sys.path.insert(0, str(project_root / 'src'))
+sys.path.insert(0, str(project_root / "src"))
 
-from rich_python_utils.mp_utils.task import Task, TaskState
 from rich_python_utils.mp_utils.queued_executor import SimulatedMultiThreadExecutor
-from rich_python_utils.service_utils.queue_service.thread_queue_service import ThreadQueueService
+from rich_python_utils.mp_utils.task import Task, TaskState
+from rich_python_utils.service_utils.queue_service.thread_queue_service import (
+    ThreadQueueService,
+)
 
 
 # =============================================================================
@@ -39,12 +41,12 @@ from rich_python_utils.service_utils.queue_service.thread_queue_service import T
 _test_counter = 0
 
 
-def unique_queue_ids(prefix='prop'):
+def unique_queue_ids(prefix="prop"):
     """Generate unique queue IDs to avoid test contamination."""
     global _test_counter
     _test_counter += 1
     unique = f"{_test_counter}_{uuid.uuid4().hex[:6]}"
-    return f'{prefix}_in_{unique}', f'{prefix}_out_{unique}'
+    return f"{prefix}_in_{unique}", f"{prefix}_out_{unique}"
 
 
 def create_executor():
@@ -56,7 +58,7 @@ def create_executor():
         output_queue_service=service,
         input_queue_id=input_q,
         output_queue_id=output_q,
-        verbose=False
+        verbose=False,
     )
     return executor, service
 
@@ -85,28 +87,29 @@ def reset_tracking():
 # Property 1: Multi-Parent Handling
 # =============================================================================
 
+
 # Module-level functions for diamond graph pattern
 def _prop1_start():
-    _execution_counts['start'] += 1
-    _execution_order.append('start')
+    _execution_counts["start"] += 1
+    _execution_order.append("start")
     return "start_result"
 
 
 def _prop1_left():
-    _execution_counts['left'] += 1
-    _execution_order.append('left')
+    _execution_counts["left"] += 1
+    _execution_order.append("left")
     return "left_result"
 
 
 def _prop1_right():
-    _execution_counts['right'] += 1
-    _execution_order.append('right')
+    _execution_counts["right"] += 1
+    _execution_order.append("right")
     return "right_result"
 
 
 def _prop1_merge(*args):
-    _execution_counts['merge'] += 1
-    _execution_order.append('merge')
+    _execution_counts["merge"] += 1
+    _execution_order.append("merge")
     return f"merge_received_{len(args)}_args"
 
 
@@ -115,7 +118,7 @@ def _prop1_router(task_id: str, result: Any, task_state: TaskState) -> List[Task
     if task_id == "start":
         return [
             Task(callable=_prop1_left, task_id="left"),
-            Task(callable=_prop1_right, task_id="right")
+            Task(callable=_prop1_right, task_id="right"),
         ]
     elif task_id in ("left", "right"):
         return [Task(callable=_prop1_merge, task_id="merge")]
@@ -137,19 +140,19 @@ def test_property_multi_parent_all_paths_execute(num_branches: int):
 
     try:
         result = executor.run_async(
-            [Task(callable=_prop1_start, task_id="start")],
-            router=_prop1_router
+            [Task(callable=_prop1_start, task_id="start")], router=_prop1_router
         )
 
         # All branch nodes should execute exactly once
-        assert _execution_counts['start'] == 1
-        assert _execution_counts['left'] == 1
-        assert _execution_counts['right'] == 1
+        assert _execution_counts["start"] == 1
+        assert _execution_counts["left"] == 1
+        assert _execution_counts["right"] == 1
 
         # Merge executes once per parent (2 times for left and right)
         # This is expected for raw run_async without WorkGraph's multi-parent handling
-        assert _execution_counts['merge'] == 2, \
+        assert _execution_counts["merge"] == 2, (
             f"Merge node should execute once per parent, got {_execution_counts['merge']}"
+        )
 
     finally:
         service.close()
@@ -158,6 +161,7 @@ def test_property_multi_parent_all_paths_execute(num_branches: int):
 # =============================================================================
 # Property 2: Dynamic Queue Addition
 # =============================================================================
+
 
 def _prop2_child(n: int):
     task_id = f"child_{n}"
@@ -168,22 +172,28 @@ def _prop2_child(n: int):
 
 def _prop2_root_2_children():
     """Root that adds 2 children."""
-    _execution_counts['root'] += 1
-    _execution_order.append('root')
-    return ("root_result", [
-        Task(callable=_prop2_child, task_id="child_0", args=(0,)),
-        Task(callable=_prop2_child, task_id="child_1", args=(1,)),
-    ])
+    _execution_counts["root"] += 1
+    _execution_order.append("root")
+    return (
+        "root_result",
+        [
+            Task(callable=_prop2_child, task_id="child_0", args=(0,)),
+            Task(callable=_prop2_child, task_id="child_1", args=(1,)),
+        ],
+    )
 
 
 def _prop2_root_5_children():
     """Root that adds 5 children."""
-    _execution_counts['root'] += 1
-    _execution_order.append('root')
-    return ("root_result", [
-        Task(callable=_prop2_child, task_id=f"child_{i}", args=(i,))
-        for i in range(5)
-    ])
+    _execution_counts["root"] += 1
+    _execution_order.append("root")
+    return (
+        "root_result",
+        [
+            Task(callable=_prop2_child, task_id=f"child_{i}", args=(i,))
+            for i in range(5)
+        ],
+    )
 
 
 @settings(max_examples=10, deadline=None)
@@ -203,17 +213,19 @@ def test_property_dynamic_queue_addition(num_children: int):
         result = executor.run_async([Task(callable=root_func, task_id="root")])
 
         # Root should execute once
-        assert _execution_counts['root'] == 1
+        assert _execution_counts["root"] == 1
 
         # All children should execute exactly once
         for i in range(num_children):
-            assert _execution_counts[f'child_{i}'] == 1, \
+            assert _execution_counts[f"child_{i}"] == 1, (
                 f"Child {i} executed {_execution_counts[f'child_{i}']} times, expected 1"
+            )
 
         # Total executions should be root + all children
         total_executions = sum(_execution_counts.values())
-        assert total_executions == 1 + num_children, \
+        assert total_executions == 1 + num_children, (
             f"Expected {1 + num_children} total executions, got {total_executions}"
+        )
 
     finally:
         service.close()
@@ -231,13 +243,19 @@ def _prop3_self_loop_task():
     """Task that loops a fixed number of times then terminates."""
     global _prop3_iteration_count
     _prop3_iteration_count += 1
-    _execution_order.append(f'iteration_{_prop3_iteration_count}')
+    _execution_order.append(f"iteration_{_prop3_iteration_count}")
 
     if _prop3_iteration_count < _prop3_max_iterations:
         # Continue looping
-        return (f"iteration_{_prop3_iteration_count}", [
-            Task(callable=_prop3_self_loop_task, task_id=f"loop_{_prop3_iteration_count + 1}")
-        ])
+        return (
+            f"iteration_{_prop3_iteration_count}",
+            [
+                Task(
+                    callable=_prop3_self_loop_task,
+                    task_id=f"loop_{_prop3_iteration_count + 1}",
+                )
+            ],
+        )
     else:
         # Terminate
         return (f"final_{_prop3_iteration_count}", [])
@@ -259,17 +277,19 @@ def test_property_self_loop_terminates(max_iterations: int):
     executor, service = create_executor()
 
     try:
-        result = executor.run_async([
-            Task(callable=_prop3_self_loop_task, task_id="loop_1")
-        ])
+        result = executor.run_async(
+            [Task(callable=_prop3_self_loop_task, task_id="loop_1")]
+        )
 
         # Should have executed exactly max_iterations times
-        assert _prop3_iteration_count == max_iterations, \
+        assert _prop3_iteration_count == max_iterations, (
             f"Expected {max_iterations} iterations, got {_prop3_iteration_count}"
+        )
 
         # Result should be from the final iteration
-        assert result == f"final_{max_iterations}", \
+        assert result == f"final_{max_iterations}", (
             f"Expected 'final_{max_iterations}', got {result}"
+        )
 
     finally:
         service.close()
@@ -279,22 +299,23 @@ def test_property_self_loop_terminates(max_iterations: int):
 # Property 4: Parent Failure Handling
 # =============================================================================
 
+
 def _prop4_success_task():
-    _execution_counts['success'] += 1
-    _execution_order.append('success')
+    _execution_counts["success"] += 1
+    _execution_order.append("success")
     return "success_result"
 
 
 def _prop4_failure_task():
-    _execution_counts['failure'] += 1
-    _execution_order.append('failure')
-    _failed_tasks.add('failure')
+    _execution_counts["failure"] += 1
+    _execution_order.append("failure")
+    _failed_tasks.add("failure")
     raise ValueError("Intentional failure for testing")
 
 
 def _prop4_child_after_mixed(*args):
-    _execution_counts['child'] += 1
-    _execution_order.append('child')
+    _execution_counts["child"] += 1
+    _execution_order.append("child")
     return f"child_received_{len(args)}_args"
 
 
@@ -322,24 +343,23 @@ def test_property_parent_failure_handling(include_failure: bool):
             initial_tasks.append(Task(callable=_prop4_failure_task, task_id="failure"))
 
         result = executor.run_async(
-            initial_tasks,
-            router=_prop4_router,
-            on_error='skip'
+            initial_tasks, router=_prop4_router, on_error="skip"
         )
 
         # Success task should always execute
-        assert _execution_counts['success'] == 1
+        assert _execution_counts["success"] == 1
 
         if include_failure:
             # Failure task should have been attempted
-            assert _execution_counts['failure'] == 1
-            assert 'failure' in _failed_tasks
+            assert _execution_counts["failure"] == 1
+            assert "failure" in _failed_tasks
 
         # Child should execute (from success parent at minimum)
         # Note: With current implementation, child may execute once or twice
         # depending on how multi-parent merging is handled
-        assert _execution_counts['child'] >= 1, \
+        assert _execution_counts["child"] >= 1, (
             f"Child should execute at least once, got {_execution_counts['child']}"
+        )
 
     finally:
         service.close()
@@ -349,15 +369,16 @@ def test_property_parent_failure_handling(include_failure: bool):
 # Property 5: Execution Order Respects Dependencies
 # =============================================================================
 
+
 def _prop5_parent():
-    _execution_counts['parent'] += 1
-    _execution_order.append('parent')
+    _execution_counts["parent"] += 1
+    _execution_order.append("parent")
     return ("parent_result", [Task(callable=_prop5_child, task_id="child")])
 
 
 def _prop5_child():
-    _execution_counts['child'] += 1
-    _execution_order.append('child')
+    _execution_counts["child"] += 1
+    _execution_order.append("child")
     return ("child_result", [])
 
 
@@ -376,12 +397,13 @@ def test_property_execution_order(num_chains: int):
         result = executor.run_async([Task(callable=_prop5_parent, task_id="parent")])
 
         # Find positions in execution order
-        parent_pos = _execution_order.index('parent')
-        child_pos = _execution_order.index('child')
+        parent_pos = _execution_order.index("parent")
+        child_pos = _execution_order.index("child")
 
         # Parent must come before child
-        assert parent_pos < child_pos, \
+        assert parent_pos < child_pos, (
             f"Parent at position {parent_pos} should come before child at {child_pos}"
+        )
 
     finally:
         service.close()
@@ -391,8 +413,9 @@ def test_property_execution_order(num_chains: int):
 # Property 6: Result Aggregation
 # =============================================================================
 
+
 def _prop6_leaf(n: int):
-    _execution_counts[f'leaf_{n}'] += 1
+    _execution_counts[f"leaf_{n}"] += 1
     return f"result_{n}"
 
 
@@ -418,14 +441,16 @@ def test_property_multiple_leaves_return_tuple(num_leaves: int):
 
         # Result should be a tuple with num_leaves elements
         assert isinstance(result, tuple), f"Expected tuple, got {type(result)}"
-        assert len(result) == num_leaves, \
+        assert len(result) == num_leaves, (
             f"Expected {num_leaves} results, got {len(result)}"
+        )
 
         # All results should be present (order may vary)
         expected_results = {f"result_{i}" for i in range(num_leaves)}
         actual_results = set(result)
-        assert actual_results == expected_results, \
+        assert actual_results == expected_results, (
             f"Expected {expected_results}, got {actual_results}"
+        )
 
     finally:
         service.close()
@@ -434,6 +459,7 @@ def test_property_multiple_leaves_return_tuple(num_leaves: int):
 # =============================================================================
 # Property 7: Empty Tasks Return None
 # =============================================================================
+
 
 @settings(max_examples=5, deadline=None)
 @given(st.just([]))
@@ -452,6 +478,7 @@ def test_property_empty_tasks_return_none(empty_list):
 # Property 8: Single Task Returns Single Result
 # =============================================================================
 
+
 def _prop8_single():
     return ("single_result", [])
 
@@ -465,10 +492,10 @@ def test_property_single_task_single_result():
         result = executor.run_async([Task(callable=_prop8_single, task_id="single")])
 
         # Result should be the raw value, not a tuple
-        assert result == "single_result", \
-            f"Expected 'single_result', got {result}"
-        assert not isinstance(result, tuple), \
+        assert result == "single_result", f"Expected 'single_result', got {result}"
+        assert not isinstance(result, tuple), (
             "Single result should not be wrapped in tuple"
+        )
 
     finally:
         service.close()
@@ -478,5 +505,5 @@ def test_property_single_task_single_result():
 # Test Runner
 # =============================================================================
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v', '--hypothesis-show-statistics'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v", "--hypothesis-show-statistics"])

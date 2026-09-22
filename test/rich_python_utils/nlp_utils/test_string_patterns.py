@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 # Configuration
-PIVOT_FOLDER_NAME = 'test'
+PIVOT_FOLDER_NAME = "test"
 
 # Get absolute path to this file
 current_file = Path(__file__).resolve()
@@ -35,13 +35,13 @@ if src_dir.exists() and str(src_dir) not in sys.path:
 
 import pytest
 from rich_python_utils.nlp_utils.string_patterns import (
-    contains_dynamic_content,
-    contains_date,
-    contains_time,
     contains_count_with_unit,
     contains_currency,
+    contains_date,
+    contains_dynamic_content,
     contains_numeric_range,
     contains_percentage,
+    contains_time,
     get_dynamic_content_matches,
 )
 
@@ -49,6 +49,7 @@ from rich_python_utils.nlp_utils.string_patterns import (
 # =============================================================================
 # Test Date Detection
 # =============================================================================
+
 
 class TestContainsDate:
     """Tests for date pattern detection."""
@@ -106,6 +107,7 @@ class TestContainsDate:
 # Test Time Detection
 # =============================================================================
 
+
 class TestContainsTime:
     """Tests for time pattern detection."""
 
@@ -142,6 +144,7 @@ class TestContainsTime:
 # =============================================================================
 # Test Count + Unit Detection
 # =============================================================================
+
 
 class TestContainsCountWithUnit:
     """Tests for count + unit pattern detection."""
@@ -189,6 +192,7 @@ class TestContainsCountWithUnit:
 # Test Currency Detection
 # =============================================================================
 
+
 class TestContainsCurrency:
     """Tests for currency/price pattern detection."""
 
@@ -202,7 +206,7 @@ class TestContainsCurrency:
 
     def test_euro_amounts_detected(self):
         """Euro amounts should be detected."""
-        assert contains_currency("EUR150") is True   # Code format (no space)
+        assert contains_currency("EUR150") is True  # Code format (no space)
         assert contains_currency("EUR 150") is True  # With space
         assert contains_currency("EUR 150.00") is True
 
@@ -226,6 +230,7 @@ class TestContainsCurrency:
 # =============================================================================
 # Test Numeric Range Detection
 # =============================================================================
+
 
 class TestContainsNumericRange:
     """Tests for numeric range pattern detection."""
@@ -255,6 +260,7 @@ class TestContainsNumericRange:
 # Test Percentage Detection
 # =============================================================================
 
+
 class TestContainsPercentage:
     """Tests for percentage pattern detection."""
 
@@ -279,6 +285,7 @@ class TestContainsPercentage:
 # =============================================================================
 # Test Main Function: contains_dynamic_content
 # =============================================================================
+
 
 class TestContainsDynamicContent:
     """Tests for the main dynamic content detection function."""
@@ -333,12 +340,12 @@ class TestContainsDynamicContent:
     def test_category_filtering(self):
         """Should be able to filter by specific categories."""
         # Date string - detected by date category
-        assert contains_dynamic_content("Jan 6", categories=['date']) is True
-        assert contains_dynamic_content("Jan 6", categories=['currency']) is False
+        assert contains_dynamic_content("Jan 6", categories=["date"]) is True
+        assert contains_dynamic_content("Jan 6", categories=["currency"]) is False
 
         # Currency string - detected by currency category
-        assert contains_dynamic_content("$299", categories=['currency']) is True
-        assert contains_dynamic_content("$299", categories=['date']) is False
+        assert contains_dynamic_content("$299", categories=["currency"]) is True
+        assert contains_dynamic_content("$299", categories=["date"]) is False
 
     def test_empty_string(self):
         """Empty string should return False."""
@@ -349,6 +356,7 @@ class TestContainsDynamicContent:
 # =============================================================================
 # Test Expedia-style Button Labels
 # =============================================================================
+
 
 class TestExpediaButtonLabels:
     """Tests specifically for Expedia-style button aria-labels."""
@@ -382,6 +390,7 @@ class TestExpediaButtonLabels:
 # Test Match Reporting
 # =============================================================================
 
+
 class TestGetDynamicContentMatches:
     """Tests for the match reporting function."""
 
@@ -390,8 +399,8 @@ class TestGetDynamicContentMatches:
         matches = get_dynamic_content_matches("Tue, Jan 6 - $299")
         # Should find at least day, month, and currency
         categories = [m[0] for m in matches]
-        assert 'date' in categories
-        assert 'currency' in categories
+        assert "date" in categories
+        assert "currency" in categories
 
     def test_empty_for_static_content(self):
         """Should return empty list for static content."""
@@ -401,13 +410,14 @@ class TestGetDynamicContentMatches:
     def test_multiple_same_category(self):
         """Should find multiple matches in same category."""
         matches = get_dynamic_content_matches("Mon - Fri")
-        date_matches = [m for m in matches if m[0] == 'date']
+        date_matches = [m for m in matches if m[0] == "date"]
         assert len(date_matches) >= 2  # Mon and Fri
 
 
 # =============================================================================
 # Test Edge Cases
 # =============================================================================
+
 
 class TestEdgeCases:
     """Tests for edge cases and boundary conditions."""

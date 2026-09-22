@@ -1,16 +1,17 @@
 from collections.abc import Callable
 from numbers import Number
-from typing import Sequence, List
+from typing import List, Sequence
 
 from typing_extensions import TypeVar
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 def optimal_binary_merge(
-        seq: Sequence[T],
-        merger: Callable[[T, T], T], merge_cost: Callable[[T, T], Number],
-        merge_invariant_given_range: bool = True
+    seq: Sequence[T],
+    merger: Callable[[T, T], T],
+    merge_cost: Callable[[T, T], Number],
+    merge_invariant_given_range: bool = True,
 ) -> Number:
     """
     Calculates the minimum total cost of merging a sequence of elements into a single element,
@@ -102,7 +103,9 @@ def optimal_binary_merge(
         raise ValueError("Sequence must contain at least one element.")
 
     # Initialize DP tables
-    dp: List[List[Number]] = [[0 if i == j else float('inf') for j in range(n)] for i in range(n)]
+    dp: List[List[Number]] = [
+        [0 if i == j else float("inf") for j in range(n)] for i in range(n)
+    ]
     merge_output: List[List[T]] = [[None for _ in range(n)] for _ in range(n)]
 
     # Initialize total[i][i]
@@ -111,7 +114,9 @@ def optimal_binary_merge(
 
     # Build the tables dp[][] and total[][] in bottom-up manner
     for L in range(2, n + 1):  # L is the merge chain length, minimum 2, and maximum n
-        for i in range(n - L + 1):  # `i` is the inclusive left boundary index and can move up to n-L
+        for i in range(
+            n - L + 1
+        ):  # `i` is the inclusive left boundary index and can move up to n-L
             j = i + L - 1  # `j` is the inclusive right boundary index
             merge_output[i][j] = None  # Initialize total[i][j]
             for k in range(i, j):
@@ -122,7 +127,9 @@ def optimal_binary_merge(
                 if cost < dp[i][j]:
                     dp[i][j] = cost
                     # Merge the elements to update merge_output[i][j]
-                    if (not merge_invariant_given_range) or (merge_output[i][j] is None):
+                    if (not merge_invariant_given_range) or (
+                        merge_output[i][j] is None
+                    ):
                         merge_output[i][j] = merger(left_merge, right_merge)
 
     return dp[0][n - 1]

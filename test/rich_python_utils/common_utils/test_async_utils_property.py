@@ -9,6 +9,7 @@ calling and (if async) awaiting f(*args, **kwargs) would produce.
 
 **Validates: Requirements 12.1, 12.2, 12.3**
 """
+
 import asyncio
 import functools
 import sys
@@ -27,13 +28,13 @@ if _src_dir.exists() and str(_src_dir) not in sys.path:
 
 import pytest
 from hypothesis import given, settings, strategies as st
-
 from rich_python_utils.common_utils.async_utils import call_maybe_async
 
 
 # ---------------------------------------------------------------------------
 # Callable type enum for strategy generation
 # ---------------------------------------------------------------------------
+
 
 class CallableType(IntEnum):
     SYNC_FUNC = 0
@@ -47,44 +48,57 @@ class CallableType(IntEnum):
 # Callable factories — each takes an integer and returns it multiplied by a factor
 # ---------------------------------------------------------------------------
 
+
 def _make_sync_func(factor: int):
     """Create a sync function that multiplies input by factor."""
+
     def sync_fn(x: int) -> int:
         return x * factor
+
     return sync_fn
 
 
 def _make_async_func(factor: int):
     """Create an async function that multiplies input by factor."""
+
     async def async_fn(x: int) -> int:
         return x * factor
+
     return async_fn
 
 
 def _make_partial_async(factor: int):
     """Create a functools.partial wrapping an async function."""
+
     async def async_mul(f: int, x: int) -> int:
         return x * f
+
     return functools.partial(async_mul, factor)
 
 
 def _make_sync_call_obj(factor: int):
     """Create a __call__-based object (sync)."""
+
     class SyncCallObj:
         def __init__(self, f):
             self._f = f
+
         def __call__(self, x: int) -> int:
             return x * self._f
+
     return SyncCallObj(factor)
 
 
 def _make_async_call_obj(factor: int):
     """Create a __call__-based object (async)."""
+
     class AsyncCallObj:
         def __init__(self, f):
             self._f = f
+
         async def __call__(self, x: int) -> int:
             return x * self._f
+
     return AsyncCallObj(factor)
 
 
@@ -110,6 +124,7 @@ input_strategy = st.integers(min_value=-1000, max_value=1000)
 # ---------------------------------------------------------------------------
 # Property test
 # ---------------------------------------------------------------------------
+
 
 class TestCallMaybeAsyncProperty:
     """Property 1: call_maybe_async correctness.

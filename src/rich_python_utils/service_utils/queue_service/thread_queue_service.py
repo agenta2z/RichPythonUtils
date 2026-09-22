@@ -76,10 +76,10 @@ For Inter-Process Communication:
 """
 
 import threading
-from queue import Queue, Empty
-from typing import Any, Optional, List, Dict
+from queue import Empty, Queue
+from typing import Any, Dict, List, Optional
 
-from attr import attrs, attrib
+from attr import attrib, attrs
 
 from .queue_service_base import QueueServiceBase
 
@@ -158,7 +158,7 @@ class ThreadQueueService(QueueServiceBase):
                 return False
 
             self.queues[queue_id] = Queue()
-            self.metadata[queue_id] = {'created': True}
+            self.metadata[queue_id] = {"created": True}
             return True
 
     def put(self, queue_id: str, obj: Any, timeout: Optional[float] = None) -> bool:
@@ -184,7 +184,7 @@ class ThreadQueueService(QueueServiceBase):
             if queue_id not in self.queues:
                 # Auto-create queue if it doesn't exist
                 self.queues[queue_id] = Queue()
-                self.metadata[queue_id] = {'created': True}
+                self.metadata[queue_id] = {"created": True}
             queue = self.queues[queue_id]
 
         # Put the object
@@ -192,10 +192,7 @@ class ThreadQueueService(QueueServiceBase):
         return True
 
     def get(
-        self,
-        queue_id: str,
-        blocking: bool = True,
-        timeout: Optional[float] = None
+        self, queue_id: str, blocking: bool = True, timeout: Optional[float] = None
     ) -> Optional[Any]:
         """
         Get an object from the queue.
@@ -285,7 +282,9 @@ class ThreadQueueService(QueueServiceBase):
                 # Put items back
                 for item in items:
                     queue.put(item, block=False)
-                raise IndexError(f"Index {index} out of range for queue with {len(items)} items")
+                raise IndexError(
+                    f"Index {index} out of range for queue with {len(items)} items"
+                )
 
             # Get the item at the index
             result = items[actual_index]
@@ -396,21 +395,18 @@ class ThreadQueueService(QueueServiceBase):
         if queue_id:
             # Stats for specific queue
             return {
-                'queue_id': queue_id,
-                'size': self.size(queue_id),
-                'exists': self.exists(queue_id)
+                "queue_id": queue_id,
+                "size": self.size(queue_id),
+                "exists": self.exists(queue_id),
             }
         else:
             # Stats for all queues
             queues = self.list_queues()
-            stats = {
-                'total_queues': len(queues),
-                'queues': {}
-            }
+            stats = {"total_queues": len(queues), "queues": {}}
             for qid in queues:
-                stats['queues'][qid] = {
-                    'size': self.size(qid),
-                    'exists': self.exists(qid)
+                stats["queues"][qid] = {
+                    "size": self.size(qid),
+                    "exists": self.exists(qid),
                 }
             return stats
 

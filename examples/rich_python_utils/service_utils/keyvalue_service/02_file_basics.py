@@ -22,6 +22,7 @@ import shutil
 import tempfile
 
 from resolve_path import resolve_path
+
 resolve_path()
 
 from rich_python_utils.service_utils.keyvalue_service.file_keyvalue_service import (
@@ -78,7 +79,7 @@ def main():
 
         # 5. Namespace isolation
         svc2.put("config", {"beam_energy": 13.6}, namespace="project_alpha")
-        svc2.put("config", {"beam_energy": 7.0},  namespace="project_beta")
+        svc2.put("config", {"beam_energy": 7.0}, namespace="project_beta")
         config_a = svc2.get("config", namespace="project_alpha")
         config_b = svc2.get("config", namespace="project_beta")
         ns_list = svc2.namespaces()
@@ -119,14 +120,18 @@ def main():
 
         print("\n[3] Retrieve and verify")
         print("-" * 50)
-        print(f"    get('exp:alpha_decay') -> detector={alpha['detector']}, duration={alpha['duration_hours']}h")
+        print(
+            f"    get('exp:alpha_decay') -> detector={alpha['detector']}, duration={alpha['duration_hours']}h"
+        )
         print(f"    keys() -> {keys_after_store}")
         print(f"    size() -> {size_after_store}")
 
         print("\n[4] Persistence: close and reopen")
         print("-" * 50)
         print(f"    Service closed")
-        print(f"    Reopened -> get('exp:protein_folding') -> temp={reopened['temperature_K']}K")
+        print(
+            f"    Reopened -> get('exp:protein_folding') -> temp={reopened['temperature_K']}K"
+        )
         print(f"    Data survives across service restarts!")
 
         print("\n[5] Namespace isolation")
@@ -160,4 +165,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n[X] Error: {e}")
         import traceback
+
         traceback.print_exc()

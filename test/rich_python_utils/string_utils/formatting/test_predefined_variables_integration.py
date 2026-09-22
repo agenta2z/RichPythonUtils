@@ -1,8 +1,8 @@
 """Tests for TemplateManager predefined_variables integration."""
 
-import pytest
 from pathlib import Path
 
+import pytest
 from rich_python_utils.string_utils.formatting.template_manager import (
     TemplateManager,
     VariableLoader,
@@ -19,7 +19,14 @@ def fixtures_dir():
 @pytest.fixture
 def mock_templates_dir():
     """Return the path to the example mock_templates directory."""
-    return Path(__file__).parent.parent.parent.parent.parent / "examples" / "rich_python_utils" / "string_utils" / "variable_loader_examples" / "mock_templates"
+    return (
+        Path(__file__).parent.parent.parent.parent.parent
+        / "examples"
+        / "rich_python_utils"
+        / "string_utils"
+        / "variable_loader_examples"
+        / "mock_templates"
+    )
 
 
 class TestPredefinedVariablesTrue:
@@ -38,7 +45,9 @@ class TestPredefinedVariablesTrue:
         """Test that predefined variables are resolved and merged."""
         # Create a template structure with a template and _variables
         (tmp_path / "main").mkdir()
-        (tmp_path / "main" / "default.j2").write_text("Hello {{notes_greeting}}, {{user_name}}!")
+        (tmp_path / "main" / "default.j2").write_text(
+            "Hello {{notes_greeting}}, {{user_name}}!"
+        )
 
         vars_dir = tmp_path / "_variables" / "notes"
         vars_dir.mkdir(parents=True)
@@ -57,7 +66,9 @@ class TestPredefinedVariablesTrue:
         """Test that user kwargs override predefined variables."""
         # Create a template structure
         (tmp_path / "main").mkdir()
-        (tmp_path / "main" / "default.j2").write_text("{{notes_greeting}}, {{user_name}}!")
+        (tmp_path / "main" / "default.j2").write_text(
+            "{{notes_greeting}}, {{user_name}}!"
+        )
 
         vars_dir = tmp_path / "_variables" / "notes"
         vars_dir.mkdir(parents=True)

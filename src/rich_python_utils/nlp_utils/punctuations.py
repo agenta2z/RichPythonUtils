@@ -1,19 +1,20 @@
 import re
+import string
 from functools import partial
 from typing import Union
 
-import string
 from rich_python_utils.string_utils.regex import iter_matches
 
-REGEX_ACRONYM_WITH_PERIODS = re.compile(r'(((\w\.)+)($|\s))+')
-REGEX_MATCH_ALL_PUNCTUATION_WITH_EXCEPTION = r'[^\w\s{}]'
-REGEX_MATCH_ALL_PUNCTUATION_EXCEPT_FOR_HYPHEN = r'[^\w\s\-]'
-REGEX_MATCH_ALL_PUNCTUATION_EXCEPT_FOR_HYPHEN_AND_UNDERSCORE = r'[^\w\s\-\_]'
+REGEX_ACRONYM_WITH_PERIODS = re.compile(r"(((\w\.)+)($|\s))+")
+REGEX_MATCH_ALL_PUNCTUATION_WITH_EXCEPTION = r"[^\w\s{}]"
+REGEX_MATCH_ALL_PUNCTUATION_EXCEPT_FOR_HYPHEN = r"[^\w\s\-]"
+REGEX_MATCH_ALL_PUNCTUATION_EXCEPT_FOR_HYPHEN_AND_UNDERSCORE = r"[^\w\s\-\_]"
+
 
 def remove_acronym_periods_and_spaces(
-        text: str,
-        acronym_pattern: Union[str, re.Match] = REGEX_ACRONYM_WITH_PERIODS,
-        upper_case_acronyms: bool = False
+    text: str,
+    acronym_pattern: Union[str, re.Match] = REGEX_ACRONYM_WITH_PERIODS,
+    upper_case_acronyms: bool = False,
 ) -> str:
     """
     Removes periods and spaces in acronyms. For example,
@@ -48,20 +49,22 @@ def remove_acronym_periods_and_spaces(
         >>> remove_acronym_periods_and_spaces('play music')
         'play music'
     """
-    if '.' not in text:
+    if "." not in text:
         return text
     out = []
     start = 0
-    for match in iter_matches(pattern=acronym_pattern, string=text, return_match_obj=True):
+    for match in iter_matches(
+        pattern=acronym_pattern, string=text, return_match_obj=True
+    ):
         match_start, match_end = match.start(), match.end()
         if start != match_start:
             out.append(text[start:match_start])
         acronym: str = match.group(0)
-        _acronym = acronym.replace('.', '').replace(' ', '')
+        _acronym = acronym.replace(".", "").replace(" ", "")
         if upper_case_acronyms:
             _acronym = _acronym.upper()
-        if acronym[-1] == ' ':
-            _acronym += ' '
+        if acronym[-1] == " ":
+            _acronym += " "
 
         out.append(_acronym)
         start = match_end
@@ -72,36 +75,34 @@ def remove_acronym_periods_and_spaces(
         if start < len(text):
             out.append(text[start:])
 
-        return ''.join(out)
+        return "".join(out)
 
 
 def remove_acronym_periods_and_spaces_udf(
-        text,
-        acronym_pattern=REGEX_ACRONYM_WITH_PERIODS,
-        upper_case_acronyms=False
+    text, acronym_pattern=REGEX_ACRONYM_WITH_PERIODS, upper_case_acronyms=False
 ):
     from pyspark.sql.functions import udf
     from pyspark.sql.types import StringType
+
     return udf(
         partial(
             remove_acronym_periods_and_spaces,
             acronym_pattern=acronym_pattern,
-            upper_case_acronyms=upper_case_acronyms
+            upper_case_acronyms=upper_case_acronyms,
         ),
-        returnType=StringType()
+        returnType=StringType(),
     )(text)
 
 
 def remove_punctuation(text: str, exception=None) -> str:
     text = re.sub(
         pattern=REGEX_MATCH_ALL_PUNCTUATION_WITH_EXCEPTION.format(
-            re.escape(exception)
-            if exception
-            else ''
+            re.escape(exception) if exception else ""
         ),
-        repl='', string=text
+        repl="",
+        string=text,
     )
-    return re.sub(pattern=r'\s+', repl=' ', string=text).strip()
+    return re.sub(pattern=r"\s+", repl=" ", string=text).strip()
 
 
 def remove_punctuation_except_for_hyphen(text: str) -> str:
@@ -131,20 +132,18 @@ def remove_punctuation_except_for_hyphen(text: str) -> str:
         'This sentence has only hyp-hens'
     """
     text = re.sub(
-        pattern=REGEX_MATCH_ALL_PUNCTUATION_EXCEPT_FOR_HYPHEN,
-        repl='',
-        string=text
+        pattern=REGEX_MATCH_ALL_PUNCTUATION_EXCEPT_FOR_HYPHEN, repl="", string=text
     )
-    return re.sub(pattern=r'\s+', repl=' ', string=text).strip()
+    return re.sub(pattern=r"\s+", repl=" ", string=text).strip()
 
 
 def remove_punctuation_except_for_hyphen_and_underscore(text: str) -> str:
     text = re.sub(
         pattern=REGEX_MATCH_ALL_PUNCTUATION_EXCEPT_FOR_HYPHEN_AND_UNDERSCORE,
-        repl='',
-        string=text
+        repl="",
+        string=text,
     )
-    return re.sub(pattern=r'\s+', repl=' ', string=text).strip()
+    return re.sub(pattern=r"\s+", repl=" ", string=text).strip()
 
 
 def contains_punctuation(s: str, exclusion=None):

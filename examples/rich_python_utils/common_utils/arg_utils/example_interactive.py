@@ -15,7 +15,9 @@ Run with:
 """
 
 import sys
+
 from resolve_path import resolve_path
+
 resolve_path()  # Add project src to sys.path
 
 from rich_python_utils.common_utils.arg_utils.arg_parse import get_parsed_args
@@ -132,7 +134,7 @@ EXPECTED BEHAVIOR:
     args = get_parsed_args(
         ("layers", [128, 256, 512], "Hidden layer sizes"),
         ("dropout_rates", [0.1, 0.2, 0.3], "Dropout rates per layer"),
-        ("config", {'lr': 0.001, 'momentum': 0.9}, "Optimizer config"),
+        ("config", {"lr": 0.001, "momentum": 0.9}, "Optimizer config"),
         ("dataset_path", "/data/train", "Path to training data"),
         ("use_gpu", True, "Enable GPU acceleration"),
         interactive=True,

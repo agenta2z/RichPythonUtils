@@ -1,12 +1,12 @@
-from typing import Sequence, Callable, Any
+from typing import Any, Callable, Sequence
 
 
 def binary_search(
-        seq: Sequence,
-        branching_left_cond: Callable[[Any, Any], bool],
-        left: int = None,
-        right: int = None,
-        branching_left_include_mid: bool = True,
+    seq: Sequence,
+    branching_left_cond: Callable[[Any, Any], bool],
+    left: int = None,
+    right: int = None,
+    branching_left_include_mid: bool = True,
 ):
     """
     Performs a binary search on a sequence to find an element satisfying a condition.
@@ -94,10 +94,7 @@ def binary_search(
 
 
 def binary_search_sorted_array_greater_than_or_equal_to_target(
-        seq: Sequence,
-        target,
-        left: int = None,
-        right: int = None
+    seq: Sequence, target, left: int = None, right: int = None
 ):
     """
     Performs a binary search on a sorted array to find the smallest index where the value is greater than or equal to the target.
@@ -168,14 +165,12 @@ def binary_search_sorted_array_greater_than_or_equal_to_target(
         seq=seq,
         branching_left_cond=lambda _mid, _: target <= _mid,
         left=left,
-        right=right
+        right=right,
     )
 
+
 def binary_search_sorted_array_less_than_or_equal_to_target(
-        seq: Sequence,
-        target: Any,
-        left: int = None,
-        right: int = None
+    seq: Sequence, target: Any, left: int = None, right: int = None
 ) -> int:
     """
     Performs a binary search on a sorted array to find the largest index where the value is less than or equal to the target.
@@ -246,7 +241,7 @@ def binary_search_sorted_array_less_than_or_equal_to_target(
         branching_left_cond=lambda _, _mid: target < _mid,
         left=left,
         right=right,
-        branching_left_include_mid=False
+        branching_left_include_mid=False,
     )
 
 
@@ -311,12 +306,7 @@ def binary_post_order_result_compute(seq: Sequence, result_compute, *args, **kwa
         left_result = _dfs(start, mid_index - 1)
         right_result = _dfs(mid_index + 1, end)
         return result_compute(
-            seq,
-            mid_index,
-            left_result,
-            right_result,
-            *args,
-            **kwargs
+            seq, mid_index, left_result, right_result, *args, **kwargs
         )
 
     return _dfs(0, len(seq) - 1)
@@ -432,6 +422,6 @@ def find_closest_elements(arr: Sequence[int], k: int, x: int) -> Sequence[int]:
         seq=range(0, n - k + 1),
         branching_left_cond=lambda i, j: x <= (arr[i] + arr[i + k]) / 2,
         left=0,
-        right=n - k
+        right=n - k,
     )
-    return arr[start:start + k]
+    return arr[start : start + k]

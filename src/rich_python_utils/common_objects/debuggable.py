@@ -4,12 +4,23 @@ import traceback as _traceback_mod
 import warnings
 from abc import ABC
 from datetime import datetime
-from typing import Union, Callable, Any, Optional, Sequence, List, Dict, Set, Tuple, Protocol, runtime_checkable
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    runtime_checkable,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+)
 
-from attr import attrs, attrib
-
+from attr import attrib, attrs
 from rich_python_utils.common_objects.identifiable import Identifiable
-from rich_python_utils.common_utils import of_type_any, iter_, get_relevant_named_args
+from rich_python_utils.common_utils import get_relevant_named_args, iter_, of_type_any
 
 LoggerType = Union[Callable[[dict], Any], logging.Logger]
 
@@ -22,9 +33,11 @@ def _level_print(message: str, level: int = logging.INFO):
     """
     try:
         from rich_python_utils.console_utils import __backend__
-        if __backend__ == 'rich':
+
+        if __backend__ == "rich":
             from rich.markup import escape as _rich_escape
             from rich_python_utils.console_utils import console as _console
+
             _escaped = _rich_escape(message)
             if level >= logging.ERROR:
                 _console.print(_escaped, style="error")
@@ -37,6 +50,7 @@ def _level_print(message: str, level: int = logging.INFO):
         else:
             try:
                 from colorama import Fore, Style
+
                 if level >= logging.ERROR:
                     print(f"{Fore.RED}{message}{Style.RESET_ALL}")
                 elif level >= logging.WARNING:
@@ -58,12 +72,14 @@ class _ColoredLogFormatter(logging.Formatter):
         message = super().format(record)
         try:
             from rich_python_utils.console_utils import __backend__
-            if __backend__ == 'rich':
+
+            if __backend__ == "rich":
                 # Rich console handles its own coloring; use plain text here
                 # since RichHandler should be used instead for Rich coloring.
                 # For StreamHandler, fall through to colorama/ANSI.
                 pass
             from colorama import Fore, Style
+
             if record.levelno >= logging.ERROR:
                 return f"{Fore.RED}{message}{Style.RESET_ALL}"
             elif record.levelno >= logging.WARNING:
@@ -75,9 +91,10 @@ class _ColoredLogFormatter(logging.Formatter):
         except ImportError:
             return message
 
-DEFAULT_LOG_TYPE = 'Message'
-LOG_TYPE_PARENT_CHILD_DEBUGGABLE_LINK = 'ParentChildDebuggableLink'
-EXCEPTION_LOG_ITEM_KEY = '__exception__'
+
+DEFAULT_LOG_TYPE = "Message"
+LOG_TYPE_PARENT_CHILD_DEBUGGABLE_LINK = "ParentChildDebuggableLink"
+EXCEPTION_LOG_ITEM_KEY = "__exception__"
 
 
 @runtime_checkable
@@ -98,8 +115,7 @@ class FileBasedLogger(Protocol):
     """
 
     @property
-    def file_path(self) -> Optional[str]:
-        ...
+    def file_path(self) -> Optional[str]: ...
 
 
 @attrs
@@ -143,6 +159,7 @@ class LoggerConfig:
             Per-log-type maximum message length overrides.
             The strictest limit (between this and ``max_message_length``) wins.
     """
+
     enabled_log_types: Optional[Set[str]] = attrib(default=None, kw_only=True)
     disabled_log_types: Optional[Set[str]] = attrib(default=None, kw_only=True)
     show_logger_name: bool = attrib(default=False, kw_only=True)
@@ -150,7 +167,9 @@ class LoggerConfig:
     use_processed: bool = attrib(default=False, kw_only=True)
     pass_item_key_as: Optional[str] = attrib(default=None, kw_only=True)
     max_message_length: Optional[int] = attrib(default=None, kw_only=True)
-    max_message_length_by_log_type: Optional[Dict[str, int]] = attrib(default=None, kw_only=True)
+    max_message_length_by_log_type: Optional[Dict[str, int]] = attrib(
+        default=None, kw_only=True
+    )
 
     def get_max_message_length(self, log_type: str) -> Optional[int]:
         """Resolve the effective max message length for a log type.
@@ -167,6 +186,7 @@ class LoggerConfig:
             if per_type and per_type > 0:
                 candidates.append(per_type)
         return min(candidates) if candidates else None
+
 
 @attrs(slots=False)
 class Debuggable(Identifiable, ABC):
@@ -252,53 +272,85 @@ class Debuggable(Identifiable, ABC):
         >>> obj.do_stuff()
         MyDebuggable_... - MyDebuggable - INFO - Message: Doing stuff...
     """
+
     debug_mode: Optional[bool] = attrib(default=None, kw_only=True)
-    logger: Optional[Optional[Union[Sequence[LoggerType], LoggerType]]] = attrib(default=None, kw_only=True)
+    logger: Optional[Optional[Union[Sequence[LoggerType], LoggerType]]] = attrib(
+        default=None, kw_only=True
+    )
     always_add_logging_based_logger: bool = attrib(default=True, kw_only=True)
     log_level: int = attrib(default=logging.INFO, kw_only=True)
-    debug_mode_log_level: int = attrib(default=logging.DEBUG, kw_only=True)  # Log levels >= DEBUG
-    log_time: Union[bool, str] = attrib(default=True, kw_only=True)  # Include timestamps in logs
+    debug_mode_log_level: int = attrib(
+        default=logging.DEBUG, kw_only=True
+    )  # Log levels >= DEBUG
+    log_time: Union[bool, str] = attrib(
+        default=True, kw_only=True
+    )  # Include timestamps in logs
     log_name: str = attrib(default=None, kw_only=True)  # Name for the logger
     default_log_type: str = attrib(default=DEFAULT_LOG_TYPE, kw_only=True)
     warning_raiser: Callable = attrib(default=warnings.warn, kw_only=True)
     parent_debuggables: List[Union[str, Any]] = attrib(default=None, kw_only=True)
-    only_keep_parent_debuggable_ids : bool = attrib(default=None, kw_only=True)
+    only_keep_parent_debuggable_ids: bool = attrib(default=None, kw_only=True)
 
     # Rate limiting and console update features
-    console_display_rate_limit: float = attrib(default=0.0, kw_only=True)  # seconds (0 = no limit)
-    logging_rate_limit: float = attrib(default=0.0, kw_only=True)  # seconds (0 = no limit)
-    enable_console_update: bool = attrib(default=False, kw_only=True)  # Enable in-place console updates
-    default_message_id_gen: Optional[Callable] = attrib(default=None, kw_only=True)  # Custom message_id generator
-    console_loggers_or_logger_types: tuple = attrib(default=(print,), kw_only=True)  # Loggers/types considered console output
+    console_display_rate_limit: float = attrib(
+        default=0.0, kw_only=True
+    )  # seconds (0 = no limit)
+    logging_rate_limit: float = attrib(
+        default=0.0, kw_only=True
+    )  # seconds (0 = no limit)
+    enable_console_update: bool = attrib(
+        default=False, kw_only=True
+    )  # Enable in-place console updates
+    default_message_id_gen: Optional[Callable] = attrib(
+        default=None, kw_only=True
+    )  # Custom message_id generator
+    console_loggers_or_logger_types: tuple = attrib(
+        default=(print,), kw_only=True
+    )  # Loggers/types considered console output
 
     # Per-logger configuration, keyed by logger name
-    logger_configs: Optional[Dict[str, LoggerConfig]] = attrib(default=None, kw_only=True)
+    logger_configs: Optional[Dict[str, LoggerConfig]] = attrib(
+        default=None, kw_only=True
+    )
 
     # Log type filtering (instance-level gate, applies before per-logger checks)
     enabled_log_types: Optional[Set[str]] = attrib(default=None, kw_only=True)
     disabled_log_types: Optional[Set[str]] = attrib(default=None, kw_only=True)
 
     # Exception auto-extraction: True (default extractor), False (disabled), or callable(exception) -> dict
-    auto_extract_info_from_exception: Union[bool, Callable] = attrib(default=True, kw_only=True)
+    auto_extract_info_from_exception: Union[bool, Callable] = attrib(
+        default=True, kw_only=True
+    )
 
     # Internal tracking (not user-configurable)
     _last_console_display_time: Dict[str, float] = attrib(factory=dict, init=False)
     _last_logging_time: Dict[str, float] = attrib(factory=dict, init=False)
-    _resolved_logger_configs: Dict[str, Optional[LoggerConfig]] = attrib(factory=dict, init=False)
+    _resolved_logger_configs: Dict[str, Optional[LoggerConfig]] = attrib(
+        factory=dict, init=False
+    )
     _console_suppression_counts: Dict[str, int] = attrib(factory=dict, init=False)
     _backend_suppression_counts: Dict[str, int] = attrib(factory=dict, init=False)
 
-    _copy_debuggable_config_from: Optional['Debuggable'] = attrib(
-        default=None,
-        kw_only=True,
-        alias='copy_debuggable_config_from'
+    _copy_debuggable_config_from: Optional["Debuggable"] = attrib(
+        default=None, kw_only=True, alias="copy_debuggable_config_from"
     )
 
-    NON_CONFIG_ATTR_NAMES = ('id', '_raw_id', 'parent_debuggables', 'log_name', '_copy_debuggable_config_from', '_last_console_display_time', '_last_logging_time', '_resolved_logger_configs', '_console_suppression_counts', '_backend_suppression_counts')
+    NON_CONFIG_ATTR_NAMES = (
+        "id",
+        "_raw_id",
+        "parent_debuggables",
+        "log_name",
+        "_copy_debuggable_config_from",
+        "_last_console_display_time",
+        "_last_logging_time",
+        "_resolved_logger_configs",
+        "_console_suppression_counts",
+        "_backend_suppression_counts",
+    )
 
     # Don't traverse the parent back-reference when regenerating ids across a clone tree
     # (``deepcopy_with_fresh_id``) — it would walk UP to parents instead of down to children.
-    _FRESH_ID_SKIP_TRAVERSE = frozenset({'parent_debuggables'})
+    _FRESH_ID_SKIP_TRAVERSE = frozenset({"parent_debuggables"})
 
     @staticmethod
     def _is_inline_config_pair(entry) -> bool:
@@ -313,14 +365,14 @@ class Debuggable(Identifiable, ABC):
     def _auto_logger_name(logger, index: int) -> str:
         """Generate an automatic name for an unnamed logger."""
         if logger is print:
-            return 'print'
+            return "print"
         if isinstance(logger, logging.Logger):
             return logger.name
         if callable(logger):
-            name = getattr(logger, '__name__', None)
-            if name and name != '<lambda>':
+            name = getattr(logger, "__name__", None)
+            if name and name != "<lambda>":
                 return name
-        return f'logger_{index}'
+        return f"logger_{index}"
 
     def _resolve_auto_logger(self):
         """Resolve ``logger='auto'`` to Python's builtin logger.
@@ -333,6 +385,7 @@ class Debuggable(Identifiable, ABC):
         default_logger = logging.getLogger(self.log_name)
         if not default_logger.handlers:
             import sys
+
             handler = logging.StreamHandler(sys.stdout)
             if self.log_time:
                 formatter = _ColoredLogFormatter(
@@ -422,11 +475,12 @@ class Debuggable(Identifiable, ABC):
         # If copying from another Debuggable, copy all config attributes and skip the rest
         if self._copy_debuggable_config_from is not None:
             from rich_python_utils.common_utils.attr_helper import copy_attrs_from
+
             copy_attrs_from(
                 target_instance=self,
                 source_instance=self._copy_debuggable_config_from,
                 target_class=Debuggable,
-                exclude=list(self.NON_CONFIG_ATTR_NAMES)
+                exclude=list(self.NON_CONFIG_ATTR_NAMES),
             )
             # Clear the reference to avoid circular references and save memory
             self._copy_debuggable_config_from = None
@@ -434,14 +488,16 @@ class Debuggable(Identifiable, ABC):
 
         # Normal initialization path (when not copying from another debuggable)
         if self.log_time is True:
-            self.log_time = '%Y-%m-%d %H:%M:%S'
+            self.log_time = "%Y-%m-%d %H:%M:%S"
 
         # Check if logger input already contains a logging.Logger
         has_logging_based_logger = False
         if self.logger is not None:
             if isinstance(self.logger, dict):
                 has_logging_based_logger = any(
-                    isinstance(v[0] if self._is_inline_config_pair(v) else v, logging.Logger)
+                    isinstance(
+                        v[0] if self._is_inline_config_pair(v) else v, logging.Logger
+                    )
                     for v in self.logger.values()
                 )
             else:
@@ -454,22 +510,24 @@ class Debuggable(Identifiable, ABC):
         if isinstance(self.logger, str):
             return
 
-        if (
-                not self.logger
-                or (self.always_add_logging_based_logger and not has_logging_based_logger)
+        if not self.logger or (
+            self.always_add_logging_based_logger and not has_logging_based_logger
         ):
             # Configure a default logger if none is provided
             default_logging_based_logger = logging.getLogger(self.log_name)
 
-            if not default_logging_based_logger.handlers:  # Avoid adding multiple handlers
+            if (
+                not default_logging_based_logger.handlers
+            ):  # Avoid adding multiple handlers
                 import sys
+
                 handler = logging.StreamHandler(sys.stdout)
 
                 # Set formatter based on the log_time attribute
                 if self.log_time:
                     formatter = _ColoredLogFormatter(
                         fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-                        datefmt=self.log_time
+                        datefmt=self.log_time,
                     )
                 else:
                     formatter = _ColoredLogFormatter(
@@ -478,10 +536,12 @@ class Debuggable(Identifiable, ABC):
 
                 handler.setFormatter(formatter)
                 default_logging_based_logger.addHandler(handler)
-                default_logging_based_logger.setLevel(logging.DEBUG)  # Set to DEBUG to capture all levels
-            self.logger['_default'] = default_logging_based_logger
+                default_logging_based_logger.setLevel(
+                    logging.DEBUG
+                )  # Set to DEBUG to capture all levels
+            self.logger["_default"] = default_logging_based_logger
 
-    def copy_logging_config(self, another_debuggable: 'Debuggable'):
+    def copy_logging_config(self, another_debuggable: "Debuggable"):
         """
         Copy logging-related configuration from another Debuggable instance.
         """
@@ -491,10 +551,16 @@ class Debuggable(Identifiable, ABC):
             target_instance=self,
             source_instance=another_debuggable,
             target_class=Debuggable,
-            exclude=Debuggable.NON_CONFIG_ATTR_NAMES
+            exclude=Debuggable.NON_CONFIG_ATTR_NAMES,
         )
 
-    def _generate_message_id(self, log_item: Any, log_type: str, log_level: int, explicit_id: Optional[str] = None) -> str:
+    def _generate_message_id(
+        self,
+        log_item: Any,
+        log_type: str,
+        log_level: int,
+        explicit_id: Optional[str] = None,
+    ) -> str:
         """
         Generate a message_id using 3-tier priority logic.
 
@@ -517,7 +583,9 @@ class Debuggable(Identifiable, ABC):
             return explicit_id
 
         # Tier 2: Custom generator callback
-        if self.default_message_id_gen is not None and callable(self.default_message_id_gen):
+        if self.default_message_id_gen is not None and callable(
+            self.default_message_id_gen
+        ):
             return self.default_message_id_gen(self, log_item, log_type, log_level)
 
         # Tier 3: Auto-generate from log_type and log_level
@@ -543,7 +611,9 @@ class Debuggable(Identifiable, ABC):
             self._last_console_display_time[message_id] = current_time
             return True
 
-        self._console_suppression_counts[message_id] = self._console_suppression_counts.get(message_id, 0) + 1
+        self._console_suppression_counts[message_id] = (
+            self._console_suppression_counts.get(message_id, 0) + 1
+        )
         return False
 
     def _should_log_to_backend(self, message_id: str) -> bool:
@@ -566,7 +636,9 @@ class Debuggable(Identifiable, ABC):
             self._last_logging_time[message_id] = current_time
             return True
 
-        self._backend_suppression_counts[message_id] = self._backend_suppression_counts.get(message_id, 0) + 1
+        self._backend_suppression_counts[message_id] = (
+            self._backend_suppression_counts.get(message_id, 0) + 1
+        )
         return False
 
     def _is_console_logger(self, logger) -> bool:
@@ -579,8 +651,8 @@ class Debuggable(Identifiable, ABC):
         Returns:
             True if the logger outputs to console (stdout/stderr), False otherwise
         """
-        import sys
         import pprint as pprint_module
+        import sys
 
         # print and pprint always output to console
         if logger is print or logger is pprint_module.pprint:
@@ -589,12 +661,21 @@ class Debuggable(Identifiable, ABC):
         # Check if it's a console_utils function
         try:
             from rich_python_utils.console_utils import (
-                hprint_message, eprint_message, wprint_message,
-                hprint_pairs, eprint_pairs, wprint_pairs
+                eprint_message,
+                eprint_pairs,
+                hprint_message,
+                hprint_pairs,
+                wprint_message,
+                wprint_pairs,
             )
+
             console_utils_functions = {
-                hprint_message, eprint_message, wprint_message,
-                hprint_pairs, eprint_pairs, wprint_pairs
+                hprint_message,
+                eprint_message,
+                wprint_message,
+                hprint_pairs,
+                eprint_pairs,
+                wprint_pairs,
             }
             if logger in console_utils_functions:
                 return True
@@ -606,7 +687,7 @@ class Debuggable(Identifiable, ABC):
             for handler in logger.handlers:
                 if isinstance(handler, logging.StreamHandler):
                     # Check if stream is stdout or stderr
-                    stream = getattr(handler, 'stream', None)
+                    stream = getattr(handler, "stream", None)
                     if stream in (sys.stdout, sys.stderr):
                         return True
 
@@ -622,7 +703,9 @@ class Debuggable(Identifiable, ABC):
         # Other callables (like write_json) are not console loggers
         return False
 
-    def _is_log_type_enabled(self, log_type: str, logger_config: Optional[LoggerConfig] = None) -> bool:
+    def _is_log_type_enabled(
+        self, log_type: str, logger_config: Optional[LoggerConfig] = None
+    ) -> bool:
         """
         Check if a log type is enabled, applying instance-level and per-logger filtering.
 
@@ -634,16 +717,25 @@ class Debuggable(Identifiable, ABC):
             True if both gates pass (the log type should be emitted).
         """
         # Gate 1: Instance-level
-        if self.enabled_log_types is not None and log_type not in self.enabled_log_types:
+        if (
+            self.enabled_log_types is not None
+            and log_type not in self.enabled_log_types
+        ):
             return False
         if self.disabled_log_types is not None and log_type in self.disabled_log_types:
             return False
 
         # Gate 2: Per-logger
         if logger_config is not None:
-            if logger_config.enabled_log_types is not None and log_type not in logger_config.enabled_log_types:
+            if (
+                logger_config.enabled_log_types is not None
+                and log_type not in logger_config.enabled_log_types
+            ):
                 return False
-            if logger_config.disabled_log_types is not None and log_type in logger_config.disabled_log_types:
+            if (
+                logger_config.disabled_log_types is not None
+                and log_type in logger_config.disabled_log_types
+            ):
                 return False
 
         return True
@@ -661,8 +753,14 @@ class Debuggable(Identifiable, ABC):
         """
         return None
 
-    def log(self, log_item: Any, log_type: str = None, log_level: Optional[int] = None,
-            message_id: Optional[str] = None, **kwargs):
+    def log(
+        self,
+        log_item: Any,
+        log_type: str = None,
+        log_level: Optional[int] = None,
+        message_id: Optional[str] = None,
+        **kwargs,
+    ):
         """
         Logs a message or data based on the provided type and item.
 
@@ -753,14 +851,16 @@ class Debuggable(Identifiable, ABC):
                 else:
                     # Default extraction: exception type, message, and traceback
                     tb_text = _traceback_mod.format_exc()
-                    if tb_text.strip() == 'NoneType: None':
-                        tb_text = ''.join(
-                            _traceback_mod.format_exception(type(exc), exc, exc.__traceback__)
+                    if tb_text.strip() == "NoneType: None":
+                        tb_text = "".join(
+                            _traceback_mod.format_exception(
+                                type(exc), exc, exc.__traceback__
+                            )
                         )
                     extracted = {
-                        'exception_type': type(exc).__name__,
-                        'message': str(exc),
-                        'traceback': tb_text,
+                        "exception_type": type(exc).__name__,
+                        "message": str(exc),
+                        "traceback": tb_text,
                     }
                 if isinstance(log_item, dict):
                     # Merge extracted info into existing dict (don't overwrite caller's keys)
@@ -777,11 +877,17 @@ class Debuggable(Identifiable, ABC):
         # with hierarchical BTA name), prefer it for log output.
         _effective_log_name = self.log_name
         _name = getattr(self, "name", None)
-        if _name and _name != _effective_log_name and self.log_name == self.__class__.__name__:
+        if (
+            _name
+            and _name != _effective_log_name
+            and self.log_name == self.__class__.__name__
+        ):
             _effective_log_name = _name
 
         # Generate message_id early for rate limiting checks
-        generated_message_id = self._generate_message_id(log_item, log_type, log_level, message_id)
+        generated_message_id = self._generate_message_id(
+            log_item, log_type, log_level, message_id
+        )
 
         # Determine whether to log based on debug_mode and log_level
         threshold = self.debug_mode_log_level if self.debug_mode else self.log_level
@@ -803,19 +909,29 @@ class Debuggable(Identifiable, ABC):
         for _logger_name, _logger in self.logger.items():
             try:
                 # Look up per-logger config
-                logger_config = self._resolved_logger_configs.get(_logger_name) if self._resolved_logger_configs else None
+                logger_config = (
+                    self._resolved_logger_configs.get(_logger_name)
+                    if self._resolved_logger_configs
+                    else None
+                )
 
                 # Per-logger log type filter
-                if logger_config is not None and not self._is_log_type_enabled(log_type, logger_config):
+                if logger_config is not None and not self._is_log_type_enabled(
+                    log_type, logger_config
+                ):
                     continue
 
                 # Determine if this is a console logger
                 is_console_logger = self._is_console_logger(_logger)
 
                 # Check rate limits
-                if is_console_logger and not self._should_display_to_console(generated_message_id):
+                if is_console_logger and not self._should_display_to_console(
+                    generated_message_id
+                ):
                     continue
-                elif not is_console_logger and not self._should_log_to_backend(generated_message_id):
+                elif not is_console_logger and not self._should_log_to_backend(
+                    generated_message_id
+                ):
                     continue
 
                 # Pipeline: determine effective log_item for this logger
@@ -831,17 +947,34 @@ class Debuggable(Identifiable, ABC):
                 if is_console_logger and logger_config is not None:
                     _max_len = logger_config.get_max_message_length(log_type)
                     if _max_len is not None:
-                        display_str = str(display_item) if not isinstance(display_item, str) else display_item
+                        display_str = (
+                            str(display_item)
+                            if not isinstance(display_item, str)
+                            else display_item
+                        )
                         if len(display_str) > _max_len:
-                            display_item = display_str[:_max_len] + f'... [{len(display_str)} chars]'
+                            display_item = (
+                                display_str[:_max_len]
+                                + f"... [{len(display_str)} chars]"
+                            )
 
                 # Determine logger name display
-                show_name = logger_config.show_logger_name if logger_config is not None else False
+                show_name = (
+                    logger_config.show_logger_name
+                    if logger_config is not None
+                    else False
+                )
 
                 if _logger is print:
                     # Check for console suppression count
-                    console_suppressed = self._console_suppression_counts.get(generated_message_id, 0)
-                    suppression_suffix = f" [{console_suppressed} suppressed]" if console_suppressed > 0 else ""
+                    console_suppressed = self._console_suppression_counts.get(
+                        generated_message_id, 0
+                    )
+                    suppression_suffix = (
+                        f" [{console_suppressed} suppressed]"
+                        if console_suppressed > 0
+                        else ""
+                    )
                     if console_suppressed > 0:
                         self._console_suppression_counts[generated_message_id] = 0
 
@@ -863,13 +996,21 @@ class Debuggable(Identifiable, ABC):
                 elif isinstance(_logger, logging.Logger):
                     # Check for suppression count based on logger type
                     if is_console_logger:
-                        suppressed = self._console_suppression_counts.get(generated_message_id, 0)
-                        suppression_suffix = f" [{suppressed} suppressed]" if suppressed > 0 else ""
+                        suppressed = self._console_suppression_counts.get(
+                            generated_message_id, 0
+                        )
+                        suppression_suffix = (
+                            f" [{suppressed} suppressed]" if suppressed > 0 else ""
+                        )
                         if suppressed > 0:
                             self._console_suppression_counts[generated_message_id] = 0
                     else:
-                        suppressed = self._backend_suppression_counts.get(generated_message_id, 0)
-                        suppression_suffix = f" [{suppressed} suppressed]" if suppressed > 0 else ""
+                        suppressed = self._backend_suppression_counts.get(
+                            generated_message_id, 0
+                        )
+                        suppression_suffix = (
+                            f" [{suppressed} suppressed]" if suppressed > 0 else ""
+                        )
                         if suppressed > 0:
                             self._backend_suppression_counts[generated_message_id] = 0
 
@@ -884,66 +1025,72 @@ class Debuggable(Identifiable, ABC):
                 elif callable(_logger):
                     # Use the callable logger
                     log_data = {
-                        'level': log_level,
-                        'name': _effective_log_name,
-                        'id': self.id,
-                        'type': log_type,
-                        'item': display_item
+                        "level": log_level,
+                        "name": _effective_log_name,
+                        "id": self.id,
+                        "type": log_type,
+                        "item": display_item,
                     }
                     if self.log_time:
-                        log_data['time'] = datetime.now().strftime(self.log_time)
+                        log_data["time"] = datetime.now().strftime(self.log_time)
 
                     # Add suppression count based on logger type
                     if is_console_logger:
-                        console_suppressed = self._console_suppression_counts.get(generated_message_id, 0)
+                        console_suppressed = self._console_suppression_counts.get(
+                            generated_message_id, 0
+                        )
                         if console_suppressed > 0:
-                            log_data['suppressed_count'] = console_suppressed
+                            log_data["suppressed_count"] = console_suppressed
                             self._console_suppression_counts[generated_message_id] = 0
                     else:
-                        backend_suppressed = self._backend_suppression_counts.get(generated_message_id, 0)
+                        backend_suppressed = self._backend_suppression_counts.get(
+                            generated_message_id, 0
+                        )
                         if backend_suppressed > 0:
-                            log_data['suppressed_count'] = backend_suppressed
+                            log_data["suppressed_count"] = backend_suppressed
                             self._backend_suppression_counts[generated_message_id] = 0
 
                     # Add logger name if configured
                     if show_name:
-                        log_data['logger_name'] = _logger_name
+                        log_data["logger_name"] = _logger_name
 
                     # Add parent debuggable IDs if they exist
                     parent_ids = self.get_parent_debuggable_ids()
                     if parent_ids:
-                        log_data['parent_ids'] = parent_ids
+                        log_data["parent_ids"] = parent_ids
 
                     # Build candidate kwargs for callable logger
-                    candidate_kwargs = {'space': self.id}
+                    candidate_kwargs = {"space": self.id}
 
                     # Console update params (conditional)
                     if self.enable_console_update:
-                        candidate_kwargs['message_id'] = generated_message_id
-                        candidate_kwargs['update_previous'] = True
+                        candidate_kwargs["message_id"] = generated_message_id
+                        candidate_kwargs["update_previous"] = True
 
                     # Inject item key name if configured
                     if logger_config is not None and logger_config.pass_item_key_as:
-                        candidate_kwargs[logger_config.pass_item_key_as] = 'item'
+                        candidate_kwargs[logger_config.pass_item_key_as] = "item"
 
                     # Inject max_message_length if configured
                     if logger_config is not None:
                         _max_len = logger_config.get_max_message_length(log_type)
                         if _max_len is not None:
-                            candidate_kwargs['max_message_length'] = _max_len
+                            candidate_kwargs["max_message_length"] = _max_len
 
                     # Forward any extra kwargs to callable loggers (e.g. parts extraction params)
                     candidate_kwargs.update(kwargs)
 
                     # Exclude params already baked into functools.partial to avoid duplicate keyword TypeError
-                    _partial_keywords = list(getattr(_logger, 'keywords', {}).keys()) or None
+                    _partial_keywords = (
+                        list(getattr(_logger, "keywords", {}).keys()) or None
+                    )
 
                     # Filter to only params the logger accepts (or pass all if logger has **kwargs)
                     _filtered_kwargs = get_relevant_named_args(
                         _logger,
                         all_named_args_relevant_if_func_support_named_args=True,
                         exclusion=_partial_keywords,
-                        **candidate_kwargs
+                        **candidate_kwargs,
                     )
 
                     # Per-write file_path override for file-based loggers (e.g. a
@@ -951,10 +1098,19 @@ class Debuggable(Identifiable, ABC):
                     # above, since file_path is a baked Partial keyword the filter
                     # strips. By contract, a FileBasedLogger's call accepts it.
                     _path_override = self._log_path_override(_logger_name, _logger)
-                    if _path_override is not None and isinstance(_logger, FileBasedLogger):
-                        _filtered_kwargs = {**(_filtered_kwargs or {}), "file_path": _path_override}
+                    if _path_override is not None and isinstance(
+                        _logger, FileBasedLogger
+                    ):
+                        _filtered_kwargs = {
+                            **(_filtered_kwargs or {}),
+                            "file_path": _path_override,
+                        }
 
-                    result = _logger(log_data, **_filtered_kwargs) if _filtered_kwargs else _logger(log_data)
+                    result = (
+                        _logger(log_data, **_filtered_kwargs)
+                        if _filtered_kwargs
+                        else _logger(log_data)
+                    )
 
                     # Pipeline: capture output for downstream loggers
                     if (
@@ -968,32 +1124,82 @@ class Debuggable(Identifiable, ABC):
                         message = f"{self.id} - {_effective_log_name} - {log_type}: {display_item}"
                         self.warning_raiser(message)
                 else:
-                    raise TypeError("Logger must be a callable or an instance of logging.Logger")
+                    raise TypeError(
+                        "Logger must be a callable or an instance of logging.Logger"
+                    )
             except Exception as e:
                 # Fallback for logging errors
                 if self.debug_mode:
                     print(f"Logging failed: {e}")
 
     # region Convenience Logging Methods
-    def log_info(self, log_item: Any, log_type: str = None, message_id: Optional[str] = None, **kwargs):
+    def log_info(
+        self,
+        log_item: Any,
+        log_type: str = None,
+        message_id: Optional[str] = None,
+        **kwargs,
+    ):
         """Logs a message with INFO level."""
-        self.log(log_item, log_type, log_level=logging.INFO, message_id=message_id, **kwargs)
+        self.log(
+            log_item, log_type, log_level=logging.INFO, message_id=message_id, **kwargs
+        )
 
-    def log_debug(self, log_item: Any, log_type: str = None, message_id: Optional[str] = None, **kwargs):
+    def log_debug(
+        self,
+        log_item: Any,
+        log_type: str = None,
+        message_id: Optional[str] = None,
+        **kwargs,
+    ):
         """Logs a message with DEBUG level."""
-        self.log(log_item, log_type, log_level=logging.DEBUG, message_id=message_id, **kwargs)
+        self.log(
+            log_item, log_type, log_level=logging.DEBUG, message_id=message_id, **kwargs
+        )
 
-    def log_warning(self, log_item: Any, log_type: str = None, message_id: Optional[str] = None, **kwargs):
+    def log_warning(
+        self,
+        log_item: Any,
+        log_type: str = None,
+        message_id: Optional[str] = None,
+        **kwargs,
+    ):
         """Logs a message with WARNING level."""
-        self.log(log_item, log_type, log_level=logging.WARNING, message_id=message_id, **kwargs)
+        self.log(
+            log_item,
+            log_type,
+            log_level=logging.WARNING,
+            message_id=message_id,
+            **kwargs,
+        )
 
-    def log_error(self, log_item: Any, log_type: str = None, message_id: Optional[str] = None, **kwargs):
+    def log_error(
+        self,
+        log_item: Any,
+        log_type: str = None,
+        message_id: Optional[str] = None,
+        **kwargs,
+    ):
         """Logs a message with ERROR level."""
-        self.log(log_item, log_type, log_level=logging.ERROR, message_id=message_id, **kwargs)
+        self.log(
+            log_item, log_type, log_level=logging.ERROR, message_id=message_id, **kwargs
+        )
 
-    def log_critical(self, log_item: Any, log_type: str = None, message_id: Optional[str] = None, **kwargs):
+    def log_critical(
+        self,
+        log_item: Any,
+        log_type: str = None,
+        message_id: Optional[str] = None,
+        **kwargs,
+    ):
         """Logs a message with CRITICAL level."""
-        self.log(log_item, log_type, log_level=logging.CRITICAL, message_id=message_id, **kwargs)
+        self.log(
+            log_item,
+            log_type,
+            log_level=logging.CRITICAL,
+            message_id=message_id,
+            **kwargs,
+        )
 
     # logging.Logger-compatible aliases
     # These allow Debuggable to be used interchangeably with logging.Logger
@@ -1032,7 +1238,7 @@ class Debuggable(Identifiable, ABC):
 
     # region Debuggable Graph Implementation
 
-    def set_parent_debuggable(self, parent_debuggable: Union[str, 'Debuggable']):
+    def set_parent_debuggable(self, parent_debuggable: Union[str, "Debuggable"]):
         """
         Set a parent debuggable object, establishing a hierarchical relationship.
 
@@ -1055,9 +1261,13 @@ class Debuggable(Identifiable, ABC):
         elif isinstance(parent_debuggable, Debuggable):
             # It's a Debuggable instance
             parent_id = parent_debuggable.id
-            to_append = parent_id if self.only_keep_parent_debuggable_ids else parent_debuggable
+            to_append = (
+                parent_id if self.only_keep_parent_debuggable_ids else parent_debuggable
+            )
         else:
-            raise TypeError("parent_debuggable must be a string or a Debuggable instance")
+            raise TypeError(
+                "parent_debuggable must be a string or a Debuggable instance"
+            )
 
         # Check if already exists (avoid duplicates)
         existing_ids = self.get_parent_debuggable_ids()
@@ -1069,7 +1279,7 @@ class Debuggable(Identifiable, ABC):
             # Even if this Debuggable never logs business data, this relationship will be recorded
             self.log_info(
                 f"Parent '{parent_id}' linked to child '{self.id}'",
-                LOG_TYPE_PARENT_CHILD_DEBUGGABLE_LINK
+                LOG_TYPE_PARENT_CHILD_DEBUGGABLE_LINK,
             )
 
     def get_parent_debuggable_ids(self) -> Sequence[str]:
@@ -1108,4 +1318,5 @@ class Debugger(Debuggable):
         >>> debugger = Debugger(debug_mode=True)
         >>> debugger.log("Test message")
     """
+
     pass

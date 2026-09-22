@@ -28,28 +28,31 @@ Usage:
 """
 
 from resolve_path import resolve_path
+
 resolve_path()  # Add project src to sys.path
 
-import os
-import time
 import math
-import tempfile
+import os
 import shutil
+import tempfile
+import time
 from functools import partial
 from multiprocessing import Manager
-from rich_python_utils.mp_utils.task import Task
+
 from rich_python_utils.mp_utils.queued_executor import (
-    SingleThreadExecutor,
     QueuedProcessPoolExecutor,
+    SingleThreadExecutor,
 )
+from rich_python_utils.mp_utils.task import Task
 from rich_python_utils.service_utils.queue_service.storage_based_queue_service import (
-    StorageBasedQueueService
+    StorageBasedQueueService,
 )
 
 
 # =============================================================================
 # Queue service factory (must be at module level for pickling)
 # =============================================================================
+
 
 def create_queue_service(root_path):
     """Factory function to create queue service instances.
@@ -64,10 +67,11 @@ def create_queue_service(root_path):
 # CPU-bound task functions (must be at module level for pickling)
 # =============================================================================
 
+
 def compute_primes(limit):
     """Find all prime numbers up to limit using trial division."""
     if limit < 2:
-        return {'limit': limit, 'count': 0, 'largest': None}
+        return {"limit": limit, "count": 0, "largest": None}
     primes = []
     for num in range(2, limit + 1):
         is_prime = True
@@ -78,9 +82,9 @@ def compute_primes(limit):
         if is_prime:
             primes.append(num)
     return {
-        'limit': limit,
-        'count': len(primes),
-        'largest': primes[-1] if primes else None
+        "limit": limit,
+        "count": len(primes),
+        "largest": primes[-1] if primes else None,
     }
 
 
@@ -96,20 +100,17 @@ def matrix_multiply(size):
                 result[i][j] += matrix_a[i][k] * matrix_b[k][j]
 
     checksum = sum(sum(row) for row in result)
-    return {'size': size, 'checksum': checksum}
+    return {"size": size, "checksum": checksum}
 
 
 def hash_iterations(data, iterations):
     """Perform many hash iterations (CPU-intensive)."""
     import hashlib
+
     result = str(data).encode()
     for _ in range(iterations):
         result = hashlib.sha256(result).digest()
-    return {
-        'data': data,
-        'iterations': iterations,
-        'hash': result.hex()[:16]
-    }
+    return {"data": data, "iterations": iterations, "hash": result.hex()[:16]}
 
 
 def main():
@@ -131,7 +132,7 @@ Processes excel at CPU-bound tasks because:
     NUM_WORKERS = 4
 
     # Create temporary directory for queue storage
-    queue_dir = tempfile.mkdtemp(prefix='queued_process_pool_')
+    queue_dir = tempfile.mkdtemp(prefix="queued_process_pool_")
     print(f"   Queue storage: {queue_dir}")
 
     try:
@@ -161,20 +162,18 @@ Processes excel at CPU-bound tasks because:
         seq_executor = SingleThreadExecutor(
             input_queue_service=queue_service,
             output_queue_service=queue_service,
-            input_queue_id='seq_in',
-            output_queue_id='seq_out',
-            name='SequentialWorker',
-            verbose=False
+            input_queue_id="seq_in",
+            output_queue_id="seq_out",
+            name="SequentialWorker",
+            verbose=False,
         )
 
         # Submit tasks - larger limits for meaningful CPU work to overcome file I/O overhead
         for i in range(NUM_TASKS):
             limit = 150000 + i * 25000
-            seq_executor.submit(Task(
-                callable=compute_primes,
-                args=(limit,),
-                name=f'Primes-{limit}'
-            ))
+            seq_executor.submit(
+                Task(callable=compute_primes, args=(limit,), name=f"Primes-{limit}")
+            )
 
         start = time.time()
         flag = seq_executor.start()
@@ -193,7 +192,9 @@ Processes excel at CPU-bound tasks because:
         # =====================================================================
         # 3. Parallel execution with QueuedProcessPoolExecutor
         # =====================================================================
-        print(f"\n3. PARALLEL execution (QueuedProcessPoolExecutor, {NUM_WORKERS} processes)...")
+        print(
+            f"\n3. PARALLEL execution (QueuedProcessPoolExecutor, {NUM_WORKERS} processes)..."
+        )
 
         # Create process-safe active flag
         active_flag = manager.list([True])
@@ -201,22 +202,20 @@ Processes excel at CPU-bound tasks because:
         par_executor = QueuedProcessPoolExecutor(
             input_queue_service=queue_service,
             output_queue_service=queue_service,
-            input_queue_id='par_in',
-            output_queue_id='par_out',
+            input_queue_id="par_in",
+            output_queue_id="par_out",
             num_workers=NUM_WORKERS,
-            name='ProcessPool',
+            name="ProcessPool",
             verbose=False,
-            queue_service_factory=queue_factory  # Factory for worker processes
+            queue_service_factory=queue_factory,  # Factory for worker processes
         )
 
         # Submit same tasks
         for i in range(NUM_TASKS):
             limit = 150000 + i * 25000
-            par_executor.submit(Task(
-                callable=compute_primes,
-                args=(limit,),
-                name=f'Primes-{limit}'
-            ))
+            par_executor.submit(
+                Task(callable=compute_primes, args=(limit,), name=f"Primes-{limit}")
+            )
 
         start = time.time()
         par_executor.start(active_flag)
@@ -271,12 +270,14 @@ Processes excel at CPU-bound tasks because:
         # =====================================================================
         print("\n6. Sample results (prime calculations)...")
 
-        sorted_results = sorted(par_results, key=lambda r: r.result['limit'])
+        sorted_results = sorted(par_results, key=lambda r: r.result["limit"])
         for result in sorted_results[:4]:
             if result.is_success():
                 data = result.result
-                print(f"   Primes up to {data['limit']}: found {data['count']} primes "
-                      f"(largest: {data['largest']})")
+                print(
+                    f"   Primes up to {data['limit']}: found {data['count']} primes "
+                    f"(largest: {data['largest']})"
+                )
 
         # =====================================================================
         # 7. Mixed CPU workload
@@ -288,24 +289,28 @@ Processes excel at CPU-bound tasks because:
         mixed_executor = QueuedProcessPoolExecutor(
             input_queue_service=queue_service,
             output_queue_service=queue_service,
-            input_queue_id='mixed_in',
-            output_queue_id='mixed_out',
+            input_queue_id="mixed_in",
+            output_queue_id="mixed_out",
             num_workers=4,
-            name='MixedCPU',
+            name="MixedCPU",
             verbose=False,
-            queue_service_factory=queue_factory
+            queue_service_factory=queue_factory,
         )
 
         # Submit different CPU task types - larger sizes to overcome IPC overhead
         mixed_tasks = 0
         for i in range(3):
-            mixed_executor.submit(Task(callable=compute_primes, args=(100000 + i * 20000,)))
+            mixed_executor.submit(
+                Task(callable=compute_primes, args=(100000 + i * 20000,))
+            )
             mixed_tasks += 1
         for i in range(3):
             mixed_executor.submit(Task(callable=matrix_multiply, args=(120 + i * 20,)))
             mixed_tasks += 1
         for i in range(3):
-            mixed_executor.submit(Task(callable=hash_iterations, args=(f'data_{i}', 500000)))
+            mixed_executor.submit(
+                Task(callable=hash_iterations, args=(f"data_{i}", 500000))
+            )
             mixed_tasks += 1
 
         start = time.time()
@@ -321,9 +326,15 @@ Processes excel at CPU-bound tasks because:
         mixed_executor.stop(active_flag)
 
         # Count by type
-        primes_done = sum(1 for r in mixed_results if r.is_success() and 'count' in r.result)
-        matrix_done = sum(1 for r in mixed_results if r.is_success() and 'checksum' in r.result)
-        hash_done = sum(1 for r in mixed_results if r.is_success() and 'hash' in r.result)
+        primes_done = sum(
+            1 for r in mixed_results if r.is_success() and "count" in r.result
+        )
+        matrix_done = sum(
+            1 for r in mixed_results if r.is_success() and "checksum" in r.result
+        )
+        hash_done = sum(
+            1 for r in mixed_results if r.is_success() and "hash" in r.result
+        )
 
         print(f"   Completed {len(mixed_results)} mixed tasks in {mixed_time:.2f}s")
         print(f"   - Prime calculations: {primes_done}")
@@ -367,12 +378,14 @@ Important Notes:
 """)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         main()
     except Exception as e:
         print(f"\n[X] Error: {e}")
         import traceback
+
         traceback.print_exc()
         import sys
+
         sys.exit(1)

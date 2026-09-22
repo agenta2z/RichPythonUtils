@@ -41,13 +41,13 @@ Usage:
     queues = service.list_queues()
 """
 
-import pickle
 import json
-from typing import Any, Optional, List, Dict
-import redis
-from redis.exceptions import ConnectionError, TimeoutError
+import pickle
+from typing import Any, Dict, List, Optional
 
-from attr import attrs, attrib
+import redis
+from attr import attrib, attrs
+from redis.exceptions import ConnectionError, TimeoutError
 
 from .queue_service_base import QueueServiceBase
 
@@ -69,11 +69,11 @@ class RedisQueueService(QueueServiceBase):
         serialization: Serialization method ('pickle' or 'json')
     """
 
-    host: str = attrib(default='localhost')
+    host: str = attrib(default="localhost")
     port: int = attrib(default=6379)
     db: int = attrib(default=0)
-    namespace: str = attrib(default='queue')
-    serialization: str = attrib(default='pickle')
+    namespace: str = attrib(default="queue")
+    serialization: str = attrib(default="pickle")
     decode_responses: bool = attrib(default=False)
     redis_client: redis.Redis = attrib(init=False)
 
@@ -92,7 +92,7 @@ class RedisQueueService(QueueServiceBase):
                 db=self.db,
                 decode_responses=self.decode_responses,
                 socket_connect_timeout=5,
-                socket_timeout=5
+                socket_timeout=5,
             )
             # Test connection
             self.redis_client.ping()
@@ -128,10 +128,10 @@ class RedisQueueService(QueueServiceBase):
             ValueError: If serialization fails
         """
         try:
-            if self.serialization == 'pickle':
+            if self.serialization == "pickle":
                 return pickle.dumps(obj)
-            elif self.serialization == 'json':
-                return json.dumps(obj).encode('utf-8')
+            elif self.serialization == "json":
+                return json.dumps(obj).encode("utf-8")
             else:
                 raise ValueError(f"Unknown serialization method: {self.serialization}")
         except Exception as e:
@@ -151,10 +151,10 @@ class RedisQueueService(QueueServiceBase):
             ValueError: If deserialization fails
         """
         try:
-            if self.serialization == 'pickle':
+            if self.serialization == "pickle":
                 return pickle.loads(data)
-            elif self.serialization == 'json':
-                return json.loads(data.decode('utf-8'))
+            elif self.serialization == "json":
+                return json.loads(data.decode("utf-8"))
             else:
                 raise ValueError(f"Unknown serialization method: {self.serialization}")
         except Exception as e:
@@ -204,10 +204,7 @@ class RedisQueueService(QueueServiceBase):
         return True
 
     def get(
-        self,
-        queue_id: str,
-        blocking: bool = True,
-        timeout: Optional[float] = None
+        self, queue_id: str, blocking: bool = True, timeout: Optional[float] = None
     ) -> Optional[Any]:
         """
         Get an object from the queue.
@@ -342,9 +339,9 @@ class RedisQueueService(QueueServiceBase):
         for key in keys:
             # Decode if bytes
             if isinstance(key, bytes):
-                key = key.decode('utf-8')
+                key = key.decode("utf-8")
             # Remove namespace prefix
-            queue_id = key[len(self.namespace) + 1:]  # +1 for the ':'
+            queue_id = key[len(self.namespace) + 1 :]  # +1 for the ':'
             queue_ids.append(queue_id)
 
         return queue_ids
@@ -363,21 +360,18 @@ class RedisQueueService(QueueServiceBase):
         if queue_id:
             # Stats for specific queue
             return {
-                'queue_id': queue_id,
-                'size': self.size(queue_id),
-                'exists': self.exists(queue_id)
+                "queue_id": queue_id,
+                "size": self.size(queue_id),
+                "exists": self.exists(queue_id),
             }
         else:
             # Stats for all queues
             queues = self.list_queues()
-            stats = {
-                'total_queues': len(queues),
-                'queues': {}
-            }
+            stats = {"total_queues": len(queues), "queues": {}}
             for qid in queues:
-                stats['queues'][qid] = {
-                    'size': self.size(qid),
-                    'exists': self.exists(qid)
+                stats["queues"][qid] = {
+                    "size": self.size(qid),
+                    "exists": self.exists(qid),
                 }
             return stats
 

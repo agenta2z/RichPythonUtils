@@ -5,7 +5,7 @@ import uuid
 from queue import Queue
 from typing import Any, Callable, Dict, List, Optional, Set, TYPE_CHECKING, Union
 
-from attr import attrs, attrib
+from attr import attrib, attrs
 
 if TYPE_CHECKING:
     from rich_python_utils.mp_utils.queued_executor import QueuedExecutorBase
@@ -13,21 +13,38 @@ if TYPE_CHECKING:
 from rich_python_utils.algorithms.graph.dag import DirectedAcyclicGraph
 from rich_python_utils.algorithms.graph.node import Node
 from rich_python_utils.common_objects.debuggable import Debuggable
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
+from rich_python_utils.common_objects.workflow.common.exceptions import (
+    ExpansionConfigError,
+    ExpansionLimitExceeded,
+    ExpansionReplayError,
+)
+from rich_python_utils.common_objects.workflow.common.expansion import (
+    GraphExpansionResult,
+    SubgraphSpec,
+)
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
+)
 from rich_python_utils.common_objects.workflow.common.step_result_save_options import (
-    StepResultSaveOptions,
     ResumeMode,
+    StepResultSaveOptions,
 )
 from rich_python_utils.common_objects.workflow.common.worknode_base import (
-    WorkNodeBase, WorkGraphStopFlags, NextNodesSelector
+    NextNodesSelector,
+    WorkGraphStopFlags,
+    WorkNodeBase,
 )
-from rich_python_utils.common_objects.workflow.common.expansion import GraphExpansionResult, SubgraphSpec
-from rich_python_utils.common_objects.workflow.common.exceptions import (
-    ExpansionConfigError, ExpansionLimitExceeded, ExpansionReplayError
+from rich_python_utils.common_utils import (
+    flatten_iter,
+    get_relevant_args,
+    get_relevant_named_args,
+    len_,
 )
-from rich_python_utils.common_utils import flatten_iter, len_, get_relevant_named_args, get_relevant_args
+from rich_python_utils.common_utils.async_utils import (
+    async_execute_with_retry,
+    call_maybe_async,
+)
 from rich_python_utils.common_utils.attr_helper import getattr_or_new
-from rich_python_utils.common_utils.async_utils import call_maybe_async, async_execute_with_retry
 
 
 # Module-level sentinel for "downstream result slot not yet filled" in the
@@ -201,7 +218,9 @@ class WorkGraphNode(Node, WorkNodeBase):
     # Set via WorkGraph.set_graph_event_callback(). Must be an async coroutine function when used
     # in _arun() (async path). In _run() (sync path), async callbacks are skipped to avoid
     # unawaited coroutine leaks. BTA always uses _arun() (use_async=True).
-    _graph_event_callback: Optional[Callable] = attrib(default=None, repr=False, kw_only=True)
+    _graph_event_callback: Optional[Callable] = attrib(
+        default=None, repr=False, kw_only=True
+    )
     min_repeat_wait: float = attrib(default=0, kw_only=True)
     max_repeat_wait: float = attrib(default=0, kw_only=True)
     retry_on_exceptions: Optional[List[type]] = attrib(default=None, kw_only=True)
@@ -241,6 +260,7 @@ class WorkGraphNode(Node, WorkNodeBase):
 
     def _post_adding_next_process(self, next_node):
         from rich_python_utils.common_objects.debuggable import Debuggable
+
         if isinstance(next_node, Debuggable):
             next_node.set_parent_debuggable(self)
 
@@ -258,37 +278,35 @@ class WorkGraphNode(Node, WorkNodeBase):
         Returns:
             The fallback result.
         """
-        return kwargs.get('fallback_result', self.fallback_result)
+        return kwargs.get("fallback_result", self.fallback_result)
 
     def _get_value_reference(self) -> Optional[str]:
         """Get serializable reference for callable value.
-        
+
         Returns:
             A string reference in the format 'module.name' if the callable has
             __module__ and __name__ attributes, otherwise None.
         """
         if self.value is None:
             return None
-        if hasattr(self.value, '__module__') and hasattr(self.value, '__name__'):
+        if hasattr(self.value, "__module__") and hasattr(self.value, "__name__"):
             return f"{self.value.__module__}.{self.value.__name__}"
         return None  # Non-serializable callable
 
     def to_serializable_obj(
-        self, 
-        mode: str = 'auto',
-        _output_format: Optional[str] = None
+        self, mode: str = "auto", _output_format: Optional[str] = None
     ) -> Dict[str, Any]:
         """Serialize WorkGraphNode to dict.
-        
+
         Serializes node configuration including name, connections, and settings.
         Callable values are stored as references when possible.
         Dynamically added nodes (expansion_depth > 0) are marked with
         ``"expanded": True`` and their ``expansion_id`` if available.
-        
+
         Args:
             mode: Serialization mode ('auto', 'dict', 'pickle')
             _output_format: Target output format for conflict detection
-            
+
         Returns:
             Dict containing node configuration and connections.
         """
@@ -298,37 +316,37 @@ class WorkGraphNode(Node, WorkNodeBase):
             result_pass_down_mode_str = self.result_pass_down_mode.value
         elif callable(self.result_pass_down_mode):
             # For callable mode, store reference if possible
-            if hasattr(self.result_pass_down_mode, '__name__'):
+            if hasattr(self.result_pass_down_mode, "__name__"):
                 result_pass_down_mode_str = f"callable:{self.result_pass_down_mode.__module__}.{self.result_pass_down_mode.__name__}"
             else:
                 result_pass_down_mode_str = None  # Non-serializable callable
-        
+
         obj = {
-            '_type': type(self).__name__,
-            '_module': type(self).__module__,
-            'name': self.name,
-            'value_ref': self._get_value_reference(),
-            'next_names': [n.name for n in (self.next or [])],
-            'previous_names': [n.name for n in (self.previous or [])],
-            'config': {
-                'max_repeat': self.max_repeat,
-                'min_repeat_wait': self.min_repeat_wait,
-                'max_repeat_wait': self.max_repeat_wait,
-                'enable_result_save': (
-                    self.enable_result_save.value 
-                    if isinstance(self.enable_result_save, StepResultSaveOptions) 
+            "_type": type(self).__name__,
+            "_module": type(self).__module__,
+            "name": self.name,
+            "value_ref": self._get_value_reference(),
+            "next_names": [n.name for n in (self.next or [])],
+            "previous_names": [n.name for n in (self.previous or [])],
+            "config": {
+                "max_repeat": self.max_repeat,
+                "min_repeat_wait": self.min_repeat_wait,
+                "max_repeat_wait": self.max_repeat_wait,
+                "enable_result_save": (
+                    self.enable_result_save.value
+                    if isinstance(self.enable_result_save, StepResultSaveOptions)
                     else self.enable_result_save
                 ),
-                'result_pass_down_mode': result_pass_down_mode_str,
-                'pass_abstain_result_flag_downstream': self.pass_abstain_result_flag_downstream,
-                'remove_abstain_result_flag_from_upstream_input': self.remove_abstain_result_flag_from_upstream_input,
-            }
+                "result_pass_down_mode": result_pass_down_mode_str,
+                "pass_abstain_result_flag_downstream": self.pass_abstain_result_flag_downstream,
+                "remove_abstain_result_flag_from_upstream_input": self.remove_abstain_result_flag_from_upstream_input,
+            },
         }
 
         # Mark dynamically added nodes (expansion_depth > 0)
         if self._expansion_depth > 0:
-            obj['expanded'] = True
-            obj['expansion_depth'] = self._expansion_depth
+            obj["expanded"] = True
+            obj["expansion_depth"] = self._expansion_depth
 
         return obj
 
@@ -425,11 +443,7 @@ class WorkGraphNode(Node, WorkNodeBase):
         else:
             return (False, True, result)  # Default: no self-loop, all downstream
 
-    def _select_downstream_nodes(
-        self,
-        include_others,
-        include_self: bool
-    ) -> list:
+    def _select_downstream_nodes(self, include_others, include_self: bool) -> list:
         """
         Select which downstream nodes to execute based on include_others and include_self.
 
@@ -459,7 +473,10 @@ class WorkGraphNode(Node, WorkNodeBase):
                 nodes.append(node)
             elif include_others is False:
                 pass  # Skip non-self nodes
-            elif isinstance(include_others, set) and getattr(node, 'name', None) in include_others:
+            elif (
+                isinstance(include_others, set)
+                and getattr(node, "name", None) in include_others
+            ):
                 nodes.append(node)
 
         return nodes
@@ -479,24 +496,24 @@ class WorkGraphNode(Node, WorkNodeBase):
             ExpansionConfigError: for lambdas, closures, or objects
                 missing ``__module__``/``__qualname__``.
         """
-        if not hasattr(fn, '__qualname__'):
+        if not hasattr(fn, "__qualname__"):
             raise ExpansionConfigError(
                 f"reconstruct_from_seed {fn!r} has no __qualname__ attribute. "
                 "It must be a module-level function (not a functools.partial, "
                 "lambda, or closure)."
             )
-        if not hasattr(fn, '__module__'):
+        if not hasattr(fn, "__module__"):
             raise ExpansionConfigError(
                 f"reconstruct_from_seed {fn!r} has no __module__ attribute. "
                 "It must be a module-level function."
             )
         qualname = fn.__qualname__
-        if '<lambda>' in qualname:
+        if "<lambda>" in qualname:
             raise ExpansionConfigError(
                 f"reconstruct_from_seed must not be a lambda (got qualname={qualname!r}). "
                 "Use a named module-level function instead."
             )
-        if '<locals>' in qualname:
+        if "<locals>" in qualname:
             raise ExpansionConfigError(
                 f"reconstruct_from_seed must not be a closure (got qualname={qualname!r}). "
                 "Use a named module-level function instead."
@@ -521,10 +538,10 @@ class WorkGraphNode(Node, WorkNodeBase):
             visited.add(node_id)
             if node.name is not None:
                 names.add(node.name)
-            for neighbor in (node.next or []):
+            for neighbor in node.next or []:
                 if id(neighbor) not in visited:
                     queue.append(neighbor)
-            for neighbor in (node.previous or []):
+            for neighbor in node.previous or []:
                 if id(neighbor) not in visited:
                     queue.append(neighbor)
         return names
@@ -549,7 +566,7 @@ class WorkGraphNode(Node, WorkNodeBase):
 
         def dfs(node):
             state[id(node)] = 1  # in-progress
-            for child in (node.next or []):
+            for child in node.next or []:
                 if child is node:
                     continue  # skip self-loops
                 child_id = id(child)
@@ -590,9 +607,7 @@ class WorkGraphNode(Node, WorkNodeBase):
         leaf_nodes = []
         for sg_node in subgraph_nodes:
             has_internal_next = any(
-                id(n) in sg_node_ids
-                for n in (sg_node.next or [])
-                if n is not sg_node
+                id(n) in sg_node_ids for n in (sg_node.next or []) if n is not sg_node
             )
             if not has_internal_next:
                 leaf_nodes.append(sg_node)
@@ -600,7 +615,7 @@ class WorkGraphNode(Node, WorkNodeBase):
         # Check 1: DFS from subgraph leaf nodes' downstream — no path should
         # reach back to the expanding node (excluding self-loops)
         for leaf in leaf_nodes:
-            for downstream in (leaf.next or []):
+            for downstream in leaf.next or []:
                 if downstream is leaf:
                     continue  # skip self-loops
                 if id(downstream) in sg_node_ids:
@@ -620,7 +635,7 @@ class WorkGraphNode(Node, WorkNodeBase):
                     if nid in visited:
                         continue
                     visited.add(nid)
-                    for child in (node.next or []):
+                    for child in node.next or []:
                         if child is node:
                             continue  # skip self-loops
                         if id(child) not in visited:
@@ -629,7 +644,7 @@ class WorkGraphNode(Node, WorkNodeBase):
         # Check 2: DFS from original downstream children (non-subgraph next of
         # subgraph leaves) — no path should reach back to any subgraph node
         for leaf in leaf_nodes:
-            for downstream in (leaf.next or []):
+            for downstream in leaf.next or []:
                 if downstream is leaf:
                     continue
                 if id(downstream) in sg_node_ids:
@@ -648,7 +663,7 @@ class WorkGraphNode(Node, WorkNodeBase):
                     if nid in visited:
                         continue
                     visited.add(nid)
-                    for child in (node.next or []):
+                    for child in node.next or []:
                         if child is node:
                             continue
                         if id(child) not in visited:
@@ -673,7 +688,7 @@ class WorkGraphNode(Node, WorkNodeBase):
         for node in nodes:
             node.enable_result_save = self.enable_result_save
             node.resume_with_saved_results = self.resume_with_saved_results
-            if hasattr(self, 'checkpoint_mode'):
+            if hasattr(self, "checkpoint_mode"):
                 node.checkpoint_mode = self.checkpoint_mode
             node._graph_event_callback = self._graph_event_callback
             node._max_expansion_depth = self._max_expansion_depth
@@ -713,9 +728,7 @@ class WorkGraphNode(Node, WorkNodeBase):
         leaf_nodes = []
         for sg_node in subgraph.nodes:
             has_internal_next = any(
-                id(n) in sg_node_ids
-                for n in (sg_node.next or [])
-                if n is not sg_node
+                id(n) in sg_node_ids for n in (sg_node.next or []) if n is not sg_node
             )
             if not has_internal_next:
                 leaf_nodes.append(sg_node)
@@ -748,6 +761,7 @@ class WorkGraphNode(Node, WorkNodeBase):
             The unwrapped result from expansion_result.result.
         """
         import logging
+
         logger = logging.getLogger(__name__)
 
         # Req 28: If already expanded (self-loop scenario), skip re-expansion
@@ -829,15 +843,19 @@ class WorkGraphNode(Node, WorkNodeBase):
 
         # Req 14.1: Persist expansion record BEFORE mutating topology
         record_data = {
-            'expanding_node': self.name,
-            'expansion_id': expansion_result.expansion_id,
-            'subgraph': subgraph.to_serializable_obj(),
+            "expanding_node": self.name,
+            "expansion_id": expansion_result.expansion_id,
+            "subgraph": subgraph.to_serializable_obj(),
         }
         if expansion_result.seed is not None:
-            record_data['seed'] = expansion_result.seed
+            record_data["seed"] = expansion_result.seed
         if expansion_result.reconstruct_from_seed is not None:
-            record_data['factory_module'] = expansion_result.reconstruct_from_seed.__module__
-            record_data['factory_qualname'] = expansion_result.reconstruct_from_seed.__qualname__
+            record_data["factory_module"] = (
+                expansion_result.reconstruct_from_seed.__module__
+            )
+            record_data["factory_qualname"] = (
+                expansion_result.reconstruct_from_seed.__qualname__
+            )
 
         self._save_result(
             record_data,
@@ -873,7 +891,9 @@ class WorkGraphNode(Node, WorkNodeBase):
 
         # region Process a special scenario when input is the AbstainResult flag
         # This flag must be passed down so
-        is_input_single_stop_flag = WorkGraphStopFlags.is_input_single_stop_flag(*args, **kwargs)
+        is_input_single_stop_flag = WorkGraphStopFlags.is_input_single_stop_flag(
+            *args, **kwargs
+        )
         if is_input_single_stop_flag:
             if not self.pass_abstain_result_flag_downstream:
                 raise ValueError(
@@ -882,14 +902,16 @@ class WorkGraphNode(Node, WorkNodeBase):
                 )
             stop_flag = args[0]
             if stop_flag != WorkGraphStopFlags.AbstainResult:
-                raise ValueError(f"Only AbstainResult flag allowed to pass downstream; got '{stop_flag}'")
+                raise ValueError(
+                    f"Only AbstainResult flag allowed to pass downstream; got '{stop_flag}'"
+                )
         # endregion
 
         # region Track execution depth for debugging
         # _graph_depth: incremented when calling downstream nodes via node.run()
         #               This tracks how deep we are in the graph traversal (parent → child → grandchild)
         # Note: Self-loop iteration is tracked separately via iteration_count (iterative, not recursive)
-        graph_depth = kwargs.pop('_graph_depth', 0)
+        graph_depth = kwargs.pop("_graph_depth", 0)
         # endregion
 
         # region If there are multiple previous nodes, we need to collect all their outputs before proceeding.
@@ -899,7 +921,7 @@ class WorkGraphNode(Node, WorkNodeBase):
         # Self-loop iterations bypass this entirely via the iterative while loop (no recursive node.run()).
         num_real_parents = sum(1 for p in (self.previous or []) if p is not self)
         if num_real_parents > 1:
-            queue: Queue = getattr_or_new(self, '_queue', default_factory=Queue)
+            queue: Queue = getattr_or_new(self, "_queue", default_factory=Queue)
             if is_input_single_stop_flag:
                 queue.put(stop_flag)
             else:
@@ -934,15 +956,15 @@ class WorkGraphNode(Node, WorkNodeBase):
         if has_self_edge and self._should_save_result():
             self.log_warning(
                 {
-                    'node_name': self.name,
-                    'enable_result_save': self.enable_result_save,
+                    "node_name": self.name,
+                    "enable_result_save": self.enable_result_save,
                 },
-                'SelfLoopWithResultSave',
+                "SelfLoopWithResultSave",
                 message=(
                     f"Node '{self.name}' has a self-edge (self-loop) but enable_result_save is enabled. "
                     "If results are loaded from saved state, the self-loop will not continue because "
                     "include_self won't be set. Consider setting enable_result_save=False for self-loop nodes."
-                )
+                ),
             )
 
         # Store original args for potential self-loop (needed for NoPassDown mode)
@@ -983,12 +1005,12 @@ class WorkGraphNode(Node, WorkNodeBase):
             # Log execution depth info
             self.log_debug(
                 {
-                    'node_name': self.name,
-                    'graph_depth': graph_depth,
-                    'self_loop_iteration': self_loop_iteration,
-                    'is_self_loop': has_self_edge and self_loop_iteration > 1,
+                    "node_name": self.name,
+                    "graph_depth": graph_depth,
+                    "self_loop_iteration": self_loop_iteration,
+                    "is_self_loop": has_self_edge and self_loop_iteration > 1,
                 },
-                'NodeExecution'
+                "NodeExecution",
             )
 
             if stop_flag == WorkGraphStopFlags.Continue:
@@ -1004,18 +1026,32 @@ class WorkGraphNode(Node, WorkNodeBase):
                             all_var_args_relevant_if_func_support_var_args=True,
                             all_named_args_relevant_if_func_support_named_args=True,
                             args=args,
-                            **kwargs
+                            **kwargs,
                         )
 
                         # Use execute_with_retry to support repeat/retry functionality
-                        from rich_python_utils.common_utils.function_helper import execute_with_retry
+                        from rich_python_utils.common_utils.function_helper import (
+                            execute_with_retry,
+                        )
+
                         # Graph visualization: emit RUNNING status (sync path — skip async cb)
                         if self._graph_event_callback:
                             import inspect as _inspect
-                            if not _inspect.iscoroutinefunction(self._graph_event_callback):
+
+                            if not _inspect.iscoroutinefunction(
+                                self._graph_event_callback
+                            ):
                                 try:
-                                    from agent_foundation.common.inferencers.graph_events import NodeStatusEvent, NodeStatus
-                                    self._graph_event_callback(NodeStatusEvent(node_id=self.name, status=NodeStatus.RUNNING))
+                                    from agent_foundation.common.inferencers.graph_events import (  # @manual
+                                        NodeStatus,
+                                        NodeStatusEvent,
+                                    )
+
+                                    self._graph_event_callback(
+                                        NodeStatusEvent(
+                                            node_id=self.name, status=NodeStatus.RUNNING
+                                        )
+                                    )
                                 except Exception:
                                     pass
                         result = execute_with_retry(
@@ -1028,21 +1064,24 @@ class WorkGraphNode(Node, WorkNodeBase):
                             pre_condition=self.repeat_condition,
                             args=rel_args,
                             kwargs=rel_kwargs,
-                            default_return_or_raise=self._get_fallback_result(*args, **kwargs),
+                            default_return_or_raise=self._get_fallback_result(
+                                *args, **kwargs
+                            ),
                         )
                     except Exception as err:
                         import traceback
+
                         self.log_error(
                             {
-                                'name': self.name,
-                                'executor': self.value,
-                                'args': args,
-                                'kwargs': kwargs,
-                                'exception_type': type(err).__name__,
-                                'exception_message': str(err),
-                                'traceback': traceback.format_exc()
+                                "name": self.name,
+                                "executor": self.value,
+                                "args": args,
+                                "kwargs": kwargs,
+                                "exception_type": type(err).__name__,
+                                "exception_message": str(err),
+                                "traceback": traceback.format_exc(),
                             },
-                            'NodeExecutionFailed',
+                            "NodeExecutionFailed",
                         )
 
                         raise err
@@ -1053,14 +1092,19 @@ class WorkGraphNode(Node, WorkNodeBase):
                     _expansion_include_others = None
 
                     # Req 29: Stop-flag composition — detect (StopFlag, GraphExpansionResult) tuples
-                    if (isinstance(result, tuple) and len(result) == 2
-                            and isinstance(result[0], WorkGraphStopFlags)
-                            and isinstance(result[1], GraphExpansionResult)):
+                    if (
+                        isinstance(result, tuple)
+                        and len(result) == 2
+                        and isinstance(result[0], WorkGraphStopFlags)
+                        and isinstance(result[1], GraphExpansionResult)
+                    ):
                         _stop_flag_from_expansion = result[0]
                         expansion_result = result[1]
                         _expansion_include_self = expansion_result.include_self
                         _expansion_include_others = expansion_result.include_others
-                        result = self._handle_graph_expansion(expansion_result, *args, **kwargs)
+                        result = self._handle_graph_expansion(
+                            expansion_result, *args, **kwargs
+                        )
                     elif isinstance(result, GraphExpansionResult):
                         # Handle plain GraphExpansionResult before NextNodesSelector
                         _expansion_include_self = result.include_self
@@ -1068,13 +1112,21 @@ class WorkGraphNode(Node, WorkNodeBase):
                         result = self._handle_graph_expansion(result, *args, **kwargs)
 
                     # Handle NextNodesSelector return value
-                    include_self, include_others, result = self._handle_next_nodes_selector(result)
+                    include_self, include_others, result = (
+                        self._handle_next_nodes_selector(result)
+                    )
 
                     # Req 23.3: GraphExpansionResult include_self/include_others take precedence
                     # Only override if GER explicitly set non-default values
-                    if _expansion_include_self is not None and _expansion_include_self is not False:
+                    if (
+                        _expansion_include_self is not None
+                        and _expansion_include_self is not False
+                    ):
                         include_self = _expansion_include_self
-                    if _expansion_include_others is not None and _expansion_include_others is not True:
+                    if (
+                        _expansion_include_others is not None
+                        and _expansion_include_others is not True
+                    ):
                         include_others = _expansion_include_others
 
                     # Stop-flag resolution: if expansion already determined the flag, use it;
@@ -1082,7 +1134,9 @@ class WorkGraphNode(Node, WorkNodeBase):
                     if _stop_flag_from_expansion is not None:
                         stop_flag = _stop_flag_from_expansion
                     else:
-                        stop_flag, result = WorkGraphStopFlags.separate_stop_flag_from_result(result)
+                        stop_flag, result = (
+                            WorkGraphStopFlags.separate_stop_flag_from_result(result)
+                        )
 
                     # After the core logic executes successfully, run the mandatory _post_process hook.
                     _result = self._post_process(result, *args, **kwargs)
@@ -1105,7 +1159,9 @@ class WorkGraphNode(Node, WorkNodeBase):
                 if stop_flag == WorkGraphStopFlags.Continue:
                     nargs, nkwargs = self._get_args_for_downstream(result, args, kwargs)
                     # EXCLUDE SELF from downstream nodes - self-loop is handled via while loop
-                    nodes_to_run = self._select_downstream_nodes(include_others, include_self=False)
+                    nodes_to_run = self._select_downstream_nodes(
+                        include_others, include_self=False
+                    )
                 else:
                     # For stop flags, we still notify all downstream nodes (not filtered)
                     # but exclude self since self-loop shouldn't run on stop flags
@@ -1117,9 +1173,10 @@ class WorkGraphNode(Node, WorkNodeBase):
                     #       then it might return None because not all inputs are ready
                     if stop_flag == WorkGraphStopFlags.Continue:
                         stop_flag = node.run(
-                            *nargs, **nkwargs,
+                            *nargs,
+                            **nkwargs,
                             _output=downstream_results,
-                            _graph_depth=graph_depth + 1
+                            _graph_depth=graph_depth + 1,
                         )
                     elif stop_flag == WorkGraphStopFlags.AbstainResult:
                         # Notify downstream nodes that this node abstained from contributing
@@ -1133,7 +1190,9 @@ class WorkGraphNode(Node, WorkNodeBase):
                 if stop_flag == WorkGraphStopFlags.AbstainResult:
                     stop_flag = WorkGraphStopFlags.Continue
 
-                downstream_results = [r for r in downstream_results if r is not _DS_EMPTY]
+                downstream_results = [
+                    r for r in downstream_results if r is not _DS_EMPTY
+                ]
                 if downstream_results:
                     result = self._merge_downstream_results(downstream_results)
 
@@ -1165,7 +1224,11 @@ class WorkGraphNode(Node, WorkNodeBase):
             # 2. has_self_edge (self is in self.next - configured at graph construction)
             # 3. stop_flag == Continue (no Terminate or error occurred)
             # =========================================================================
-            if include_self and has_self_edge and stop_flag == WorkGraphStopFlags.Continue:
+            if (
+                include_self
+                and has_self_edge
+                and stop_flag == WorkGraphStopFlags.Continue
+            ):
                 # Prepare args for next iteration based on result_pass_down_mode
                 if self.result_pass_down_mode == ResultPassDownMode.NoPassDown:
                     args, kwargs = original_args, dict(original_kwargs)
@@ -1185,24 +1248,26 @@ class WorkGraphNode(Node, WorkNodeBase):
 
                 self.log_debug(
                     {
-                        'node_name': self.name,
-                        'graph_depth': graph_depth,
-                        'completed_iteration': self_loop_iteration,
-                        'next_iteration': self_loop_iteration + 1,
+                        "node_name": self.name,
+                        "graph_depth": graph_depth,
+                        "completed_iteration": self_loop_iteration,
+                        "next_iteration": self_loop_iteration + 1,
                     },
-                    'SelfLoopContinue'
+                    "SelfLoopContinue",
                 )
                 continue  # Loop back to re-execute this node (replaces recursive call)
             else:
                 if has_self_edge and self_loop_iteration > 1:
                     self.log_debug(
                         {
-                            'node_name': self.name,
-                            'graph_depth': graph_depth,
-                            'total_iterations': self_loop_iteration,
-                            'exit_reason': 'include_self=False' if not include_self else f'stop_flag={stop_flag}',
+                            "node_name": self.name,
+                            "graph_depth": graph_depth,
+                            "total_iterations": self_loop_iteration,
+                            "exit_reason": "include_self=False"
+                            if not include_self
+                            else f"stop_flag={stop_flag}",
                         },
-                        'SelfLoopExit'
+                        "SelfLoopExit",
                     )
                 if has_self_edge and self._should_save_result():
                     result_path = self._get_result_path(self.name, *args, **kwargs)
@@ -1218,7 +1283,10 @@ class WorkGraphNode(Node, WorkNodeBase):
         if stop_flag == WorkGraphStopFlags.Continue:
             return result
         else:
-            return stop_flag, result  # pop `WorkGraphStopFlags.Terminate` to stop the entire graph
+            return (
+                stop_flag,
+                result,
+            )  # pop `WorkGraphStopFlags.Terminate` to stop the entire graph
 
     async def _arun(self, *args, **kwargs):
         """Async implementation mirroring _run() for WorkGraphNode.
@@ -1242,7 +1310,9 @@ class WorkGraphNode(Node, WorkNodeBase):
         stop_flag = WorkGraphStopFlags.Continue
 
         # region Process a special scenario when input is the AbstainResult flag
-        is_input_single_stop_flag = WorkGraphStopFlags.is_input_single_stop_flag(*args, **kwargs)
+        is_input_single_stop_flag = WorkGraphStopFlags.is_input_single_stop_flag(
+            *args, **kwargs
+        )
         if is_input_single_stop_flag:
             if not self.pass_abstain_result_flag_downstream:
                 raise ValueError(
@@ -1251,15 +1321,17 @@ class WorkGraphNode(Node, WorkNodeBase):
                 )
             stop_flag = args[0]
             if stop_flag != WorkGraphStopFlags.AbstainResult:
-                raise ValueError(f"Only AbstainResult flag allowed to pass downstream; got '{stop_flag}'")
+                raise ValueError(
+                    f"Only AbstainResult flag allowed to pass downstream; got '{stop_flag}'"
+                )
         # endregion
 
         # region Track execution depth for debugging
-        graph_depth = kwargs.pop('_graph_depth', 0)
+        graph_depth = kwargs.pop("_graph_depth", 0)
         # endregion
 
         # Pop _semaphore early so it doesn't leak into get_relevant_args or node execution
-        _semaphore_or_map = kwargs.pop('_semaphore', None)
+        _semaphore_or_map = kwargs.pop("_semaphore", None)
         # Support per-group semaphores: if _semaphore is a dict, select by node.group
         if isinstance(_semaphore_or_map, dict):
             semaphore = _semaphore_or_map.get(self.group) or _semaphore_or_map.get(None)
@@ -1274,7 +1346,9 @@ class WorkGraphNode(Node, WorkNodeBase):
         # region Multi-parent input collection using asyncio.Queue
         num_real_parents = sum(1 for p in (self.previous or []) if p is not self)
         if num_real_parents > 1:
-            aqueue: asyncio.Queue = getattr_or_new(self, '_aqueue', default_factory=asyncio.Queue)
+            aqueue: asyncio.Queue = getattr_or_new(
+                self, "_aqueue", default_factory=asyncio.Queue
+            )
             if is_input_single_stop_flag:
                 await aqueue.put(stop_flag)
             else:
@@ -1301,15 +1375,15 @@ class WorkGraphNode(Node, WorkNodeBase):
         if has_self_edge and self._should_save_result():
             self.log_warning(
                 {
-                    'node_name': self.name,
-                    'enable_result_save': self.enable_result_save,
+                    "node_name": self.name,
+                    "enable_result_save": self.enable_result_save,
                 },
-                'SelfLoopWithResultSave',
+                "SelfLoopWithResultSave",
                 message=(
                     f"Node '{self.name}' has a self-edge (self-loop) but enable_result_save is enabled. "
                     "If results are loaded from saved state, the self-loop will not continue because "
                     "include_self won't be set. Consider setting enable_result_save=False for self-loop nodes."
-                )
+                ),
             )
 
         # Store original args for potential self-loop (needed for NoPassDown mode)
@@ -1345,12 +1419,12 @@ class WorkGraphNode(Node, WorkNodeBase):
 
             self.log_debug(
                 {
-                    'node_name': self.name,
-                    'graph_depth': graph_depth,
-                    'self_loop_iteration': self_loop_iteration,
-                    'is_self_loop': has_self_edge and self_loop_iteration > 1,
+                    "node_name": self.name,
+                    "graph_depth": graph_depth,
+                    "self_loop_iteration": self_loop_iteration,
+                    "is_self_loop": has_self_edge and self_loop_iteration > 1,
                 },
-                'NodeExecution'
+                "NodeExecution",
             )
 
             if stop_flag == WorkGraphStopFlags.Continue:
@@ -1373,29 +1447,50 @@ class WorkGraphNode(Node, WorkNodeBase):
                                 all_var_args_relevant_if_func_support_var_args=True,
                                 all_named_args_relevant_if_func_support_named_args=True,
                                 args=args,
-                                **kwargs
+                                **kwargs,
                             )
 
                             # Graph visualization: emit RUNNING status (async path)
                             if self._graph_event_callback:
                                 try:
-                                    from agent_foundation.common.inferencers.graph_events import NodeStatusEvent, NodeStatus
-                                    _cb_result = self._graph_event_callback(NodeStatusEvent(node_id=self.name, status=NodeStatus.RUNNING))
+                                    from agent_foundation.common.inferencers.graph_events import (  # @manual
+                                        NodeStatus,
+                                        NodeStatusEvent,
+                                    )
+
+                                    _cb_result = self._graph_event_callback(
+                                        NodeStatusEvent(
+                                            node_id=self.name, status=NodeStatus.RUNNING
+                                        )
+                                    )
                                     if _cb_result is not None:
                                         import asyncio as _asyncio
+
                                         if _asyncio.iscoroutine(_cb_result):
                                             await _cb_result
                                 except Exception:
                                     pass
+
                             # On retry, re-emit RUNNING so the UI doesn't stick on ERROR
                             async def _on_retry(attempt, exc):
                                 if self._graph_event_callback:
                                     try:
-                                        from agent_foundation.common.inferencers.graph_events import NodeStatusEvent, NodeStatus
-                                        _r = self._graph_event_callback(NodeStatusEvent(node_id=self.name, status=NodeStatus.RUNNING))
+                                        from agent_foundation.common.inferencers.graph_events import (  # @manual
+                                            NodeStatus,
+                                            NodeStatusEvent,
+                                        )
+
+                                        _r = self._graph_event_callback(
+                                            NodeStatusEvent(
+                                                node_id=self.name,
+                                                status=NodeStatus.RUNNING,
+                                            )
+                                        )
                                         if _r is not None:
                                             import asyncio as _a
-                                            if _a.iscoroutine(_r): await _r
+
+                                            if _a.iscoroutine(_r):
+                                                await _r
                                     except Exception:
                                         pass
 
@@ -1409,47 +1504,74 @@ class WorkGraphNode(Node, WorkNodeBase):
                                 pre_condition=self.repeat_condition,
                                 args=rel_args,
                                 kwargs=rel_kwargs,
-                                default_return_or_raise=self._get_fallback_result(*args, **kwargs),
+                                default_return_or_raise=self._get_fallback_result(
+                                    *args, **kwargs
+                                ),
                                 on_retry_callback=_on_retry,
                             )
                             # Graph visualization: emit COMPLETED status after successful execution
                             if self._graph_event_callback:
                                 try:
-                                    from agent_foundation.common.inferencers.graph_events import NodeStatusEvent, NodeStatus
-                                    _cb_result = self._graph_event_callback(NodeStatusEvent(node_id=self.name, status=NodeStatus.COMPLETED))
+                                    from agent_foundation.common.inferencers.graph_events import (  # @manual
+                                        NodeStatus,
+                                        NodeStatusEvent,
+                                    )
+
+                                    _cb_result = self._graph_event_callback(
+                                        NodeStatusEvent(
+                                            node_id=self.name,
+                                            status=NodeStatus.COMPLETED,
+                                        )
+                                    )
                                     if _cb_result is not None:
                                         import asyncio as _asyncio
+
                                         if _asyncio.iscoroutine(_cb_result):
                                             await _cb_result
                                 except Exception as _e:
                                     import logging as _logging
+
                                     _logging.getLogger(__name__).warning(
-                                        "Graph COMPLETED callback failed for %s: %s", self.name, _e
+                                        "Graph COMPLETED callback failed for %s: %s",
+                                        self.name,
+                                        _e,
                                     )
                         except Exception as err:
                             import traceback
+
                             # Graph visualization: emit ERROR status
                             if self._graph_event_callback:
                                 try:
-                                    from agent_foundation.common.inferencers.graph_events import NodeStatusEvent, NodeStatus
-                                    _cb_result = self._graph_event_callback(NodeStatusEvent(node_id=self.name, status=NodeStatus.ERROR, error=str(err)))
+                                    from agent_foundation.common.inferencers.graph_events import (  # @manual
+                                        NodeStatus,
+                                        NodeStatusEvent,
+                                    )
+
+                                    _cb_result = self._graph_event_callback(
+                                        NodeStatusEvent(
+                                            node_id=self.name,
+                                            status=NodeStatus.ERROR,
+                                            error=str(err),
+                                        )
+                                    )
                                     if _cb_result is not None:
                                         import asyncio as _asyncio
+
                                         if _asyncio.iscoroutine(_cb_result):
                                             await _cb_result
                                 except Exception:
                                     pass
                             self.log_error(
                                 {
-                                    'name': self.name,
-                                    'executor': self.value,
-                                    'args': args,
-                                    'kwargs': kwargs,
-                                    'exception_type': type(err).__name__,
-                                    'exception_message': str(err),
-                                    'traceback': traceback.format_exc()
+                                    "name": self.name,
+                                    "executor": self.value,
+                                    "args": args,
+                                    "kwargs": kwargs,
+                                    "exception_type": type(err).__name__,
+                                    "exception_message": str(err),
+                                    "traceback": traceback.format_exc(),
                                 },
-                                'NodeExecutionFailed',
+                                "NodeExecutionFailed",
                             )
                             raise err
 
@@ -1459,28 +1581,43 @@ class WorkGraphNode(Node, WorkNodeBase):
                         _expansion_include_others = None
 
                         # Req 29: Stop-flag composition — detect (StopFlag, GraphExpansionResult) tuples
-                        if (isinstance(result, tuple) and len(result) == 2
-                                and isinstance(result[0], WorkGraphStopFlags)
-                                and isinstance(result[1], GraphExpansionResult)):
+                        if (
+                            isinstance(result, tuple)
+                            and len(result) == 2
+                            and isinstance(result[0], WorkGraphStopFlags)
+                            and isinstance(result[1], GraphExpansionResult)
+                        ):
                             _stop_flag_from_expansion = result[0]
                             expansion_result = result[1]
                             _expansion_include_self = expansion_result.include_self
                             _expansion_include_others = expansion_result.include_others
-                            result = self._handle_graph_expansion(expansion_result, *args, **kwargs)
+                            result = self._handle_graph_expansion(
+                                expansion_result, *args, **kwargs
+                            )
                         elif isinstance(result, GraphExpansionResult):
                             # Handle plain GraphExpansionResult before NextNodesSelector
                             _expansion_include_self = result.include_self
                             _expansion_include_others = result.include_others
-                            result = self._handle_graph_expansion(result, *args, **kwargs)
+                            result = self._handle_graph_expansion(
+                                result, *args, **kwargs
+                            )
 
                         # Handle NextNodesSelector return value
-                        include_self, include_others, result = self._handle_next_nodes_selector(result)
+                        include_self, include_others, result = (
+                            self._handle_next_nodes_selector(result)
+                        )
 
                         # Req 23.3: GraphExpansionResult include_self/include_others take precedence
                         # Only override if GER explicitly set non-default values
-                        if _expansion_include_self is not None and _expansion_include_self is not False:
+                        if (
+                            _expansion_include_self is not None
+                            and _expansion_include_self is not False
+                        ):
                             include_self = _expansion_include_self
-                        if _expansion_include_others is not None and _expansion_include_others is not True:
+                        if (
+                            _expansion_include_others is not None
+                            and _expansion_include_others is not True
+                        ):
                             include_others = _expansion_include_others
 
                         # Stop-flag resolution: if expansion already determined the flag, use it;
@@ -1488,21 +1625,31 @@ class WorkGraphNode(Node, WorkNodeBase):
                         if _stop_flag_from_expansion is not None:
                             stop_flag = _stop_flag_from_expansion
                         else:
-                            stop_flag, result = WorkGraphStopFlags.separate_stop_flag_from_result(result)
+                            stop_flag, result = (
+                                WorkGraphStopFlags.separate_stop_flag_from_result(
+                                    result
+                                )
+                            )
 
                         # Post-process hooks via call_maybe_async
-                        _result = await call_maybe_async(self._post_process, result, *args, **kwargs)
+                        _result = await call_maybe_async(
+                            self._post_process, result, *args, **kwargs
+                        )
                         if _result is not None:
                             result = _result
 
                         if self.enable_optional_post_process:
-                            _result = await call_maybe_async(self._optional_post_process, result, *args, **kwargs)
+                            _result = await call_maybe_async(
+                                self._optional_post_process, result, *args, **kwargs
+                            )
                             if _result is not None:
                                 result = _result
 
                         # Save results if configured
                         if self._should_save_result():
-                            result_path = self._get_result_path(self.name, *args, **kwargs)
+                            result_path = self._get_result_path(
+                                self.name, *args, **kwargs
+                            )
                             self._save_result(result, result_path)
                     finally:
                         if semaphore:
@@ -1513,7 +1660,9 @@ class WorkGraphNode(Node, WorkNodeBase):
             if self.next:
                 if stop_flag == WorkGraphStopFlags.Continue:
                     nargs, nkwargs = self._get_args_for_downstream(result, args, kwargs)
-                    nodes_to_run = self._select_downstream_nodes(include_others, include_self=False)
+                    nodes_to_run = self._select_downstream_nodes(
+                        include_others, include_self=False
+                    )
                 else:
                     nodes_to_run = [n for n in self.next if n is not self]
 
@@ -1527,6 +1676,7 @@ class WorkGraphNode(Node, WorkNodeBase):
                         # Capture loop variables explicitly to avoid closure-over-loop-variable bug
                         nargs_copy = tuple(nargs)
                         nkwargs_copy = dict(nkwargs)
+
                         # Don't gate downstream propagation with the semaphore —
                         # each downstream node acquires it for its own computation
                         # inside its _arun(). This prevents nested-lock deadlock
@@ -1537,8 +1687,9 @@ class WorkGraphNode(Node, WorkNodeBase):
                                 _output_idx=(downstream_results, i),
                                 _graph_depth=graph_depth + 1,
                                 _semaphore=_semaphore_or_map,
-                                **kw
+                                **kw,
                             )
+
                         tasks.append(_run_ds(idx, node, nargs_copy, nkwargs_copy))
                     elif stop_flag == WorkGraphStopFlags.AbstainResult:
                         # Notify downstream nodes of abstention
@@ -1554,7 +1705,9 @@ class WorkGraphNode(Node, WorkNodeBase):
                 if stop_flag == WorkGraphStopFlags.AbstainResult:
                     stop_flag = WorkGraphStopFlags.Continue
 
-                downstream_results = [r for r in downstream_results if r is not _DS_EMPTY]
+                downstream_results = [
+                    r for r in downstream_results if r is not _DS_EMPTY
+                ]
                 if downstream_results:
                     result = self._merge_downstream_results(downstream_results)
 
@@ -1582,7 +1735,11 @@ class WorkGraphNode(Node, WorkNodeBase):
             # =========================================================================
             # SELF-LOOP HANDLING (async): Same iterative pattern as sync _run()
             # =========================================================================
-            if include_self and has_self_edge and stop_flag == WorkGraphStopFlags.Continue:
+            if (
+                include_self
+                and has_self_edge
+                and stop_flag == WorkGraphStopFlags.Continue
+            ):
                 if self.result_pass_down_mode == ResultPassDownMode.NoPassDown:
                     args, kwargs = original_args, dict(original_kwargs)
                 else:
@@ -1600,24 +1757,26 @@ class WorkGraphNode(Node, WorkNodeBase):
 
                 self.log_debug(
                     {
-                        'node_name': self.name,
-                        'graph_depth': graph_depth,
-                        'completed_iteration': self_loop_iteration,
-                        'next_iteration': self_loop_iteration + 1,
+                        "node_name": self.name,
+                        "graph_depth": graph_depth,
+                        "completed_iteration": self_loop_iteration,
+                        "next_iteration": self_loop_iteration + 1,
                     },
-                    'SelfLoopContinue'
+                    "SelfLoopContinue",
                 )
                 continue
             else:
                 if has_self_edge and self_loop_iteration > 1:
                     self.log_debug(
                         {
-                            'node_name': self.name,
-                            'graph_depth': graph_depth,
-                            'total_iterations': self_loop_iteration,
-                            'exit_reason': 'include_self=False' if not include_self else f'stop_flag={stop_flag}',
+                            "node_name": self.name,
+                            "graph_depth": graph_depth,
+                            "total_iterations": self_loop_iteration,
+                            "exit_reason": "include_self=False"
+                            if not include_self
+                            else f"stop_flag={stop_flag}",
                         },
-                        'SelfLoopExit'
+                        "SelfLoopExit",
                     )
                 if has_self_edge and self._should_save_result():
                     result_path = self._get_result_path(self.name, *args, **kwargs)
@@ -1634,6 +1793,7 @@ class WorkGraphNode(Node, WorkNodeBase):
             return result
         else:
             return stop_flag, result
+
 
 @attrs(slots=False)
 class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
@@ -1818,7 +1978,7 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
     # Optional executor for queue-based parallel execution (Phase 4)
     # When set, _run() delegates to executor.run_async() instead of recursive execution
     # Use wrapper mode (threads) or router mode (multi-processing)
-    executor: Optional['QueuedExecutorBase'] = attrib(default=None, kw_only=True)
+    executor: Optional["QueuedExecutorBase"] = attrib(default=None, kw_only=True)
     use_async: bool = attrib(default=False, kw_only=True)
 
     # Optional concurrency limit for async execution path (_arun).
@@ -1834,7 +1994,9 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
     # Dynamic expansion configuration (Task 6.1)
     max_expansion_depth: int = attrib(default=0, kw_only=True)
     max_total_nodes: int = attrib(default=200, kw_only=True)
-    subgraph_registry: Optional[Dict[str, Callable]] = attrib(default=None, kw_only=True)
+    subgraph_registry: Optional[Dict[str, Callable]] = attrib(
+        default=None, kw_only=True
+    )
 
     def __attrs_post_init__(self):
         super().__attrs_post_init__()
@@ -1851,6 +2013,7 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
         graph has the correct expansion limits set.
         """
         from collections import deque
+
         visited = set()
         queue = deque(self.start_nodes)
         while queue:
@@ -1861,7 +2024,7 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
             visited.add(node_id)
             node._max_expansion_depth = self.max_expansion_depth
             node._max_total_nodes = self.max_total_nodes
-            for child in (node.next or []):
+            for child in node.next or []:
                 if id(child) not in visited:
                     queue.append(child)
 
@@ -1869,51 +2032,49 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
         return tuple(x for x in result if x is not None)
 
     def to_serializable_obj(
-        self, 
-        mode: str = 'auto',
-        _output_format: Optional[str] = None
+        self, mode: str = "auto", _output_format: Optional[str] = None
     ) -> Dict[str, Any]:
         """Serialize WorkGraph to dict with circular reference handling.
-        
+
         Traverses the graph starting from start_nodes and serializes all
         reachable nodes, handling circular references by tracking visited nodes.
-        
+
         Args:
             mode: Serialization mode ('auto', 'dict', 'pickle')
             _output_format: Target output format for conflict detection
-            
+
         Returns:
             Dict containing graph structure with version, start_node_names,
             nodes list, and config.
         """
         visited = set()
         nodes_data = []
-        
+
         def serialize_node(node):
             if node.name in visited:
                 return
             visited.add(node.name)
             nodes_data.append(node.to_serializable_obj())
-            for child in (node.next or []):
+            for child in node.next or []:
                 serialize_node(child)
-        
+
         for start_node in self.start_nodes:
             serialize_node(start_node)
-        
+
         return {
-            '_type': type(self).__name__,
-            '_module': type(self).__module__,
-            'version': '1.0',
-            'start_node_names': [n.name for n in self.start_nodes],
-            'nodes': nodes_data,
-            'config': {
-                'enable_result_save': (
-                    self.enable_result_save.value 
-                    if isinstance(self.enable_result_save, StepResultSaveOptions) 
+            "_type": type(self).__name__,
+            "_module": type(self).__module__,
+            "version": "1.0",
+            "start_node_names": [n.name for n in self.start_nodes],
+            "nodes": nodes_data,
+            "config": {
+                "enable_result_save": (
+                    self.enable_result_save.value
+                    if isinstance(self.enable_result_save, StepResultSaveOptions)
                     else self.enable_result_save
                 ),
-                'resume_with_saved_results': self.resume_with_saved_results,
-            }
+                "resume_with_saved_results": self.resume_with_saved_results,
+            },
         }
 
     def _clear_all_node_queues(self):
@@ -1930,14 +2091,15 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
             if id(node) in visited:
                 return
             visited.add(id(node))
-            if hasattr(node, '_queue'):
+            if hasattr(node, "_queue"):
                 # Clear the queue by replacing it
                 from queue import Queue
+
                 node._queue = Queue()
-            if hasattr(node, '_aqueue'):
+            if hasattr(node, "_aqueue"):
                 # asyncio.Queue has no .clear() method, so replace with a new instance
                 node._aqueue = asyncio.Queue()
-            for child in (node.next or []):
+            for child in node.next or []:
                 clear_node(child)
 
         for start_node in self.start_nodes:
@@ -1958,7 +2120,7 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
         for node in self._all_nodes():
             node._graph_event_callback = callback
 
-    def _all_nodes(self) -> List['WorkGraphNode']:
+    def _all_nodes(self) -> List["WorkGraphNode"]:
         """Get all nodes reachable from start_nodes via DFS."""
         visited = set()
         nodes = []
@@ -1968,7 +2130,7 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
                 return
             visited.add(id(node))
             nodes.append(node)
-            for child in (node.next or []):
+            for child in node.next or []:
                 collect(child)
 
         for start_node in self.start_nodes:
@@ -2014,7 +2176,9 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
             result_id = f"__graph_expansion__{node.name}"
             try:
                 result_path = node._resolve_result_path(result_id, *args, **kwargs)
-                exists = node._exists_result(result_id=result_id, result_path=result_path)
+                exists = node._exists_result(
+                    result_id=result_id, result_path=result_path
+                )
             except (NotImplementedError, Exception):
                 exists = None
 
@@ -2038,6 +2202,7 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
                     try:
                         import importlib
                         import operator
+
                         module = importlib.import_module(factory_module)
                         factory = operator.attrgetter(factory_qualname)(module)
                         reconstructed_subgraph = factory(seed)
@@ -2050,9 +2215,11 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
 
                 # Priority 2: Registry-based
                 if reconstructed_subgraph is None:
-                    if (self.subgraph_registry is not None
-                            and expansion_id is not None
-                            and expansion_id in self.subgraph_registry):
+                    if (
+                        self.subgraph_registry is not None
+                        and expansion_id is not None
+                        and expansion_id in self.subgraph_registry
+                    ):
                         factory = self.subgraph_registry[expansion_id]
                         reconstructed_subgraph = factory(expansion_id)
 
@@ -2069,14 +2236,17 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
                 # Re-attach subgraph to the node
                 if isinstance(reconstructed_subgraph, SubgraphSpec):
                     was_insert_mode = record.get("was_insert_mode", False)
-                    original_downstream_names = record.get("original_downstream_names", [])
+                    original_downstream_names = record.get(
+                        "original_downstream_names", []
+                    )
 
                     if was_insert_mode and original_downstream_names:
                         # Insert-mode reconstruction: detach original downstream,
                         # attach subgraph entries, wire subgraph leaves to original downstream
                         original_downstream = [
-                            n for n in (node.next or []) if n is not node
-                            and n.name in original_downstream_names
+                            n
+                            for n in (node.next or [])
+                            if n is not node and n.name in original_downstream_names
                         ]
                         for child in original_downstream:
                             node.next.remove(child)
@@ -2088,7 +2258,8 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
                         sg_node_ids = {id(n) for n in reconstructed_subgraph.nodes}
                         for sg_node in reconstructed_subgraph.nodes:
                             has_internal_next = any(
-                                id(n) in sg_node_ids for n in (sg_node.next or [])
+                                id(n) in sg_node_ids
+                                for n in (sg_node.next or [])
                                 if n is not sg_node
                             )
                             if not has_internal_next:
@@ -2117,7 +2288,7 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
                     )
 
             # Continue BFS to downstream nodes
-            for next_node in (node.next or []):
+            for next_node in node.next or []:
                 if id(next_node) not in visited:
                     queue.append(next_node)
 
@@ -2127,9 +2298,9 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
 
     def _create_wrapper_callable(
         self,
-        node: 'WorkGraphNode',
+        node: "WorkGraphNode",
         upstream_inputs: Dict[str, List],
-        failed_parents: Dict[str, Set[str]]
+        failed_parents: Dict[str, Set[str]],
     ) -> Callable:
         """
         Create a wrapper callable for wrapper mode (threads).
@@ -2150,14 +2321,16 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
         def wrapper(*args, **kwargs):
             # Execute the node's value function
             from rich_python_utils.common_utils import get_relevant_args
-            from rich_python_utils.common_utils.function_helper import execute_with_retry
+            from rich_python_utils.common_utils.function_helper import (
+                execute_with_retry,
+            )
 
             rel_args, rel_kwargs = get_relevant_args(
                 func=node.value,
                 all_var_args_relevant_if_func_support_var_args=True,
                 all_named_args_relevant_if_func_support_named_args=True,
                 args=args,
-                **kwargs
+                **kwargs,
             )
 
             result = execute_with_retry(
@@ -2179,7 +2352,9 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
                 result = node._handle_graph_expansion(expansion_result, *args, **kwargs)
 
             # Handle NextNodesSelector
-            include_self, include_others, actual_result = node._handle_next_nodes_selector(result)
+            include_self, include_others, actual_result = (
+                node._handle_next_nodes_selector(result)
+            )
 
             # Get downstream nodes
             downstream = node._select_downstream_nodes(include_others, include_self)
@@ -2198,25 +2373,37 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
 
                     new_task_id = f"{node.name}::selfloop::{uuid.uuid4().hex[:8]}"
                     task = Task(
-                        callable=self._create_wrapper_callable(node, upstream_inputs, failed_parents),
+                        callable=self._create_wrapper_callable(
+                            node, upstream_inputs, failed_parents
+                        ),
                         args=self_args,
                         kwargs=self_kwargs,
-                        task_id=new_task_id
+                        task_id=new_task_id,
                     )
                     next_tasks.append(task)
                 else:
                     # Regular downstream node
-                    num_parents = len_([p for p in (downstream_node.previous or []) if p is not downstream_node])
-                    nargs, nkwargs = node._get_args_for_downstream(actual_result, args, kwargs)
+                    num_parents = len_(
+                        [
+                            p
+                            for p in (downstream_node.previous or [])
+                            if p is not downstream_node
+                        ]
+                    )
+                    nargs, nkwargs = node._get_args_for_downstream(
+                        actual_result, args, kwargs
+                    )
 
                     if num_parents <= 1:
                         # Single parent - create task immediately
                         new_task_id = f"{downstream_node.name}::{uuid.uuid4().hex[:8]}"
                         task = Task(
-                            callable=self._create_wrapper_callable(downstream_node, upstream_inputs, failed_parents),
+                            callable=self._create_wrapper_callable(
+                                downstream_node, upstream_inputs, failed_parents
+                            ),
                             args=nargs,
                             kwargs=nkwargs,
-                            task_id=new_task_id
+                            task_id=new_task_id,
                         )
                         next_tasks.append(task)
                     else:
@@ -2233,8 +2420,10 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
 
                         if successful + failed >= num_parents:
                             # All parents accounted for - merge inputs and create task
-                            merged_args, merged_kwargs = downstream_node._merge_upstream_inputs(
-                                upstream_inputs[downstream_name]
+                            merged_args, merged_kwargs = (
+                                downstream_node._merge_upstream_inputs(
+                                    upstream_inputs[downstream_name]
+                                )
                             )
 
                             # Clear for potential re-execution
@@ -2244,10 +2433,12 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
 
                             new_task_id = f"{downstream_name}::{uuid.uuid4().hex[:8]}"
                             task = Task(
-                                callable=self._create_wrapper_callable(downstream_node, upstream_inputs, failed_parents),
+                                callable=self._create_wrapper_callable(
+                                    downstream_node, upstream_inputs, failed_parents
+                                ),
                                 args=merged_args,
                                 kwargs=merged_kwargs,
-                                task_id=new_task_id
+                                task_id=new_task_id,
                             )
                             next_tasks.append(task)
 
@@ -2260,7 +2451,7 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
         upstream_inputs: Dict[str, List],
         failed_parents: Dict[str, Set[str]],
         *args,
-        **kwargs
+        **kwargs,
     ) -> List:
         """
         Create initial tasks with wrapper callables (for wrapper mode).
@@ -2278,13 +2469,15 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
 
         tasks = []
         for node in self.start_nodes:
-            wrapper = self._create_wrapper_callable(node, upstream_inputs, failed_parents)
+            wrapper = self._create_wrapper_callable(
+                node, upstream_inputs, failed_parents
+            )
             task = Task(
                 callable=wrapper,
                 task_id=node.name,
                 args=args,
                 kwargs=kwargs,
-                name=node.name
+                name=node.name,
             )
             tasks.append(task)
         return tasks
@@ -2316,7 +2509,7 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
         def router(task_id: str, result: Any, task_state: TaskState) -> List:
             # Extract node name from task_id using "::" delimiter
             # Format: "node_name::uuid" (e.g., "my_node::abc123")
-            node_name = task_to_node.get(task_id) or task_id.rsplit('::', 1)[0]
+            node_name = task_to_node.get(task_id) or task_id.rsplit("::", 1)[0]
             node = node_map[node_name]
 
             # ============================================================
@@ -2326,12 +2519,18 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
                 next_tasks = []
 
                 # Track this parent as failed for all its downstream nodes
-                for downstream_node in (node.next or []):
+                for downstream_node in node.next or []:
                     if downstream_node is node:
                         continue  # Skip self-edge - failed node won't loop
 
                     dn_name = downstream_node.name
-                    num_parents = len_([p for p in (downstream_node.previous or []) if p is not downstream_node])
+                    num_parents = len_(
+                        [
+                            p
+                            for p in (downstream_node.previous or [])
+                            if p is not downstream_node
+                        ]
+                    )
 
                     # Track this parent as failed
                     if dn_name not in failed_parents:
@@ -2345,8 +2544,10 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
                     if successful + failed >= num_parents:
                         if successful > 0:
                             # At least one parent succeeded - run with partial inputs
-                            merged_args, merged_kwargs = downstream_node._merge_upstream_inputs(
-                                upstream_inputs[dn_name]
+                            merged_args, merged_kwargs = (
+                                downstream_node._merge_upstream_inputs(
+                                    upstream_inputs[dn_name]
+                                )
                             )
                             new_task_id = f"{dn_name}::{uuid.uuid4().hex[:8]}"
                             task_to_node[new_task_id] = dn_name
@@ -2354,7 +2555,7 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
                                 callable=downstream_node.value,
                                 args=merged_args,
                                 kwargs=merged_kwargs,
-                                task_id=new_task_id
+                                task_id=new_task_id,
                             )
                             next_tasks.append(task)
                         # else: All parents failed - skip downstream entirely
@@ -2372,13 +2573,17 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
             # Handle GraphExpansionResult before NextNodesSelector
             if isinstance(result, GraphExpansionResult):
                 expansion_result = result
-                result = node._handle_graph_expansion(expansion_result, *task_state.input_args, **task_state.input_kwargs)
+                result = node._handle_graph_expansion(
+                    expansion_result, *task_state.input_args, **task_state.input_kwargs
+                )
                 # Update node_map with newly added subgraph nodes
                 for sg_node in expansion_result.subgraph.nodes:
                     node_map[sg_node.name] = sg_node
 
             # Handle NextNodesSelector
-            include_self, include_others, actual_result = node._handle_next_nodes_selector(result)
+            include_self, include_others, actual_result = (
+                node._handle_next_nodes_selector(result)
+            )
 
             # Get downstream nodes
             downstream = node._select_downstream_nodes(include_others, include_self)
@@ -2393,7 +2598,9 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
                         self_kwargs = task_state.input_kwargs
                     else:
                         self_args, self_kwargs = node._get_args_for_downstream(
-                            actual_result, task_state.input_args, task_state.input_kwargs
+                            actual_result,
+                            task_state.input_args,
+                            task_state.input_kwargs,
                         )
 
                     new_task_id = f"{node.name}::selfloop::{uuid.uuid4().hex[:8]}"
@@ -2402,12 +2609,18 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
                         callable=node.value,  # Raw function - same node!
                         args=self_args,
                         kwargs=self_kwargs,
-                        task_id=new_task_id
+                        task_id=new_task_id,
                     )
                     next_tasks.append(task)
                 else:
                     # Regular downstream node
-                    num_parents = len_([p for p in (downstream_node.previous or []) if p is not downstream_node])
+                    num_parents = len_(
+                        [
+                            p
+                            for p in (downstream_node.previous or [])
+                            if p is not downstream_node
+                        ]
+                    )
                     nargs, nkwargs = node._get_args_for_downstream(
                         actual_result, task_state.input_args, task_state.input_kwargs
                     )
@@ -2420,7 +2633,7 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
                             callable=downstream_node.value,  # Raw function!
                             args=nargs,
                             kwargs=nkwargs,
-                            task_id=new_task_id
+                            task_id=new_task_id,
                         )
                         next_tasks.append(task)
                     else:
@@ -2437,8 +2650,10 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
 
                         if successful + failed >= num_parents:
                             # All parents accounted for - merge inputs and create task
-                            merged_args, merged_kwargs = downstream_node._merge_upstream_inputs(
-                                upstream_inputs[downstream_name]
+                            merged_args, merged_kwargs = (
+                                downstream_node._merge_upstream_inputs(
+                                    upstream_inputs[downstream_name]
+                                )
                             )
 
                             # Clear for potential re-execution (next wave)
@@ -2452,7 +2667,7 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
                                 callable=downstream_node.value,
                                 args=merged_args,
                                 kwargs=merged_kwargs,
-                                task_id=new_task_id
+                                task_id=new_task_id,
                             )
                             next_tasks.append(task)
                         else:
@@ -2487,7 +2702,7 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
                 task_id=node.name,
                 args=args,
                 kwargs=kwargs,
-                name=node.name
+                name=node.name,
             )
             for node in self.start_nodes
         ]
@@ -2582,34 +2797,34 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
                 except Exception as err:
                     if self.enable_result_save == StepResultSaveOptions.OnError:
                         # On error, if OnError saving is enabled, save partial results
-                        for prev_result, prev_is_loaded_from_saved_result, prev_node in zip(
-                                output,
-                                is_loaded_from_saved_results,
-                                self.start_nodes
+                        for (
+                            prev_result,
+                            prev_is_loaded_from_saved_result,
+                            prev_node,
+                        ) in zip(
+                            output, is_loaded_from_saved_results, self.start_nodes
                         ):  # type: WorkGraphNode
                             if (
-                                    prev_node.enable_result_save == StepResultSaveOptions.OnError
-                                    and not prev_is_loaded_from_saved_result
+                                prev_node.enable_result_save
+                                == StepResultSaveOptions.OnError
+                                and not prev_is_loaded_from_saved_result
                             ):
                                 prev_node._save_result(
                                     prev_result,
                                     output_path=prev_node._get_result_path(
                                         prev_node.name, *args, **kwargs
-                                    )
+                                    ),
                                 )
                     raise err
 
         result = self.post_process(output, *args, **kwargs)
         if (
-                self.enable_result_save is True or
-                self.enable_result_save == StepResultSaveOptions.Always
+            self.enable_result_save is True
+            or self.enable_result_save == StepResultSaveOptions.Always
         ):
             # If Always saving is enabled, save the result of this node
             result_path = self._get_result_path(self.name, *args, **kwargs)
-            self._save_result(
-                result,
-                output_path=result_path
-            )
+            self._save_result(result, output_path=result_path)
         return result
 
     async def _arun(self, *args, **kwargs):
@@ -2673,9 +2888,7 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
             # semaphore deadlock that occurs when the caller holds a slot while
             # the node's downstream propagation tries to acquire another slot.
             flag = await node.arun(
-                *args, **kwargs,
-                _output_idx=(output, idx),
-                _semaphore=semaphore
+                *args, **kwargs, _output_idx=(output, idx), _semaphore=semaphore
             )
             if flag == WorkGraphStopFlags.Terminate:
                 terminate_event.set()
@@ -2685,7 +2898,9 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Post-filter: separate successes from exceptions
-        exceptions = [(i, r) for i, r in enumerate(results) if isinstance(r, BaseException)]
+        exceptions = [
+            (i, r) for i, r in enumerate(results) if isinstance(r, BaseException)
+        ]
 
         if exceptions:
             if self.enable_result_save == StepResultSaveOptions.OnError:
@@ -2701,7 +2916,9 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
                     ):
                         node._save_result(
                             result_val,
-                            output_path=node._get_result_path(node.name, *args, **kwargs)
+                            output_path=node._get_result_path(
+                                node.name, *args, **kwargs
+                            ),
                         )
             raise exceptions[0][1]
 
@@ -2714,7 +2931,9 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
         if _result is not None:
             output = _result
         if self.enable_optional_post_process:
-            _result = await call_maybe_async(self._optional_post_process, output, *args, **kwargs)
+            _result = await call_maybe_async(
+                self._optional_post_process, output, *args, **kwargs
+            )
             if _result is not None:
                 output = _result
 

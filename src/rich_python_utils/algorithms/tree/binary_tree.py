@@ -1,20 +1,41 @@
-from collections import deque, defaultdict
+from collections import defaultdict, deque
 from math import inf
-from typing import Any, Callable, Union, List, TypeVar, Optional, Generic, Tuple, Sequence, Iterator, Iterable
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
-from rich_python_utils.algorithms.array.binary_search import binary_post_order_result_compute
-from rich_python_utils.common_utils.array_helper import index_of_last_non_null, index_
+from rich_python_utils.algorithms.array.binary_search import (
+    binary_post_order_result_compute,
+)
+from rich_python_utils.common_utils.array_helper import index_, index_of_last_non_null
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class BinaryTree(Generic[T]):
-    def __init__(self, value: T, left: Optional['BinaryTree[T]'] = None, right: Optional['BinaryTree[T]'] = None):
+    def __init__(
+        self,
+        value: T,
+        left: Optional["BinaryTree[T]"] = None,
+        right: Optional["BinaryTree[T]"] = None,
+    ):
         self.value = value
         self.left = left
         self.right = right
 
-    def in_order_dfs(self, yield_value: bool = True) -> Iterator[Union[T, 'BinaryTree[T]']]:
+    def in_order_dfs(
+        self, yield_value: bool = True
+    ) -> Iterator[Union[T, "BinaryTree[T]"]]:
         """
         Performs an in-order traversal of the binary tree.
 
@@ -75,7 +96,7 @@ class BinaryTree(Generic[T]):
             - Space Complexity: O(h), where h is the height of the tree, due to the recursion stack.
         """
 
-        def _dfs(node: 'BinaryTree'):
+        def _dfs(node: "BinaryTree"):
             if node.left is not None:
                 yield from _dfs(node.left)
             yield node.value if yield_value else node
@@ -84,7 +105,9 @@ class BinaryTree(Generic[T]):
 
         yield from _dfs(self)
 
-    def post_order_dfs(self, yield_value: bool = True) -> Iterator[Union[T, 'BinaryTree[T]']]:
+    def post_order_dfs(
+        self, yield_value: bool = True
+    ) -> Iterator[Union[T, "BinaryTree[T]"]]:
         """
         Performs a post-order traversal of the binary tree.
 
@@ -138,7 +161,7 @@ class BinaryTree(Generic[T]):
             - Space Complexity: O(h), where h is the height of the tree, due to the recursion stack.
         """
 
-        def _dfs(node: 'BinaryTree'):
+        def _dfs(node: "BinaryTree"):
             if node.left is not None:
                 yield from _dfs(node.left)
             if node.right is not None:
@@ -147,7 +170,9 @@ class BinaryTree(Generic[T]):
 
         yield from _dfs(self)
 
-    def pre_order_dfs(self, yield_value: bool = True) -> Iterator[Union[T, 'BinaryTree[T]']]:
+    def pre_order_dfs(
+        self, yield_value: bool = True
+    ) -> Iterator[Union[T, "BinaryTree[T]"]]:
         """
         Performs a pre-order traversal of the binary tree.
 
@@ -201,7 +226,7 @@ class BinaryTree(Generic[T]):
             - Space Complexity: O(h), where h is the height of the tree, due to the recursion stack.
         """
 
-        def _dfs(node: 'BinaryTree'):
+        def _dfs(node: "BinaryTree"):
             yield node.value if yield_value else node
             if node.left is not None:
                 yield from _dfs(node.left)
@@ -211,11 +236,14 @@ class BinaryTree(Generic[T]):
         yield from _dfs(self)
 
     def post_order_dfs_with_result_compute(
-            self,
-            compute_at_parent_node: Callable = None,
-            pass_parent_node_value: bool = True,
-            early_termination_at_parent_node: Callable[[Union['BinaryTree[T]', Any], ...], Any] = None,
-            *args, **kwargs
+        self,
+        compute_at_parent_node: Callable = None,
+        pass_parent_node_value: bool = True,
+        early_termination_at_parent_node: Callable[
+            [Union["BinaryTree[T]", Any], ...], Any
+        ] = None,
+        *args,
+        **kwargs,
     ):
         """
         Performs a post-order traversal of the binary tree and computes a result at each node.
@@ -327,7 +355,9 @@ class BinaryTree(Generic[T]):
 
         """
         if early_termination_at_parent_node is not None:
-            early_termination_result = early_termination_at_parent_node(self, *args, **kwargs)
+            early_termination_result = early_termination_at_parent_node(
+                self, *args, **kwargs
+            )
             if early_termination_result is not None:
                 return early_termination_result
 
@@ -337,14 +367,16 @@ class BinaryTree(Generic[T]):
                 compute_at_parent_node=compute_at_parent_node,
                 pass_parent_node_value=pass_parent_node_value,
                 early_termination_at_parent_node=early_termination_at_parent_node,
-                *args, **kwargs
+                *args,
+                **kwargs,
             )
         if self.right is not None:
             right_result = self.right.post_order_dfs_with_result_compute(
                 compute_at_parent_node=compute_at_parent_node,
                 pass_parent_node_value=pass_parent_node_value,
                 early_termination_at_parent_node=early_termination_at_parent_node,
-                *args, **kwargs
+                *args,
+                **kwargs,
             )
         if compute_at_parent_node is not None:
             return compute_at_parent_node(
@@ -352,17 +384,18 @@ class BinaryTree(Generic[T]):
                 left_result,  # result from left child
                 right_result,  # result from right child
                 *args,
-                **kwargs
+                **kwargs,
             )
         else:
             return left_result or right_result
 
     def pre_order_dfs_with_result_compute(
-            self,
-            compute_at_parent_node: Callable = None,
-            pass_parent_node_value: bool = True,
-            initial_state: Optional[Any] = None,
-            *args, **kwargs
+        self,
+        compute_at_parent_node: Callable = None,
+        pass_parent_node_value: bool = True,
+        initial_state: Optional[Any] = None,
+        *args,
+        **kwargs,
     ):
         """
         Performs a pre-order traversal of the binary tree and computes a result at each node.
@@ -463,14 +496,11 @@ class BinaryTree(Generic[T]):
             nonlocal result
 
             result, state = compute_at_parent_node(
-                (
-                    parent_node.value
-                    if pass_parent_node_value
-                    else parent_node
-                ),
+                (parent_node.value if pass_parent_node_value else parent_node),
                 result,
                 state,
-                *args, **kwargs
+                *args,
+                **kwargs,
             )
             if parent_node.left:
                 _dfs(parent_node.left, state)
@@ -482,21 +512,22 @@ class BinaryTree(Generic[T]):
 
     # region Level BFS
     def _level_bfs_with_state_handler(
-            self,
-            yield_value: bool,
-            decodable: bool,
-            level_yield_cond: Callable[['BinaryTree', int, int], bool],
-            state_handler: Callable[['BinaryTree[T]', Any, bool, ...], Any],
-            unpack_singleton_level: bool,
-            *args, **kwargs
-    ) -> Iterator[List[Union['BinaryTree[T]', T, None]]]:
-        queue = deque([
-            (self, state_handler(self, None, None, *args, **kwargs))
-        ])
+        self,
+        yield_value: bool,
+        decodable: bool,
+        level_yield_cond: Callable[["BinaryTree", int, int], bool],
+        state_handler: Callable[["BinaryTree[T]", Any, bool, ...], Any],
+        unpack_singleton_level: bool,
+        *args,
+        **kwargs,
+    ) -> Iterator[List[Union["BinaryTree[T]", T, None]]]:
+        queue = deque([(self, state_handler(self, None, None, *args, **kwargs))])
         if level_yield_cond is not None:
             # region customized level yield
             if decodable:
-                raise ValueError("'decodable' cannot be True while 'level_yield_cond' is specified")
+                raise ValueError(
+                    "'decodable' cannot be True while 'level_yield_cond' is specified"
+                )
 
             while queue:
                 level_size = len(queue)
@@ -507,16 +538,32 @@ class BinaryTree(Generic[T]):
                     if level_yield_cond(node, i, level_size):
                         # Append node or value based on the flag
                         if node:
-                            level.append((node.value, state) if yield_value else (node, state))
+                            level.append(
+                                (node.value, state) if yield_value else (node, state)
+                            )
                         else:
                             level.append((None, None))
 
                     if node:
                         # Enqueue children
                         if node.left:
-                            queue.append((node.left, state_handler(node.left, state, True, *args, **kwargs)))
+                            queue.append(
+                                (
+                                    node.left,
+                                    state_handler(
+                                        node.left, state, True, *args, **kwargs
+                                    ),
+                                )
+                            )
                         if node.right:
-                            queue.append((node.right, state_handler(node.right, state, False, *args, **kwargs)))
+                            queue.append(
+                                (
+                                    node.right,
+                                    state_handler(
+                                        node.right, state, False, *args, **kwargs
+                                    ),
+                                )
+                            )
 
                 if len(level) == 1 and unpack_singleton_level:
                     level = level[0]
@@ -535,19 +582,25 @@ class BinaryTree(Generic[T]):
                 for _ in range(level_size):
                     node, state = queue.popleft()
                     if node:
-                        level.append((node.value, state) if yield_value else (node, state))
+                        level.append(
+                            (node.value, state) if yield_value else (node, state)
+                        )
 
                         # Enqueue children with state transformations
                         queue.append(
                             (
                                 node.left,
-                                state_handler(node.left, state, True, *args, **kwargs) if node.left else None
+                                state_handler(node.left, state, True, *args, **kwargs)
+                                if node.left
+                                else None,
                             )
                         )
                         queue.append(
                             (
                                 node.right,
-                                state_handler(node.right, state, False, *args, **kwargs) if node.right else None
+                                state_handler(node.right, state, False, *args, **kwargs)
+                                if node.right
+                                else None,
                             )
                         )
                         if node.left or node.right:
@@ -558,7 +611,7 @@ class BinaryTree(Generic[T]):
 
                 if next_queue_all_null:
                     # For the last level, remove all tailing nulls
-                    level = level[:(index_(level, lambda x: x[0] is not None) + 1)]
+                    level = level[: (index_(level, lambda x: x[0] is not None) + 1)]
 
                 if len(level) == 1 and unpack_singleton_level:
                     level = level[0]
@@ -577,13 +630,29 @@ class BinaryTree(Generic[T]):
                 for _ in range(level_size):
                     node, state = queue.popleft()
                     if node:
-                        level.append((node.value, state) if yield_value else (node, state))
+                        level.append(
+                            (node.value, state) if yield_value else (node, state)
+                        )
 
                         # Enqueue children with state transformations
                         if node.left:
-                            queue.append((node.left, state_handler(node.left, state, True, *args, **kwargs)))
+                            queue.append(
+                                (
+                                    node.left,
+                                    state_handler(
+                                        node.left, state, True, *args, **kwargs
+                                    ),
+                                )
+                            )
                         if node.right:
-                            queue.append((node.right, state_handler(node.right, state, False, *args, **kwargs)))
+                            queue.append(
+                                (
+                                    node.right,
+                                    state_handler(
+                                        node.right, state, False, *args, **kwargs
+                                    ),
+                                )
+                            )
 
                 if len(level) == 1 and unpack_singleton_level:
                     level = level[0]
@@ -592,17 +661,19 @@ class BinaryTree(Generic[T]):
             # endregion
 
     def _level_bfs(
-            self,
-            yield_value: bool,
-            decodable: bool,
-            level_yield_cond: Callable[['BinaryTree', int, int], bool],
-            unpack_singleton_level: bool,
-    ) -> Iterator[List[Union['BinaryTree[T]', T, None]]]:
+        self,
+        yield_value: bool,
+        decodable: bool,
+        level_yield_cond: Callable[["BinaryTree", int, int], bool],
+        unpack_singleton_level: bool,
+    ) -> Iterator[List[Union["BinaryTree[T]", T, None]]]:
         queue = deque([self])
         if level_yield_cond is not None:
             # region customized level yield
             if decodable:
-                raise ValueError("'decodable' cannot be True while 'level_yield_cond' is specified")
+                raise ValueError(
+                    "'decodable' cannot be True while 'level_yield_cond' is specified"
+                )
 
             while queue:
                 level_size = len(queue)
@@ -655,7 +726,7 @@ class BinaryTree(Generic[T]):
 
                 if next_queue_all_null:
                     # For the last level, remove all tailing nulls
-                    level = level[:(index_of_last_non_null(level) + 1)]
+                    level = level[: (index_of_last_non_null(level) + 1)]
 
                 if len(level) == 1 and unpack_singleton_level:
                     level = level[0]
@@ -690,13 +761,13 @@ class BinaryTree(Generic[T]):
             # endregion
 
     def level_bfs(
-            self,
-            yield_value: bool = False,
-            decodable: bool = False,
-            level_yield_cond: Callable[['BinaryTree', int, int], bool] = None,
-            state_handler: Callable[['BinaryTree[T]', Any, bool, ...], Any] = None,
-            unpack_singleton_level: bool = False,
-    ) -> Iterator[List[Union['BinaryTree[T]', T, None]]]:
+        self,
+        yield_value: bool = False,
+        decodable: bool = False,
+        level_yield_cond: Callable[["BinaryTree", int, int], bool] = None,
+        state_handler: Callable[["BinaryTree[T]", Any, bool, ...], Any] = None,
+        unpack_singleton_level: bool = False,
+    ) -> Iterator[List[Union["BinaryTree[T]", T, None]]]:
         """
         Perform a level-by-level Breadth-First Search (BFS) traversal of the binary tree.
 
@@ -955,7 +1026,7 @@ class BinaryTree(Generic[T]):
                 yield_value=yield_value,
                 decodable=decodable,
                 level_yield_cond=level_yield_cond,
-                unpack_singleton_level=unpack_singleton_level
+                unpack_singleton_level=unpack_singleton_level,
             )
         else:
             return self._level_bfs_with_state_handler(
@@ -963,19 +1034,20 @@ class BinaryTree(Generic[T]):
                 decodable=decodable,
                 level_yield_cond=level_yield_cond,
                 state_handler=state_handler,
-                unpack_singleton_level=unpack_singleton_level
+                unpack_singleton_level=unpack_singleton_level,
             )
 
     # endregion
 
     def bfs(
-            self,
-            yield_value: bool = False,
-            decodable: bool = False,
-            allow_tailing_nones: bool = True,
-            state_handler: Callable[['BinaryTree[T]', Any, bool, ...], Any] = None,
-            *args, **kwargs
-    ) -> Iterator[Union['BinaryTree[T]', T]]:
+        self,
+        yield_value: bool = False,
+        decodable: bool = False,
+        allow_tailing_nones: bool = True,
+        state_handler: Callable[["BinaryTree[T]", Any, bool, ...], Any] = None,
+        *args,
+        **kwargs,
+    ) -> Iterator[Union["BinaryTree[T]", T]]:
         """Perform a Breadth-First Search (BFS) traversal of the binary tree as an iterator.
 
         Args:
@@ -1122,28 +1194,35 @@ class BinaryTree(Generic[T]):
                     # endregion
                 else:
                     queue = deque(
-                        [(
-                            self,
-                            state_handler(self, None, None, *args, **kwargs)
-                        )]
+                        [(self, state_handler(self, None, None, *args, **kwargs))]
                     )
                     while queue:
                         node, state = queue.popleft()
                         if node:
                             yield (node.value, state) if yield_value else (node, state)
-                            queue.append((
-                                node.left,
-                                state_handler(node.left, state, True, *args, **kwargs)
-                            ))
-                            queue.append((
-                                node.right,
-                                state_handler(node.right, state, False, *args, **kwargs)
-                            ))
+                            queue.append(
+                                (
+                                    node.left,
+                                    state_handler(
+                                        node.left, state, True, *args, **kwargs
+                                    ),
+                                )
+                            )
+                            queue.append(
+                                (
+                                    node.right,
+                                    state_handler(
+                                        node.right, state, False, *args, **kwargs
+                                    ),
+                                )
+                            )
                         else:
                             yield (None, state)
             else:
                 # region only leveraging level traversal can elegantly remove tailing None values for decoddable mode
-                for level in self.level_bfs(yield_value=yield_value, decodable=True, state_handler=state_handler):
+                for level in self.level_bfs(
+                    yield_value=yield_value, decodable=True, state_handler=state_handler
+                ):
                     yield from level
                 # endregion
         else:
@@ -1162,7 +1241,9 @@ class BinaryTree(Generic[T]):
                         if node.right:
                             queue.append(node.right)
             else:
-                queue = deque([(self, state_handler(self, None, None, *args, **kwargs))])
+                queue = deque(
+                    [(self, state_handler(self, None, None, *args, **kwargs))]
+                )
                 while queue:
                     node, state = queue.popleft()
                     if node:
@@ -1174,20 +1255,26 @@ class BinaryTree(Generic[T]):
                             queue.append(
                                 (
                                     node.left,
-                                    state_handler(node.left, state, True, *args, **kwargs)
+                                    state_handler(
+                                        node.left, state, True, *args, **kwargs
+                                    ),
                                 )
                             )
                         if node.right:
                             queue.append(
                                 (
                                     node.right,
-                                    state_handler(node.right, state, False, *args, **kwargs)
+                                    state_handler(
+                                        node.right, state, False, *args, **kwargs
+                                    ),
                                 )
                             )
             # endregion
 
     @classmethod
-    def decode_bfs(cls, value_seq: Sequence, pop_queue: Callable[[Sequence], Any] = None):
+    def decode_bfs(
+        cls, value_seq: Sequence, pop_queue: Callable[[Sequence], Any] = None
+    ):
         """Decode a sequence of values into a binary tree using level-order traversal (BFS).
 
         Args:
@@ -1235,20 +1322,14 @@ class BinaryTree(Generic[T]):
         """
         if value_seq:
             queue = deque(value_seq)
-            root = cls(
-                queue.popleft()
-                if pop_queue is None
-                else pop_queue(queue)
-            )
+            root = cls(queue.popleft() if pop_queue is None else pop_queue(queue))
             level = [root]
             while level:
                 next_level = []
                 for i in range(len(level)):
                     if queue:
                         curr = (
-                            queue.popleft()
-                            if pop_queue is None
-                            else pop_queue(queue)
+                            queue.popleft() if pop_queue is None else pop_queue(queue)
                         )
                         if curr is not None:
                             curr = cls(curr)
@@ -1257,9 +1338,7 @@ class BinaryTree(Generic[T]):
                             next_level.append(curr)
                     if queue:
                         curr = (
-                            queue.popleft()
-                            if pop_queue is None
-                            else pop_queue(queue)
+                            queue.popleft() if pop_queue is None else pop_queue(queue)
                         )
                         if curr is not None:
                             curr = cls(curr)
@@ -1406,7 +1485,7 @@ class BinaryTree(Generic[T]):
             current_diameter = max(
                 left_diameter,  # Diameter in the left subtree
                 right_diameter,  # Diameter in the right subtree
-                left_depth + right_depth  # Path passing through this node
+                left_depth + right_depth,  # Path passing through this node
             )
 
             return current_diameter, current_depth
@@ -1463,15 +1542,15 @@ class BinaryTree(Generic[T]):
         return self.level_bfs(
             yield_value=True,
             level_yield_cond=cond_yield_last,
-            unpack_singleton_level=True
+            unpack_singleton_level=True,
         )
 
     def encode_with_existence_flags(
-            self,
-            null_flag: Any,
-            existence_flag: Any,
-            value_encoder: Callable[[T], Any] = None,
-            encode_as_string_sep: str = chr(31)
+        self,
+        null_flag: Any,
+        existence_flag: Any,
+        value_encoder: Callable[[T], Any] = None,
+        encode_as_string_sep: str = chr(31),
     ) -> Union[List, str]:
         """
         Encodes the binary tree into a string or list representation.
@@ -1535,7 +1614,9 @@ class BinaryTree(Generic[T]):
             '1,10,0,1,2,1,3'
         """
         tokens = []
-        for node in self.bfs(yield_value=False, decodable=True, allow_tailing_nones=False):
+        for node in self.bfs(
+            yield_value=False, decodable=True, allow_tailing_nones=False
+        ):
             if node is not None:
                 # Node exists
                 tokens.append(existence_flag)  # Existence flag
@@ -1554,13 +1635,13 @@ class BinaryTree(Generic[T]):
 
     @classmethod
     def decode_with_existence_flags(
-            cls,
-            encoding: Union[str, List],
-            null_flag: Any,
-            existence_flag: Any,
-            value_decoder: Callable[[Any], T],
-            encode_as_string_sep: str = chr(31)
-    ) -> 'BinaryTree[T]':
+        cls,
+        encoding: Union[str, List],
+        null_flag: Any,
+        existence_flag: Any,
+        value_decoder: Callable[[Any], T],
+        encode_as_string_sep: str = chr(31),
+    ) -> "BinaryTree[T]":
         """
         Decodes an encoded representation of a binary tree into a `BinaryTree` object.
 
@@ -1647,22 +1728,24 @@ class BinaryTree(Generic[T]):
                 return None
             elif token == existence_flag:
                 if not queue:
-                    raise ValueError("Incomplete encoding: expected node value after existence flag.")
+                    raise ValueError(
+                        "Incomplete encoding: expected node value after existence flag."
+                    )
                 value_token = queue.popleft()
                 return (
-                    value_token
-                    if value_decoder is None
-                    else value_decoder(value_token)
+                    value_token if value_decoder is None else value_decoder(value_token)
                 )
             else:
-                raise ValueError(f"Invalid token: expected {null_flag} or {existence_flag}, got {token}")
+                raise ValueError(
+                    f"Invalid token: expected {null_flag} or {existence_flag}, got {token}"
+                )
 
         # Use decode_bfs with the custom pop function
         return cls.decode_bfs(tokens, pop_queue=pop_with_flags)
 
     def longest_consecutive_sequence(
-            self,
-            increase_value: Union[T, Callable[[T], T]] = None,
+        self,
+        increase_value: Union[T, Callable[[T], T]] = None,
     ) -> int:
         """
         Computes the length of the longest consecutive sequence path in the binary tree.
@@ -1729,11 +1812,17 @@ class BinaryTree(Generic[T]):
                 T: The expected value for the next node in the consecutive sequence.
             """
             if increase_value is not None:
-                return increase_value(value) if callable(increase_value) else value + increase_value
+                return (
+                    increase_value(value)
+                    if callable(increase_value)
+                    else value + increase_value
+                )
             else:
                 return value + 1
 
-        def _compute_lcs(curr_node: BinaryTree, left_result: Tuple, right_result: Tuple) -> Tuple[int, int]:
+        def _compute_lcs(
+            curr_node: BinaryTree, left_result: Tuple, right_result: Tuple
+        ) -> Tuple[int, int]:
             """
             Computes the longest consecutive sequence (LCS) for the current node.
 
@@ -1749,24 +1838,30 @@ class BinaryTree(Generic[T]):
             """
             (
                 left_lcs,  # LCS in the left subtree
-                left_ending  # LCS ending at the left child
+                left_ending,  # LCS ending at the left child
             ) = left_result or (0, 0)
             (
                 right_lcs,  # LCS in the right subtree
-                right_ending  # LCS ending at the right child
+                right_ending,  # LCS ending at the right child
             ) = right_result or (0, 0)
 
             # Start with the node itself
             expected_next_value = _compute_next_value(curr_node.value)
 
             # Check left child
-            if curr_node.left is not None and curr_node.left.value == expected_next_value:
+            if (
+                curr_node.left is not None
+                and curr_node.left.value == expected_next_value
+            ):
                 lcs_ending_here = left_ending + 1
             else:
                 lcs_ending_here = 1
 
             # Check right child
-            if curr_node.right is not None and curr_node.right.value == expected_next_value:
+            if (
+                curr_node.right is not None
+                and curr_node.right.value == expected_next_value
+            ):
                 lcs_ending_here = max(lcs_ending_here, right_ending + 1)
 
             # Max LCS in the subtree
@@ -1775,11 +1870,13 @@ class BinaryTree(Generic[T]):
             return max_lcs_in_subtree, lcs_ending_here
 
         # Return the longest consecutive sequence in the tree
-        return self.post_order_dfs_with_result_compute(_compute_lcs, pass_parent_node_value=False)[0]
+        return self.post_order_dfs_with_result_compute(
+            _compute_lcs, pass_parent_node_value=False
+        )[0]
 
     def longest_consecutive_sequence_pre_order_dfs(
-            self,
-            increase_value: Callable[[T], T] = None,
+        self,
+        increase_value: Callable[[T], T] = None,
     ) -> int:
         """
         Computes the length of the longest consecutive sequence path in the binary tree.
@@ -1834,7 +1931,11 @@ class BinaryTree(Generic[T]):
 
         def _compute_next_value(value: T) -> T:
             if increase_value is not None:
-                return increase_value(value) if callable(increase_value) else value + increase_value
+                return (
+                    increase_value(value)
+                    if callable(increase_value)
+                    else value + increase_value
+                )
             else:
                 return value + 1
 
@@ -1845,7 +1946,9 @@ class BinaryTree(Generic[T]):
                 parent_lcs, parent_value = state
 
                 # Determine if the current node continues the consecutive sequence
-                if parent_value is not None and curr_value == _compute_next_value(parent_value):
+                if parent_value is not None and curr_value == _compute_next_value(
+                    parent_value
+                ):
                     curr_lcs = parent_lcs + 1
                 else:
                     curr_lcs = 1
@@ -1857,8 +1960,7 @@ class BinaryTree(Generic[T]):
 
         # Perform pre-order DFS traversal and compute the longest consecutive sequence
         return self.pre_order_dfs_with_result_compute(
-            _compute_lcs,
-            pass_parent_node_value=True
+            _compute_lcs, pass_parent_node_value=True
         )
 
     def largest_path_sum(self, negative_inf=-inf):
@@ -1917,9 +2019,7 @@ class BinaryTree(Generic[T]):
          """
 
         def _compute_max_path_sum(
-                node_value: T,
-                left_result: Tuple[T, T],
-                right_result: Tuple[T, T]
+            node_value: T, left_result: Tuple[T, T], right_result: Tuple[T, T]
         ) -> Tuple[T, T]:
             """
             Computes the maximum path sum for the current node.
@@ -1935,7 +2035,10 @@ class BinaryTree(Generic[T]):
                     - The maximum sum of any path ending at this node.
             """
             left_path_sum, left_ending_sum = left_result or (negative_inf, negative_inf)
-            right_path_sum, right_ending_sum = right_result or (negative_inf, negative_inf)
+            right_path_sum, right_ending_sum = right_result or (
+                negative_inf,
+                negative_inf,
+            )
 
             # Maximum path sum ending at the current node
             max_ending_at_curr = max(
@@ -1949,7 +2052,9 @@ class BinaryTree(Generic[T]):
                 left_path_sum,
                 right_path_sum,
                 max_ending_at_curr,
-                node_value + left_ending_sum + right_ending_sum,  # Path through this node
+                node_value
+                + left_ending_sum
+                + right_ending_sum,  # Path through this node
             )
 
             return max_in_subtree, max_ending_at_curr
@@ -1957,7 +2062,9 @@ class BinaryTree(Generic[T]):
         # Compute the largest path sum using post-order traversal
         return self.post_order_dfs_with_result_compute(_compute_max_path_sum)[0]
 
-    def vertical_order_traversal(self, yield_value: bool = True) -> Iterator[List[Union['BinaryTree[T]', Any]]]:
+    def vertical_order_traversal(
+        self, yield_value: bool = True
+    ) -> Iterator[List[Union["BinaryTree[T]", Any]]]:
         """
         Perform vertical order traversal of the binary tree.
 
@@ -2050,16 +2157,20 @@ class BinaryTree(Generic[T]):
             return prev_state - 1 if is_left else prev_state + 1
 
         for node, vertical_order in self.bfs(
-                yield_value=False,
-                decodable=False,
-                allow_tailing_nones=False,
-                state_handler=_vertical_order_state_handler
+            yield_value=False,
+            decodable=False,
+            allow_tailing_nones=False,
+            state_handler=_vertical_order_state_handler,
         ):
-            vertical_order_dict[vertical_order].append(node.value if yield_value else node)
+            vertical_order_dict[vertical_order].append(
+                node.value if yield_value else node
+            )
 
         yield from (v for _, v in sorted(vertical_order_dict.items()))
 
-    def lowest_common_ancestor(self, p: 'BinaryTree[T]', q: 'BinaryTree[T]') -> 'BinaryTree[T]':
+    def lowest_common_ancestor(
+        self, p: "BinaryTree[T]", q: "BinaryTree[T]"
+    ) -> "BinaryTree[T]":
         """
         Finds the lowest common ancestor (LCA) of two nodes `p` and `q` in the binary tree.
         Only returns None if both `p` and `q` are not found in the tree.
@@ -2148,14 +2259,14 @@ class BinaryTree(Generic[T]):
         #
         #     return left or right
 
-        def early_termination_at_parent_node(parent_node: 'BinaryTree[T]'):
+        def early_termination_at_parent_node(parent_node: "BinaryTree[T]"):
             if parent_node == p or parent_node == q:
                 return parent_node
 
         def compute_lca_at_parent_node(
-                parent_node: 'BinaryTree[T]',
-                left_result: 'BinaryTree[T]',
-                right_result: 'BinaryTree[T]'
+            parent_node: "BinaryTree[T]",
+            left_result: "BinaryTree[T]",
+            right_result: "BinaryTree[T]",
         ):
             if left_result is not None and right_result is not None:
                 return parent_node
@@ -2165,10 +2276,12 @@ class BinaryTree(Generic[T]):
         return self.post_order_dfs_with_result_compute(
             compute_lca_at_parent_node,
             pass_parent_node_value=False,
-            early_termination_at_parent_node=early_termination_at_parent_node
+            early_termination_at_parent_node=early_termination_at_parent_node,
         )
 
-    def lowest_common_ancestor2(self, p: 'BinaryTree[T]', q: 'BinaryTree[T]') -> Optional['BinaryTree[T]']:
+    def lowest_common_ancestor2(
+        self, p: "BinaryTree[T]", q: "BinaryTree[T]"
+    ) -> Optional["BinaryTree[T]"]:
         """
         Finds the lowest common ancestor (LCA) of two nodes `p` and `q` in the binary tree.
 
@@ -2259,10 +2372,10 @@ class BinaryTree(Generic[T]):
         """
 
         def compute_lca_at_parent_node(
-                parent_node: 'BinaryTree[T]',
-                left_result: Tuple[Optional['BinaryTree[T]'], bool, bool],
-                right_result: Tuple[Optional['BinaryTree[T]'], bool, bool]
-        ) -> Tuple[Optional['BinaryTree[T]'], bool, bool]:
+            parent_node: "BinaryTree[T]",
+            left_result: Tuple[Optional["BinaryTree[T]"], bool, bool],
+            right_result: Tuple[Optional["BinaryTree[T]"], bool, bool],
+        ) -> Tuple[Optional["BinaryTree[T]"], bool, bool]:
             """
             Computes the LCA at the current node and tracks the presence of `p` and `q`.
 
@@ -2306,8 +2419,7 @@ class BinaryTree(Generic[T]):
 
         # Perform post-order DFS to compute the LCA and track presence of `p` and `q`
         lca, found_p, found_q = self.post_order_dfs_with_result_compute(
-            compute_lca_at_parent_node,
-            pass_parent_node_value=False
+            compute_lca_at_parent_node, pass_parent_node_value=False
         )
 
         # If both `p` and `q` are found, return the LCA; otherwise, return None
@@ -2399,20 +2511,28 @@ class BinaryTree(Generic[T]):
                 is_left_child_bst_compliant = True
                 left_min_value = parent_node_value
             else:
-                is_left_child_bst_compliant, left_min_value, left_max_value = left_result
-                is_left_child_bst_compliant = is_left_child_bst_compliant and left_max_value < parent_node_value
+                is_left_child_bst_compliant, left_min_value, left_max_value = (
+                    left_result
+                )
+                is_left_child_bst_compliant = (
+                    is_left_child_bst_compliant and left_max_value < parent_node_value
+                )
 
             if right_result is None:
                 is_right_child_bst_compliant = True
                 right_max_value = parent_node_value
             else:
-                is_right_child_bst_compliant, right_min_value, right_max_value = right_result
-                is_right_child_bst_compliant = is_right_child_bst_compliant and right_min_value > parent_node_value
+                is_right_child_bst_compliant, right_min_value, right_max_value = (
+                    right_result
+                )
+                is_right_child_bst_compliant = (
+                    is_right_child_bst_compliant and right_min_value > parent_node_value
+                )
 
             return (
                 (is_left_child_bst_compliant and is_right_child_bst_compliant),
                 left_min_value,
-                right_max_value
+                right_max_value,
             )
 
         return self.post_order_dfs_with_result_compute(_test_bst_at_parent_node)[0]
@@ -2633,7 +2753,7 @@ class BinaryTree(Generic[T]):
         _dfs(self)
 
     @classmethod
-    def sequence_to_binary_search_tree(cls, seq: Iterable[T]) -> 'BinaryTree[T]':
+    def sequence_to_binary_search_tree(cls, seq: Iterable[T]) -> "BinaryTree[T]":
         """
         Creates a binary search tree (BST) from a sequence of values.
 
@@ -2692,7 +2812,9 @@ class BinaryTree(Generic[T]):
         return root
 
     @classmethod
-    def sorted_array_to_binary_search_tree(cls, arr: List[T]) -> Optional['BinaryTree[T]']:
+    def sorted_array_to_binary_search_tree(
+        cls, arr: List[T]
+    ) -> Optional["BinaryTree[T]"]:
         """
         Converts a sorted array into a height-balanced binary search tree (BST).
 
@@ -2734,10 +2856,10 @@ class BinaryTree(Generic[T]):
         """
 
         def _build_node(
-                seq: List[T],
-                mid_index: int,
-                left: Optional['BinaryTree[T]'],
-                right: Optional['BinaryTree[T]']
+            seq: List[T],
+            mid_index: int,
+            left: Optional["BinaryTree[T]"],
+            right: Optional["BinaryTree[T]"],
         ):
             # Construct a binary tree node using the middle element as the root
             return cls(seq[mid_index], left, right)

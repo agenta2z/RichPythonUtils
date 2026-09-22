@@ -18,7 +18,7 @@ class TestRealisticLargeHTMLCodeBlock:
         Real-world XML from an SEO link building channel summary.
         Contains extensive HTML with tables, lists, special characters.
         """
-        return '''<StructuredResponse>
+        return """<StructuredResponse>
  <InstantResponse>
 ```html
 <h1>SEO Link Building News & Updates Channel Summary</h1>
@@ -340,108 +340,112 @@ class TestRealisticLargeHTMLCodeBlock:
 ```
  </InstantResponse>
  <TaskStatus>Completed</TaskStatus>
-</StructuredResponse>'''
+</StructuredResponse>"""
 
     def test_parse_with_protection_preserves_full_html(self, large_seo_summary_xml):
         """Test that code block protection preserves the entire HTML block."""
         result = xml_to_dict(large_seo_summary_xml)
 
         # Verify structure
-        assert 'StructuredResponse' in result
-        assert 'InstantResponse' in result['StructuredResponse']
-        assert 'TaskStatus' in result['StructuredResponse']
+        assert "StructuredResponse" in result
+        assert "InstantResponse" in result["StructuredResponse"]
+        assert "TaskStatus" in result["StructuredResponse"]
 
         # The HTML should be preserved with markdown syntax
-        html_content = result['StructuredResponse']['InstantResponse']
-        assert '```html' in html_content
-        assert '<h1>SEO Link Building News & Updates Channel Summary</h1>' in html_content
+        html_content = result["StructuredResponse"]["InstantResponse"]
+        assert "```html" in html_content
+        assert (
+            "<h1>SEO Link Building News & Updates Channel Summary</h1>" in html_content
+        )
 
         # Verify critical XML-breaking characters are preserved
-        assert '<table' in html_content
-        assert '<tr>' in html_content
-        assert '<td>' in html_content
-        assert '&' in html_content  # Would break XML without protection
+        assert "<table" in html_content
+        assert "<tr>" in html_content
+        assert "<td>" in html_content
+        assert "&" in html_content  # Would break XML without protection
 
     def test_parse_extract_html_only(self, large_seo_summary_xml):
         """Test extracting just the HTML content without markdown markers."""
         result = xml_to_dict(large_seo_summary_xml, code_block_restore_group=-1)
 
-        html_content = result['StructuredResponse']['InstantResponse']
+        html_content = result["StructuredResponse"]["InstantResponse"]
 
         # Should NOT have markdown markers
-        assert '```html' not in html_content or html_content.startswith('<h1>')
+        assert "```html" not in html_content or html_content.startswith("<h1>")
 
         # Should have HTML content
-        assert '<h1>SEO Link Building News & Updates Channel Summary</h1>' in html_content
-        assert '<h2>November 13-21, 2025</h2>' in html_content
+        assert (
+            "<h1>SEO Link Building News & Updates Channel Summary</h1>" in html_content
+        )
+        assert "<h2>November 13-21, 2025</h2>" in html_content
 
     def test_verify_table_content_preserved(self, large_seo_summary_xml):
         """Test that complex table structures are preserved."""
         result = xml_to_dict(large_seo_summary_xml, code_block_restore_group=-1)
-        html_content = result['StructuredResponse']['InstantResponse']
+        html_content = result["StructuredResponse"]["InstantResponse"]
 
         # Check table structure
         assert '<table border="1" cellpadding="5">' in html_content
-        assert '<tr><th>Website</th><th>Price</th></tr>' in html_content
+        assert "<tr><th>Website</th><th>Price</th></tr>" in html_content
 
         # Check specific table data
-        assert '<tr><td>cutedp.org</td><td>$80</td></tr>' in html_content
-        assert '<tr><td>redstaglabs.com</td><td>$200</td></tr>' in html_content
-        assert '<tr><td>techimply.com</td><td>$300</td></tr>' in html_content
+        assert "<tr><td>cutedp.org</td><td>$80</td></tr>" in html_content
+        assert "<tr><td>redstaglabs.com</td><td>$200</td></tr>" in html_content
+        assert "<tr><td>techimply.com</td><td>$300</td></tr>" in html_content
 
     def test_verify_list_content_preserved(self, large_seo_summary_xml):
         """Test that unordered and ordered lists are preserved."""
         result = xml_to_dict(large_seo_summary_xml, code_block_restore_group=-1)
-        html_content = result['StructuredResponse']['InstantResponse']
+        html_content = result["StructuredResponse"]["InstantResponse"]
 
         # Check unordered lists
-        assert '<ul>' in html_content
-        assert '<li>englishsumup.com</li>' in html_content
-        assert '<li>mailsuite.com</li>' in html_content
+        assert "<ul>" in html_content
+        assert "<li>englishsumup.com</li>" in html_content
+        assert "<li>mailsuite.com</li>" in html_content
 
         # Check ordered lists
-        assert '<ol>' in html_content
-        assert '<li>leadgenapp.io</li>' in html_content
-        assert '<li>landofcoder.com</li>' in html_content
+        assert "<ol>" in html_content
+        assert "<li>leadgenapp.io</li>" in html_content
+        assert "<li>landofcoder.com</li>" in html_content
 
     def test_verify_special_characters_preserved(self, large_seo_summary_xml):
         """Test that special characters that would break XML are preserved."""
         result = xml_to_dict(large_seo_summary_xml, code_block_restore_group=-1)
-        html_content = result['StructuredResponse']['InstantResponse']
+        html_content = result["StructuredResponse"]["InstantResponse"]
 
         # These characters would break XML parsing without protection
-        assert '<strong>' in html_content
-        assert '</strong>' in html_content
-        assert '<p>' in html_content
-        assert '</p>' in html_content
-        assert '<hr>' in html_content
+        assert "<strong>" in html_content
+        assert "</strong>" in html_content
+        assert "<p>" in html_content
+        assert "</p>" in html_content
+        assert "<hr>" in html_content
 
         # Email addresses with @ symbol
-        assert 'aliseo6170@gmail.com' in html_content
-        assert 'priyanka.koyani@outreachdesk.com' in html_content
+        assert "aliseo6170@gmail.com" in html_content
+        assert "priyanka.koyani@outreachdesk.com" in html_content
 
     def test_verify_emojis_preserved(self, large_seo_summary_xml):
         """Test that emoji characters are preserved in the HTML."""
         result = xml_to_dict(large_seo_summary_xml, code_block_restore_group=-1)
-        html_content = result['StructuredResponse']['InstantResponse']
+        html_content = result["StructuredResponse"]["InstantResponse"]
 
         # Check various emojis used in the content
-        assert '📊' in html_content  # Overview
-        assert '🔗' in html_content  # Guest Post
-        assert '💰' in html_content  # Paid Link
-        assert '🔄' in html_content  # Free Link
-        assert '📋' in html_content  # Site Availability
-        assert '🎯' in html_content  # SaaS Sites
-        assert '👥' in html_content  # New Members
-        assert '💼' in html_content  # Professional
-        assert '🔑' in html_content  # Key Takeaways
+        assert "📊" in html_content  # Overview
+        assert "🔗" in html_content  # Guest Post
+        assert "💰" in html_content  # Paid Link
+        assert "🔄" in html_content  # Free Link
+        assert "📋" in html_content  # Site Availability
+        assert "🎯" in html_content  # SaaS Sites
+        assert "👥" in html_content  # New Members
+        assert "💼" in html_content  # Professional
+        assert "🔑" in html_content  # Key Takeaways
 
     def test_verify_task_status_element(self, large_seo_summary_xml):
         """Test that sibling elements outside code block are parsed correctly."""
         result = xml_to_dict(large_seo_summary_xml)
 
         # TaskStatus should be a separate element
-        assert result['StructuredResponse']['TaskStatus'] == 'Completed'
+        assert result["StructuredResponse"]["TaskStatus"] == "Completed"
 
     def test_protection_disabled_would_fail(self, large_seo_summary_xml):
         """Verify that without protection, this large HTML causes parsing to fail."""
@@ -452,9 +456,7 @@ class TestRealisticLargeHTMLCodeBlock:
         # Attempt to parse without protection should fail
         with pytest.raises(Exception):  # xml.etree.ElementTree.ParseError
             xml_to_dict(
-                large_seo_summary_xml,
-                protect_code_blocks=False,
-                lenient_parsing=True
+                large_seo_summary_xml, protect_code_blocks=False, lenient_parsing=True
             )
 
         # With protection enabled, parsing succeeds
@@ -462,9 +464,9 @@ class TestRealisticLargeHTMLCodeBlock:
 
         # The protected version should have clean, predictable structure
         # The InstantResponse in protected version contains the full HTML block
-        assert '```html' in result_protected['StructuredResponse']['InstantResponse']
-        assert 'StructuredResponse' in result_protected
-        assert result_protected['StructuredResponse']['TaskStatus'] == 'Completed'
+        assert "```html" in result_protected["StructuredResponse"]["InstantResponse"]
+        assert "StructuredResponse" in result_protected
+        assert result_protected["StructuredResponse"]["TaskStatus"] == "Completed"
 
     def test_large_content_performance(self, large_seo_summary_xml):
         """Test that protection handles large content efficiently."""
@@ -478,39 +480,39 @@ class TestRealisticLargeHTMLCodeBlock:
         assert elapsed_time < 1.0
 
         # Verify result is complete
-        assert 'StructuredResponse' in result
-        assert len(result['StructuredResponse']['InstantResponse']) > 10000
+        assert "StructuredResponse" in result
+        assert len(result["StructuredResponse"]["InstantResponse"]) > 10000
 
     def test_count_html_elements(self, large_seo_summary_xml):
         """Test that all HTML elements are accounted for."""
         result = xml_to_dict(large_seo_summary_xml, code_block_restore_group=-1)
-        html_content = result['StructuredResponse']['InstantResponse']
+        html_content = result["StructuredResponse"]["InstantResponse"]
 
         # Count various element types
-        assert html_content.count('<h1>') >= 1
-        assert html_content.count('<h2>') >= 1
-        assert html_content.count('<h3>') >= 5
-        assert html_content.count('<h4>') >= 10
-        assert html_content.count('<table') >= 2
-        assert html_content.count('<ul>') >= 10
-        assert html_content.count('<ol>') >= 1
-        assert html_content.count('<li>') >= 100
-        assert html_content.count('<p>') >= 10
-        assert html_content.count('<strong>') >= 20
+        assert html_content.count("<h1>") >= 1
+        assert html_content.count("<h2>") >= 1
+        assert html_content.count("<h3>") >= 5
+        assert html_content.count("<h4>") >= 10
+        assert html_content.count("<table") >= 2
+        assert html_content.count("<ul>") >= 10
+        assert html_content.count("<ol>") >= 1
+        assert html_content.count("<li>") >= 100
+        assert html_content.count("<p>") >= 10
+        assert html_content.count("<strong>") >= 20
 
     def test_specific_pricing_data_accuracy(self, large_seo_summary_xml):
         """Test that specific pricing data is accurately preserved."""
         result = xml_to_dict(large_seo_summary_xml, code_block_restore_group=-1)
-        html_content = result['StructuredResponse']['InstantResponse']
+        html_content = result["StructuredResponse"]["InstantResponse"]
 
         # Verify specific pricing entries
-        assert '$50-$60' in html_content  # dutable.com range
-        assert '$300' in html_content     # techimply.com premium
-        assert '$65' in html_content      # psychreg.org budget
-        assert '$230' in html_content     # troopmessenger.com
+        assert "$50-$60" in html_content  # dutable.com range
+        assert "$300" in html_content  # techimply.com premium
+        assert "$65" in html_content  # psychreg.org budget
+        assert "$230" in html_content  # troopmessenger.com
 
         # Verify dollar signs aren't causing issues
-        assert html_content.count('$') >= 50
+        assert html_content.count("$") >= 50
 
 
 class TestRealisticContentVariations:
@@ -518,23 +520,23 @@ class TestRealisticContentVariations:
 
     def test_without_task_status(self):
         """Test HTML code block without additional sibling elements."""
-        xml = '''<Response>
+        xml = """<Response>
 ```html
 <h1>Title & Content</h1>
 <table>
 <tr><td>A</td><td>B & C</td></tr>
 </table>
 ```
-</Response>'''
+</Response>"""
 
         result = xml_to_dict(xml, code_block_restore_group=-1)
-        assert '<h1>Title & Content</h1>' in result['Response']
-        assert '&' in result['Response']
-        assert '<table>' in result['Response']
+        assert "<h1>Title & Content</h1>" in result["Response"]
+        assert "&" in result["Response"]
+        assert "<table>" in result["Response"]
 
     def test_multiple_html_blocks_in_response(self):
         """Test multiple separate HTML code blocks."""
-        xml = '''<MultiResponse>
+        xml = """<MultiResponse>
 <Section1>```html
 <h1>Section 1</h1>
 <p>Content with & symbol</p>
@@ -543,13 +545,13 @@ class TestRealisticContentVariations:
 <h2>Section 2</h2>
 <div class="test">More & content</div>
 ```</Section2>
-</MultiResponse>'''
+</MultiResponse>"""
 
         result = xml_to_dict(xml, code_block_restore_group=-1)
-        assert '<h1>Section 1</h1>' in result['MultiResponse']['Section1']
-        assert '<h2>Section 2</h2>' in result['MultiResponse']['Section2']
-        assert '&' in result['MultiResponse']['Section1']
-        assert '&' in result['MultiResponse']['Section2']
+        assert "<h1>Section 1</h1>" in result["MultiResponse"]["Section1"]
+        assert "<h2>Section 2</h2>" in result["MultiResponse"]["Section2"]
+        assert "&" in result["MultiResponse"]["Section1"]
+        assert "&" in result["MultiResponse"]["Section2"]
 
 
 if __name__ == "__main__":

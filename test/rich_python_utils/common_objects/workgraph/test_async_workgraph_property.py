@@ -13,83 +13,100 @@ equivalent sync callables.
 
 Uses Hypothesis with @settings(max_examples=100).
 """
+
 import asyncio
 
 import pytest
 from hypothesis import given, settings, strategies as st
-
-from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode
-from rich_python_utils.common_objects.workflow.common.worknode_base import (
-    WorkGraphStopFlags,
-    NextNodesSelector,
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
 )
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
+from rich_python_utils.common_objects.workflow.common.worknode_base import (
+    NextNodesSelector,
+    WorkGraphStopFlags,
+)
+from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 class _TestGraphNode(WorkGraphNode):
     """WorkGraphNode subclass that stubs out result path for testing."""
 
     def _get_result_path(self, result_id, *args, **kwargs):
-        import tempfile, os
+        import os
+        import tempfile
+
         return os.path.join(tempfile.gettempdir(), f"_prop_test_{result_id}.pkl")
 
 
 def _make_sync_fn(factor):
     """Create a sync callable: x -> x * factor."""
+
     def fn(x):
         return x * factor
+
     fn.__name__ = f"sync_mul_{factor}"
     return fn
 
 
 def _make_async_fn(factor):
     """Create an async callable: x -> x * factor."""
+
     async def fn(x):
         return x * factor
+
     fn.__name__ = f"async_mul_{factor}"
     return fn
 
 
 def _make_stop_flag_fn(flag, factor):
     """Create a sync callable that returns (stop_flag, result)."""
+
     def fn(x):
         return (flag, x * factor)
+
     fn.__name__ = f"sync_flag_{flag.name}_{factor}"
     return fn
 
 
 def _make_async_stop_flag_fn(flag, factor):
     """Create an async callable that returns (stop_flag, result)."""
+
     async def fn(x):
         return (flag, x * factor)
+
     fn.__name__ = f"async_flag_{flag.name}_{factor}"
     return fn
 
 
 def _make_next_nodes_selector_fn(include_self, include_others, factor):
     """Create a sync callable that returns a NextNodesSelector."""
+
     def fn(x):
         return NextNodesSelector(
             include_self=include_self,
             include_others=include_others,
             result=x * factor,
         )
+
     fn.__name__ = f"sync_nns_{factor}"
     return fn
 
 
 def _make_async_next_nodes_selector_fn(include_self, include_others, factor):
     """Create an async callable that returns a NextNodesSelector."""
+
     async def fn(x):
         return NextNodesSelector(
             include_self=include_self,
             include_others=include_others,
             result=x * factor,
         )
+
     fn.__name__ = f"async_nns_{factor}"
     return fn
 
@@ -101,26 +118,33 @@ def _make_async_next_nodes_selector_fn(include_self, include_others, factor):
 factor_strategy = st.integers(min_value=-20, max_value=20)
 input_strategy = st.integers(min_value=-50, max_value=50)
 
-stop_flag_strategy = st.sampled_from([
-    WorkGraphStopFlags.Continue,
-    WorkGraphStopFlags.Terminate,
-    WorkGraphStopFlags.AbstainResult,
-])
+stop_flag_strategy = st.sampled_from(
+    [
+        WorkGraphStopFlags.Continue,
+        WorkGraphStopFlags.Terminate,
+        WorkGraphStopFlags.AbstainResult,
+    ]
+)
 
-pass_down_mode_strategy = st.sampled_from([
-    ResultPassDownMode.ResultAsFirstArg,
-    ResultPassDownMode.NoPassDown,
-])
+pass_down_mode_strategy = st.sampled_from(
+    [
+        ResultPassDownMode.ResultAsFirstArg,
+        ResultPassDownMode.NoPassDown,
+    ]
+)
 
 # Retry config: max_repeat 1-3, wait times 0 for fast tests
-retry_strategy = st.fixed_dictionaries({
-    'max_repeat': st.integers(min_value=1, max_value=3),
-})
+retry_strategy = st.fixed_dictionaries(
+    {
+        "max_repeat": st.integers(min_value=1, max_value=3),
+    }
+)
 
 
 # ---------------------------------------------------------------------------
 # Property 6: WorkGraphNode sync/async equivalence
 # ---------------------------------------------------------------------------
+
 
 class TestWorkGraphNodeSyncAsyncEquivalence:
     """Property 6: WorkGraphNode sync/async equivalence.
@@ -170,9 +194,7 @@ class TestWorkGraphNodeSyncAsyncEquivalence:
         flag=stop_flag_strategy,
         use_async=st.booleans(),
     )
-    async def test_stop_flag_equivalence(
-        self, factor, input_val, flag, use_async
-    ):
+    async def test_stop_flag_equivalence(self, factor, input_val, flag, use_async):
         """Nodes returning stop flags produce the same result via sync and async paths.
 
         **Validates: Requirements 7.3**
@@ -183,7 +205,8 @@ class TestWorkGraphNodeSyncAsyncEquivalence:
         sync_result = sync_node.run(input_val)
 
         async_fn = (
-            _make_async_stop_flag_fn(flag, factor) if use_async
+            _make_async_stop_flag_fn(flag, factor)
+            if use_async
             else _make_stop_flag_fn(flag, factor)
         )
         async_node = _TestGraphNode(name="async_flag", value=async_fn)
@@ -213,7 +236,7 @@ class TestWorkGraphNodeSyncAsyncEquivalence:
         sync_node = _TestGraphNode(
             name="sync_retry",
             value=sync_fn,
-            max_repeat=retry_cfg['max_repeat'],
+            max_repeat=retry_cfg["max_repeat"],
             min_repeat_wait=0,
             max_repeat_wait=0,
         )
@@ -223,7 +246,7 @@ class TestWorkGraphNodeSyncAsyncEquivalence:
         async_node = _TestGraphNode(
             name="async_retry",
             value=async_fn,
-            max_repeat=retry_cfg['max_repeat'],
+            max_repeat=retry_cfg["max_repeat"],
             min_repeat_wait=0,
             max_repeat_wait=0,
         )
@@ -255,7 +278,8 @@ class TestWorkGraphNodeSyncAsyncEquivalence:
         sync_result = sync_node.run(input_val)
 
         async_fn = (
-            _make_async_next_nodes_selector_fn(False, include_others, factor) if use_async
+            _make_async_next_nodes_selector_fn(False, include_others, factor)
+            if use_async
             else _make_next_nodes_selector_fn(False, include_others, factor)
         )
         async_node = _TestGraphNode(name="async_nns", value=async_fn)
@@ -273,13 +297,12 @@ class TestWorkGraphNodeSyncAsyncEquivalence:
         num_parents=st.integers(min_value=2, max_value=4),
         use_async=st.booleans(),
     )
-    async def test_multi_parent_merge_equivalence(
-        self, factor, num_parents, use_async
-    ):
+    async def test_multi_parent_merge_equivalence(self, factor, num_parents, use_async):
         """Multi-parent nodes produce the same result via sync and async paths.
 
         **Validates: Requirements 8.1, 8.3**
         """
+
         # Create a function that sums all positional args and multiplies by factor
         def sum_fn(*args):
             return sum(args) * factor
@@ -334,13 +357,12 @@ class TestWorkGraphNodeSyncAsyncEquivalence:
         input_val=input_strategy,
         use_async=st.booleans(),
     )
-    async def test_post_process_hook_equivalence(
-        self, factor, input_val, use_async
-    ):
+    async def test_post_process_hook_equivalence(self, factor, input_val, use_async):
         """Post-process hooks produce the same result via sync and async paths.
 
         **Validates: Requirements 9.1, 9.2**
         """
+
         # Create a node subclass with a post-process hook
         class SyncPostProcessNode(_TestGraphNode):
             def _post_process(self, result, *args, **kwargs):
@@ -399,7 +421,9 @@ class TestWorkGraphNodeSyncAsyncEquivalence:
         # Async chain: node1 -> node2
         async_node2 = _TestGraphNode(
             name="async_ds",
-            value=_make_async_fn(downstream_factor) if use_async else _make_sync_fn(downstream_factor),
+            value=_make_async_fn(downstream_factor)
+            if use_async
+            else _make_sync_fn(downstream_factor),
         )
         async_node1 = _TestGraphNode(
             name="async_root",
@@ -425,11 +449,14 @@ from rich_python_utils.common_objects.workflow.workgraph import WorkGraph
 # Helpers for WorkGraph-level property tests
 # ===========================================================================
 
+
 class _TestWorkGraph(WorkGraph):
     """WorkGraph subclass that stubs out result path for testing."""
 
     def _get_result_path(self, result_id, *args, **kwargs):
-        import tempfile, os
+        import os
+        import tempfile
+
         return os.path.join(tempfile.gettempdir(), f"_prop_test_wg_{result_id}.pkl")
 
 
@@ -452,7 +479,9 @@ def _build_linear_chain(node_specs, pass_down=ResultPassDownMode.ResultAsFirstAr
     return nodes[0] if nodes else None
 
 
-def _build_fan_out_graph(root_name, root_fn, branch_specs, pass_down=ResultPassDownMode.ResultAsFirstArg):
+def _build_fan_out_graph(
+    root_name, root_fn, branch_specs, pass_down=ResultPassDownMode.ResultAsFirstArg
+):
     """Build a fan-out graph: one root node with multiple leaf branches.
 
     branch_specs: list of (name, fn) tuples for leaf nodes.
@@ -490,6 +519,7 @@ max_concurrency_strategy = st.integers(min_value=1, max_value=4)
 # ---------------------------------------------------------------------------
 # Property 7: WorkGraph sync/async equivalence
 # ---------------------------------------------------------------------------
+
 
 class TestWorkGraphSyncAsyncEquivalence:
     """Property 7: WorkGraph sync/async equivalence.
@@ -582,7 +612,9 @@ class TestWorkGraphSyncAsyncEquivalence:
         ),
         input_val=input_strategy,
     )
-    async def test_fan_out_graph_equivalence(self, root_factor, branch_factors, input_val):
+    async def test_fan_out_graph_equivalence(
+        self, root_factor, branch_factors, input_val
+    ):
         """A fan-out graph (one root, multiple leaves) produces the same result
         via _run() and _arun().
 
@@ -590,7 +622,8 @@ class TestWorkGraphSyncAsyncEquivalence:
         """
         # Sync graph
         sync_root, _ = _build_fan_out_graph(
-            "s_root", _make_sync_fn(root_factor),
+            "s_root",
+            _make_sync_fn(root_factor),
             [(f"s_leaf_{i}", _make_sync_fn(f)) for i, f in enumerate(branch_factors)],
         )
         sync_graph = _TestWorkGraph(start_nodes=[sync_root])
@@ -598,7 +631,8 @@ class TestWorkGraphSyncAsyncEquivalence:
 
         # Async graph
         async_root, _ = _build_fan_out_graph(
-            "a_root", _make_sync_fn(root_factor),
+            "a_root",
+            _make_sync_fn(root_factor),
             [(f"a_leaf_{i}", _make_sync_fn(f)) for i, f in enumerate(branch_factors)],
         )
         async_graph = _TestWorkGraph(start_nodes=[async_root])
@@ -620,7 +654,9 @@ class TestWorkGraphSyncAsyncEquivalence:
         downstream_factor=factor_strategy,
         input_val=input_strategy,
     )
-    async def test_multi_start_with_downstream_chains_equivalence(self, start_factors, downstream_factor, input_val):
+    async def test_multi_start_with_downstream_chains_equivalence(
+        self, start_factors, downstream_factor, input_val
+    ):
         """Multiple start nodes each with their own downstream chain produce
         the same result via _run() and _arun().
 
@@ -672,6 +708,7 @@ class TestWorkGraphSyncAsyncEquivalence:
 # Property 8: WorkGraph stop flag handling
 # ---------------------------------------------------------------------------
 
+
 class TestWorkGraphStopFlagHandling:
     """Property 8: WorkGraph stop flag handling.
 
@@ -696,6 +733,7 @@ class TestWorkGraphStopFlagHandling:
 
         **Validates: Requirements 11.3**
         """
+
         # Build a graph where the first start node returns Terminate
         def terminate_fn(x):
             return (WorkGraphStopFlags.Terminate, x * factor)
@@ -731,6 +769,7 @@ class TestWorkGraphStopFlagHandling:
 
         **Validates: Requirements 11.3**
         """
+
         def terminate_fn(x):
             return (WorkGraphStopFlags.Terminate, x * factor)
 
@@ -754,13 +793,16 @@ class TestWorkGraphStopFlagHandling:
         leaf_factor=factor_strategy,
         input_val=input_strategy,
     )
-    async def test_abstain_result_within_branch(self, root_factor, leaf_factor, input_val):
+    async def test_abstain_result_within_branch(
+        self, root_factor, leaf_factor, input_val
+    ):
         """AbstainResult within a single branch (root -> downstream) behaves
         the same in sync and async paths. The downstream node receives the
         abstention notification.
 
         **Validates: Requirements 11.4**
         """
+
         # Root node returns AbstainResult — downstream should be notified
         def abstain_fn(x):
             return (WorkGraphStopFlags.AbstainResult, x * root_factor)
@@ -812,6 +854,7 @@ class TestWorkGraphStopFlagHandling:
 
         **Validates: Requirements 11.4**
         """
+
         # Single start node that returns AbstainResult with a result value.
         # The graph should still produce the result (AbstainResult only affects
         # downstream propagation, not the node's own result).
@@ -838,6 +881,7 @@ class TestWorkGraphStopFlagHandling:
 # Property 9: WorkGraph concurrency limiting
 # ---------------------------------------------------------------------------
 
+
 class TestWorkGraphConcurrencyLimiting:
     """Property 9: WorkGraph concurrency limiting.
 
@@ -859,7 +903,9 @@ class TestWorkGraphConcurrencyLimiting:
         input_val=input_strategy,
         max_conc=max_concurrency_strategy,
     )
-    async def test_concurrency_limit_vs_unlimited_simple(self, factors, input_val, max_conc):
+    async def test_concurrency_limit_vs_unlimited_simple(
+        self, factors, input_val, max_conc
+    ):
         """Multiple independent start nodes produce the same result with
         max_concurrency=K as with max_concurrency=None.
 
@@ -906,7 +952,9 @@ class TestWorkGraphConcurrencyLimiting:
         # (each node acquires/releases around its own computation only)
         max_conc=st.integers(min_value=1, max_value=8),
     )
-    async def test_concurrency_limit_fan_out(self, root_factor, branch_factors, input_val, max_conc):
+    async def test_concurrency_limit_fan_out(
+        self, root_factor, branch_factors, input_val, max_conc
+    ):
         """A fan-out graph produces the same result with max_concurrency=K
         as with max_concurrency=None.
 
@@ -914,7 +962,8 @@ class TestWorkGraphConcurrencyLimiting:
         """
         # Unlimited graph
         u_root, _ = _build_fan_out_graph(
-            "u_root", _make_sync_fn(root_factor),
+            "u_root",
+            _make_sync_fn(root_factor),
             [(f"u_leaf_{i}", _make_sync_fn(f)) for i, f in enumerate(branch_factors)],
         )
         unlimited_graph = _TestWorkGraph(
@@ -925,7 +974,8 @@ class TestWorkGraphConcurrencyLimiting:
 
         # Limited graph
         l_root, _ = _build_fan_out_graph(
-            "l_root", _make_sync_fn(root_factor),
+            "l_root",
+            _make_sync_fn(root_factor),
             [(f"l_leaf_{i}", _make_sync_fn(f)) for i, f in enumerate(branch_factors)],
         )
         limited_graph = _TestWorkGraph(
@@ -953,7 +1003,9 @@ class TestWorkGraphConcurrencyLimiting:
         # (each node acquires/releases around its own computation only)
         max_conc=st.integers(min_value=1, max_value=8),
     )
-    async def test_concurrency_limit_multi_start_with_chains(self, start_factors, input_val, max_conc):
+    async def test_concurrency_limit_multi_start_with_chains(
+        self, start_factors, input_val, max_conc
+    ):
         """Multiple start nodes each with their own downstream chain produce
         the same result with max_concurrency=K as with max_concurrency=None.
 

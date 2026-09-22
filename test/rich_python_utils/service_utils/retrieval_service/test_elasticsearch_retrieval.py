@@ -14,15 +14,12 @@ import pytest
 
 elasticsearch = pytest.importorskip("elasticsearch")
 
-from hypothesis import given, settings, assume, HealthCheck
-from hypothesis import strategies as st
-
+from conftest import document_strategy
+from hypothesis import assume, given, HealthCheck, settings, strategies as st
+from rich_python_utils.service_utils.retrieval_service.document import Document
 from rich_python_utils.service_utils.retrieval_service.elasticsearch_retrieval_service import (
     ElasticsearchRetrievalService,
 )
-from rich_python_utils.service_utils.retrieval_service.document import Document
-
-from conftest import document_strategy
 
 pytestmark = pytest.mark.requires_elasticsearch
 
@@ -35,6 +32,7 @@ def _check_es():
     if _ES_AVAILABLE is None:
         try:
             from elasticsearch import Elasticsearch
+
             c = Elasticsearch(hosts=_ES_HOSTS)
             c.ping()
             c.close()
@@ -68,6 +66,7 @@ def es_svc():
 
 # ── Property 7: Document add/get round-trip ──
 
+
 class TestESDocRoundTrip:
     """**Validates: Requirements 6.1**"""
 
@@ -88,6 +87,7 @@ class TestESDocRoundTrip:
 
 # ── Property 8: Duplicate add raises error ──
 
+
 class TestESDuplicateAdd:
     """**Validates: Requirements 6.2**"""
 
@@ -105,8 +105,8 @@ class TestESDuplicateAdd:
 
 # ── Unit tests ──
 
-class TestESUnit:
 
+class TestESUnit:
     def test_get_nonexistent_returns_none(self, es_svc):
         assert es_svc.get_by_id("no_such_doc") is None
 

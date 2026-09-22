@@ -7,11 +7,11 @@ import unicodedata
 from enum import IntEnum
 from os import path
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union, Iterator
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 _logger = logging.getLogger(__name__)
 
-NOEXT_PATTERN = 'NOEXT'
+NOEXT_PATTERN = "NOEXT"
 
 
 class FullPathMode(IntEnum):
@@ -22,9 +22,7 @@ class FullPathMode(IntEnum):
 
 
 def sort_paths(
-        paths: List[str],
-        sort: Union[bool, str],
-        sort_by_basename: bool = False
+    paths: List[str], sort: Union[bool, str], sort_by_basename: bool = False
 ) -> List[str]:
     """
     Sorts a list of file paths according to the specified criteria: alphabetically, by base name,
@@ -57,20 +55,26 @@ def sort_paths(
               It sorts based on the first numerical index found in each path or filename.
     """
     if sort_by_basename:
-        if sort is True or sort == 'alphabetic':
+        if sort is True or sort == "alphabetic":
             return sorted(paths, key=lambda x: path.basename(x))
-        elif sort == 'index':
-            return sorted(paths, key=lambda x: int(re.search(r'[0-9]+', path.basename(x)).group()))
+        elif sort == "index":
+            return sorted(
+                paths, key=lambda x: int(re.search(r"[0-9]+", path.basename(x)).group())
+            )
     else:
-        if sort is True or sort == 'alphabetic':
+        if sort is True or sort == "alphabetic":
             return sorted(paths)
-        elif sort == 'index':
-            return sorted(paths, key=lambda x: int(re.search(r'[0-9]+', x).group()))
+        elif sort == "index":
+            return sorted(paths, key=lambda x: int(re.search(r"[0-9]+", x).group()))
     return paths
 
 
-def iter_files_by_pattern(dir_or_dirs: str, pattern: str = '*', full_path: Union[FullPathMode, bool] = True,
-                          recursive=True):
+def iter_files_by_pattern(
+    dir_or_dirs: str,
+    pattern: str = "*",
+    full_path: Union[FullPathMode, bool] = True,
+    recursive=True,
+):
     """
     Iterate through the paths or file names of all files in a folder at path `dir_path` of a specified `pattern`.
     :param dir_or_dirs: the path to the folder.
@@ -83,8 +87,8 @@ def iter_files_by_pattern(dir_or_dirs: str, pattern: str = '*', full_path: Union
     def _iter_files(dir_path):
         nonlocal pattern
         if path.isdir(dir_path):
-            if recursive and not pattern.startswith('**/'):
-                pattern = '**/' + pattern
+            if recursive and not pattern.startswith("**/"):
+                pattern = "**/" + pattern
             if full_path is True or full_path == FullPathMode.FullPath:
                 p = Path(path.abspath(dir_path))
                 for f in p.glob(pattern):
@@ -102,7 +106,11 @@ def iter_files_by_pattern(dir_or_dirs: str, pattern: str = '*', full_path: Union
                 for f in p.glob(pattern):
                     if path.isfile(f):
                         f = str(f)
-                        yield f[len_dir_path + 1:] if f[len_dir_path] == os.sep else f[len_dir_path:]
+                        yield (
+                            f[len_dir_path + 1 :]
+                            if f[len_dir_path] == os.sep
+                            else f[len_dir_path:]
+                        )
             elif full_path == FullPathMode.FullPathRelativePathTuple:
                 dir_path = path.abspath(dir_path)
                 len_dir_path = len(dir_path)
@@ -110,7 +118,11 @@ def iter_files_by_pattern(dir_or_dirs: str, pattern: str = '*', full_path: Union
                 for f in p.glob(pattern):
                     if path.isfile(f):
                         f = str(f)
-                        yield (f, f[len_dir_path + 1:]) if f[len_dir_path] == os.sep else (f, f[len_dir_path:])
+                        yield (
+                            (f, f[len_dir_path + 1 :])
+                            if f[len_dir_path] == os.sep
+                            else (f, f[len_dir_path:])
+                        )
 
     if isinstance(dir_or_dirs, str):
         yield from _iter_files(dir_or_dirs)
@@ -120,13 +132,13 @@ def iter_files_by_pattern(dir_or_dirs: str, pattern: str = '*', full_path: Union
 
 
 def get_paths_by_pattern(
-        dir_or_dirs: Union[str, Iterator],
-        pattern: str = '*',
-        full_path: Union[FullPathMode, bool] = True,
-        recursive=True,
-        sort=False,
-        sort_use_basename=False,
-        path_filter='file'
+    dir_or_dirs: Union[str, Iterator],
+    pattern: str = "*",
+    full_path: Union[FullPathMode, bool] = True,
+    recursive=True,
+    sort=False,
+    sort_use_basename=False,
+    path_filter="file",
 ):
     """
     Retrieves paths matching a given pattern within specified directory or directories,
@@ -168,38 +180,58 @@ def get_paths_by_pattern(
     """
 
     if isinstance(path_filter, str):
-        path_filter = getattr(path, f'is{path_filter}', None)
+        path_filter = getattr(path, f"is{path_filter}", None)
 
     def _proc1(f, len_dir_path):
         f = str(f)
-        return f[len_dir_path + 1:] if f[len_dir_path] == os.sep else f[len_dir_path:]
+        return f[len_dir_path + 1 :] if f[len_dir_path] == os.sep else f[len_dir_path:]
 
     def _proc2(f, len_dir_path):
         f = str(f)
-        return (f, f[len_dir_path + 1:]) if f[len_dir_path] == os.sep else (f, f[len_dir_path:])
+        return (
+            (f, f[len_dir_path + 1 :])
+            if f[len_dir_path] == os.sep
+            else (f, f[len_dir_path:])
+        )
 
     def _get_files(dir_path):
         nonlocal pattern
         if path.isdir(dir_path):
-            if recursive and not pattern.startswith('**/'):
-                pattern = '**/' + pattern
+            if recursive and not pattern.startswith("**/"):
+                pattern = "**/" + pattern
 
             if full_path is True or full_path == FullPathMode.FullPath:
                 p = Path(path.abspath(dir_path))
-                results = [str(f) for f in p.glob(pattern) if ((not path_filter) or path_filter(f))]
+                results = [
+                    str(f)
+                    for f in p.glob(pattern)
+                    if ((not path_filter) or path_filter(f))
+                ]
             elif full_path is False or full_path == FullPathMode.BaseName:
                 p = Path(dir_path)
-                results = [path.basename(f) for f in p.glob(pattern) if ((not path_filter) or path_filter(f))]
+                results = [
+                    path.basename(f)
+                    for f in p.glob(pattern)
+                    if ((not path_filter) or path_filter(f))
+                ]
             elif full_path == FullPathMode.RelativePath:
                 dir_path = path.abspath(dir_path)
                 p = Path(dir_path)
                 len_dir_path = len(dir_path)
-                results = [_proc1(f, len_dir_path) for f in p.glob(pattern) if ((not path_filter) or path_filter(f))]
+                results = [
+                    _proc1(f, len_dir_path)
+                    for f in p.glob(pattern)
+                    if ((not path_filter) or path_filter(f))
+                ]
             elif full_path == FullPathMode.FullPathRelativePathTuple:
                 dir_path = path.abspath(dir_path)
                 p = Path(dir_path)
                 len_dir_path = len(dir_path)
-                results = [_proc2(f, len_dir_path) for f in p.glob(pattern) if ((not path_filter) or path_filter(f))]
+                results = [
+                    _proc2(f, len_dir_path)
+                    for f in p.glob(pattern)
+                    if ((not path_filter) or path_filter(f))
+                ]
             return sort_paths(results, sort=sort, sort_by_basename=sort_use_basename)
         else:
             return []
@@ -246,12 +278,12 @@ def get_all_sub_dirs(dir_path: str) -> List[str]:
 
 
 def get_files_by_pattern(
-        dir_or_dirs: Union[str, Iterator],
-        pattern: str = '*',
-        full_path: Union[FullPathMode, bool] = True,
-        recursive=True,
-        sort: bool = False,
-        sort_use_basename: bool = False
+    dir_or_dirs: Union[str, Iterator],
+    pattern: str = "*",
+    full_path: Union[FullPathMode, bool] = True,
+    recursive=True,
+    sort: bool = False,
+    sort_use_basename: bool = False,
 ):
     """
     Get the paths or file names of all files from one or more directories matching a given pattern. By default
@@ -376,57 +408,71 @@ def get_files_by_pattern(
         ['myfile']
     """
 
-    noext_mode = (pattern == NOEXT_PATTERN)
+    noext_mode = pattern == NOEXT_PATTERN
     if noext_mode:
-        pattern = '*'
+        pattern = "*"
 
     def _process_glob(glob_results):
         if noext_mode:
-            return [
-                f
-                for f in glob_results
-                if f.is_file() and '.' not in f.name
-            ]
+            return [f for f in glob_results if f.is_file() and "." not in f.name]
         else:
             return glob_results
 
     def _proc1(f, len_dir_path):
         # Process the file path to return the relative path
         f = str(f)
-        return f[len_dir_path + 1:] if f[len_dir_path] == os.sep else f[len_dir_path:]
+        return f[len_dir_path + 1 :] if f[len_dir_path] == os.sep else f[len_dir_path:]
 
     def _proc2(f, len_dir_path):
         # Process the file path to return a tuple of full path and relative path
         f = str(f)
-        return (f, f[len_dir_path + 1:]) if f[len_dir_path] == os.sep else (f, f[len_dir_path:])
+        return (
+            (f, f[len_dir_path + 1 :])
+            if f[len_dir_path] == os.sep
+            else (f, f[len_dir_path:])
+        )
 
     def _get_files(dir_path):
         nonlocal pattern
 
         if path.isdir(dir_path):
-            if recursive and not pattern.startswith('**/'):
-                pattern = '**/' + pattern
+            if recursive and not pattern.startswith("**/"):
+                pattern = "**/" + pattern
 
             if full_path is True or full_path == FullPathMode.FullPath:
                 # Get files with full path
                 p = Path(path.abspath(dir_path))
-                results = [str(f) for f in _process_glob(p.glob(pattern)) if path.isfile(f)]
+                results = [
+                    str(f) for f in _process_glob(p.glob(pattern)) if path.isfile(f)
+                ]
             elif full_path is False or full_path == FullPathMode.BaseName:
                 # Get files with basename only
                 p = Path(dir_path)
-                results = [path.basename(f) for f in _process_glob(p.glob(pattern)) if path.isfile(f)]
+                results = [
+                    path.basename(f)
+                    for f in _process_glob(p.glob(pattern))
+                    if path.isfile(f)
+                ]
             elif full_path == FullPathMode.RelativePath:
                 # Get files with relative path
                 dir_path = path.abspath(dir_path)
                 p = Path(dir_path)
                 len_dir_path = len(dir_path)
-                results = [_proc1(f, len_dir_path) for f in _process_glob(p.glob(pattern)) if path.isfile(f)]
+                results = [
+                    _proc1(f, len_dir_path)
+                    for f in _process_glob(p.glob(pattern))
+                    if path.isfile(f)
+                ]
             elif full_path == FullPathMode.FullPathRelativePathTuple:
                 # Get files with a tuple of full path and relative path
                 dir_path = path.abspath(dir_path)
                 p = Path(dir_path)
                 len_dir_path = len(dir_path)
-                results = [_proc2(f, len_dir_path) for f in _process_glob(p.glob(pattern)) if path.isfile(f)]
+                results = [
+                    _proc2(f, len_dir_path)
+                    for f in _process_glob(p.glob(pattern))
+                    if path.isfile(f)
+                ]
             return sort_paths(results, sort=sort, sort_by_basename=sort_use_basename)
         else:
             return []
@@ -439,7 +485,9 @@ def get_files_by_pattern(
     )
 
 
-def get_sorted_files_from_all_sub_dirs(dir_path: str, pattern: str, full_path: bool = True):
+def get_sorted_files_from_all_sub_dirs(
+    dir_path: str, pattern: str, full_path: bool = True
+):
     """
     Get sorted files from all subdirectories (including nested subdirectories)
     of a given directory and matching a specified pattern.
@@ -460,10 +508,7 @@ def get_sorted_files_from_all_sub_dirs(dir_path: str, pattern: str, full_path: b
     sub_dirs.sort()
     for sub_dir in sub_dirs:
         sub_dir_files = get_files_by_pattern(
-            dir_or_dirs=sub_dir,
-            pattern=pattern,
-            full_path=full_path,
-            recursive=False
+            dir_or_dirs=sub_dir, pattern=pattern, full_path=full_path, recursive=False
         )
         sub_dir_files.sort()
         files.extend(sub_dir_files)
@@ -479,6 +524,7 @@ from typing import NamedTuple
 
 class FileCandidate(NamedTuple):
     """One root's version of a file."""
+
     root_name: str
     abs_path: str
     size: int
@@ -487,6 +533,7 @@ class FileCandidate(NamedTuple):
 
 class MultiRootDiff(NamedTuple):
     """Result of comparing files across multiple root directories."""
+
     agreed: List[Dict[str, Any]]
     conflicts: Dict[str, List[Dict[str, Any]]]
 
@@ -507,7 +554,9 @@ def canonicalize_text(content: bytes) -> bytes:
     return text.encode("utf-8")
 
 
-def hash_file_canonical(filepath: str, large_file_threshold: int = 10 * 1024 * 1024) -> str:
+def hash_file_canonical(
+    filepath: str, large_file_threshold: int = 10 * 1024 * 1024
+) -> str:
     """SHA-256 of canonical-normalized file content.
 
     Files larger than *large_file_threshold* are hashed raw (no normalization).
@@ -559,25 +608,29 @@ def find_conflicting_and_agreed_files(
                 rel_path = os.path.relpath(abs_path, root_dir)
                 size = os.path.getsize(abs_path)
                 sha = hash_file_canonical(abs_path)
-                file_map.setdefault(rel_path, []).append({
-                    "root_name": name,
-                    "abs_path": abs_path,
-                    "size": size,
-                    "sha256": sha,
-                })
+                file_map.setdefault(rel_path, []).append(
+                    {
+                        "root_name": name,
+                        "abs_path": abs_path,
+                        "size": size,
+                        "sha256": sha,
+                    }
+                )
 
     agreed: List[Dict[str, Any]] = []
     conflicts: Dict[str, List[Dict[str, Any]]] = {}
     for rel_path, instances in sorted(file_map.items()):
         unique_hashes = {inst["sha256"] for inst in instances}
         if len(unique_hashes) == 1:
-            agreed.append({
-                "path": rel_path,
-                "size": instances[0]["size"],
-                "sha256": instances[0]["sha256"],
-                "abs_path": instances[0]["abs_path"],
-                "source_roots": [inst["root_name"] for inst in instances],
-            })
+            agreed.append(
+                {
+                    "path": rel_path,
+                    "size": instances[0]["size"],
+                    "sha256": instances[0]["sha256"],
+                    "abs_path": instances[0]["abs_path"],
+                    "source_roots": [inst["root_name"] for inst in instances],
+                }
+            )
         else:
             conflicts[rel_path] = instances
     return agreed, conflicts
@@ -640,7 +693,9 @@ def safe_copy_per_file(
             copied.append(rel_path)
             _logger.warning(
                 "Conflict fallback (largest): %s → copied from %s (%d bytes)",
-                rel_path, best.get("root_name", "unknown"), best.get("size", 0),
+                rel_path,
+                best.get("root_name", "unknown"),
+                best.get("size", 0),
             )
     return copied
 
@@ -665,5 +720,7 @@ def group_conflicts_by_parent(
             parent = "/".join(parts[:depth])
         else:
             parent = "."
-        groups.setdefault(parent, []).append({"path": rel_path, "candidates": candidates})
+        groups.setdefault(parent, []).append(
+            {"path": rel_path, "candidates": candidates}
+        )
     return groups

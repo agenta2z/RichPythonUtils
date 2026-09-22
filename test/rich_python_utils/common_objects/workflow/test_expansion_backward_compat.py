@@ -5,31 +5,35 @@ when expansion is not used (max_expansion_events=0, max_expansion_depth=0).
 
 Requirements: 21.1, 21.2, 21.3, 21.4, 21.5
 """
+
 import asyncio
 import os
 import shutil
 import tempfile
 
 import pytest
-from attr import attrs, attrib
-
-from rich_python_utils.common_objects.workflow.workflow import Workflow
-from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode, WorkGraph
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
+from attr import attrib, attrs
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
+)
 from rich_python_utils.common_objects.workflow.common.step_wrapper import StepWrapper
 from rich_python_utils.common_objects.workflow.common.worknode_base import (
-    WorkGraphStopFlags,
     NextNodesSelector,
+    WorkGraphStopFlags,
 )
+from rich_python_utils.common_objects.workflow.workflow import Workflow
+from rich_python_utils.common_objects.workflow.workgraph import WorkGraph, WorkGraphNode
 
 
 # ---------------------------------------------------------------------------
 # Concrete Workflow subclass for testing
 # ---------------------------------------------------------------------------
 
+
 @attrs(slots=False)
 class _BackcompatWorkflow(Workflow):
     """Minimal Workflow subclass for backward compat tests."""
+
     _save_dir: str = attrib(default=None)
 
     def __attrs_post_init__(self):
@@ -50,6 +54,7 @@ class _BackcompatWorkflow(Workflow):
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def save_dir():
     d = tempfile.mkdtemp(prefix="bc_wf_test_")
@@ -60,6 +65,7 @@ def save_dir():
 # ===========================================================================
 # Workflow backward compat (max_expansion_events=0 default)
 # ===========================================================================
+
 
 class TestWorkflowDefaultBehavior:
     """Workflow with max_expansion_events=0 (default) behaves identically to pre-expansion code."""
@@ -183,6 +189,7 @@ class TestWorkflowDefaultBehavior:
 # WorkGraph backward compat (max_expansion_depth=0 default)
 # ===========================================================================
 
+
 class TestWorkGraphDefaultBehavior:
     """WorkGraph with max_expansion_depth=0 (default) behaves identically."""
 
@@ -281,7 +288,10 @@ class TestWorkGraphDefaultBehavior:
 
         node_a = WorkGraphNode(
             name="A",
-            value=lambda x: (call_log.append("A"), (WorkGraphStopFlags.Terminate, x + 1))[1],
+            value=lambda x: (
+                call_log.append("A"),
+                (WorkGraphStopFlags.Terminate, x + 1),
+            )[1],
             result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         )
         node_b = WorkGraphNode(

@@ -13,7 +13,6 @@ Covers:
 from pathlib import Path
 
 import pytest
-
 from rich_python_utils.common_objects.variable_manager import (
     FileBasedVariableManager,
     VariableManagerConfig,
@@ -48,9 +47,7 @@ class TestPerFolderVersionConvention:
         folder = tmp_path / "task_preamble"
         folder.mkdir()
         (folder / "agg_v2.j2").write_text("aliased preamble", encoding="utf-8")
-        (folder / ".config.yaml").write_text(
-            "aggregation: agg_v2\n", encoding="utf-8"
-        )
+        (folder / ".config.yaml").write_text("aggregation: agg_v2\n", encoding="utf-8")
 
         path, name = manager._find_variable_file(
             "task_preamble", [tmp_path], version="aggregation"
@@ -83,9 +80,7 @@ class TestPass2DefaultFallback:
         folder = tmp_path / "task_instructions"
         folder.mkdir()
         (folder / "generic.j2").write_text("generic content", encoding="utf-8")
-        (folder / ".config.yaml").write_text(
-            "default: generic\n", encoding="utf-8"
-        )
+        (folder / ".config.yaml").write_text("default: generic\n", encoding="utf-8")
 
         path, _ = manager._find_variable_file(
             "task_instructions", [tmp_path], version="aggregation"
@@ -113,9 +108,7 @@ class TestPass2DefaultFallback:
 
 
 class TestVersionAnywhereBeatsUnversionedLocally:
-    def test_version_at_level_b_beats_unversioned_at_level_a(
-        self, tmp_path
-    ):
+    def test_version_at_level_b_beats_unversioned_at_level_a(self, tmp_path):
         # Cascade A (specific) has unversioned only.
         # Cascade B (general) has versioned aggregation file.
         # Pass 1 sweeps both levels for version BEFORE Pass 3 sweeps for unversioned.
@@ -125,9 +118,7 @@ class TestVersionAnywhereBeatsUnversionedLocally:
         cascade_a.mkdir()
         cascade_b.mkdir()
 
-        (cascade_a / "task_preamble.j2").write_text(
-            "A unversioned", encoding="utf-8"
-        )
+        (cascade_a / "task_preamble.j2").write_text("A unversioned", encoding="utf-8")
         b_folder = cascade_b / "task_preamble"
         b_folder.mkdir()
         b_versioned = b_folder / "aggregation.j2"
@@ -149,9 +140,7 @@ class TestVersionAnywhereBeatsUnversionedLocally:
         cascade_a.mkdir()
         cascade_b.mkdir()
 
-        (cascade_a / "task_preamble.j2").write_text(
-            "A unversioned", encoding="utf-8"
-        )
+        (cascade_a / "task_preamble.j2").write_text("A unversioned", encoding="utf-8")
         b_folder = cascade_b / "task_preamble"
         b_folder.mkdir()
         b_default = b_folder / "default.j2"
@@ -195,9 +184,7 @@ class TestPass1PhaseOrdering:
         flat_target.write_text("flat content", encoding="utf-8")
         folder = tmp_path / "task_preamble"
         folder.mkdir()
-        (folder / "aggregation.j2").write_text(
-            "per-folder content", encoding="utf-8"
-        )
+        (folder / "aggregation.j2").write_text("per-folder content", encoding="utf-8")
 
         manager = FileBasedVariableManager(base_path=str(tmp_path))
         path, _ = manager._find_variable_file(
@@ -231,18 +218,14 @@ class TestEmptyVersionSemantics:
         folder.mkdir()
         (folder / "aggregation.j2").write_text("content", encoding="utf-8")
 
-        path, _ = manager._find_variable_file(
-            "task_preamble", [tmp_path], version=""
-        )
+        path, _ = manager._find_variable_file("task_preamble", [tmp_path], version="")
         assert path is None
 
     def test_empty_version_finds_unversioned(self, manager, tmp_path):
         target = tmp_path / "task_preamble.j2"
         target.write_text("unversioned", encoding="utf-8")
 
-        path, _ = manager._find_variable_file(
-            "task_preamble", [tmp_path], version=""
-        )
+        path, _ = manager._find_variable_file("task_preamble", [tmp_path], version="")
         assert path == target
 
 
@@ -312,9 +295,7 @@ class TestDotToSlashConversion:
         target = deep / "c.j2"
         target.write_text("deep content", encoding="utf-8")
 
-        path, name = manager._find_variable_file(
-            "a.b.c", [tmp_path], version=""
-        )
+        path, name = manager._find_variable_file("a.b.c", [tmp_path], version="")
         assert path == target
         assert name == "a.b.c"
 
@@ -328,9 +309,7 @@ class TestDotToSlashConversion:
         flat = tmp_path / "foo.bar.j2"
         flat.write_text("flat", encoding="utf-8")
 
-        path, _ = manager._find_variable_file(
-            "foo.bar", [tmp_path], version=""
-        )
+        path, _ = manager._find_variable_file("foo.bar", [tmp_path], version="")
         # Dot-to-slash is tried before underscore splits
         assert path == nested
 
@@ -400,7 +379,9 @@ class TestDotToSlashConversion:
 
         result = mgr.resolve_from_content(
             "{{ instructions }}",
-            variable_root_space="", variable_type="", version="",
+            variable_root_space="",
+            variable_type="",
+            version="",
         )
         assert "instructions" in result
         assert "DO NOT rm -rf /" in result["instructions"]

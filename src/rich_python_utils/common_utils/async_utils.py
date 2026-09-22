@@ -18,7 +18,10 @@ import random
 from time import monotonic
 from typing import Any, Callable, Dict, Sequence, Tuple, Union
 
-from rich_python_utils.common_utils.function_helper import FallbackMode  # noqa: F401 — re-exported
+from rich_python_utils.common_utils.function_helper import (  # noqa: F401 — re-exported
+    FallbackMode,
+    OutputValidationExhaustedError,
+)
 
 
 async def maybe_await(result: Any) -> Any:
@@ -260,12 +263,16 @@ async def async_execute_with_retry(
             await asyncio.sleep(wait_time)
 
     for chain_idx, current_func in enumerate(callable_chain):
-        is_last_in_chain = (chain_idx == len(callable_chain) - 1)
-        is_primary = (chain_idx == 0)
+        is_last_in_chain = chain_idx == len(callable_chain) - 1
+        is_primary = chain_idx == 0
 
         # Determine max attempts for this callable in the chain
         # CRITICAL: Preserve async semantics: `for attempt in range(max_retry)` = max_retry total calls
-        if is_primary and has_fallback and fallback_mode == FallbackMode.ON_FIRST_FAILURE:
+        if (
+            is_primary
+            and has_fallback
+            and fallback_mode == FallbackMode.ON_FIRST_FAILURE
+        ):
             # ON_FIRST_FAILURE: primary gets exactly 1 attempt
             current_max_attempts = 1
         else:
@@ -288,7 +295,9 @@ async def async_execute_with_retry(
                 # Execute with or without per-attempt timeout
                 if effective is not None:
                     coro = current_func(*args, **kwargs)
-                    result = await asyncio.wait_for(maybe_await(coro), timeout=effective)
+                    result = await asyncio.wait_for(
+                        maybe_await(coro), timeout=effective
+                    )
                 else:
                     result = current_func(*args, **kwargs)
                     result = await maybe_await(result)
@@ -300,20 +309,45 @@ async def async_execute_with_retry(
                 if output_validator is not None:
                     verdict = await call_maybe_async(output_validator, result)
                     if verdict is not True and verdict is not None:
+                        # Deterministic validation/guardrail rejection. Signalled
+                        # as OutputValidationExhaustedError (a dedicated type), NOT
+                        # a bare ValueError — a two-path contract that stops one
+                        # bad result from multiplying up a NESTED-retry tree:
+                        #   • HERE (the validation path) it is retried up to
+                        #     max_retry WITHOUT consulting non_retryable_exceptions,
+                        #     so THIS callable keeps its own retry budget;
+                        #   • once it ESCAPES to an ENCLOSING helper's `except`
+                        #     block (below), that block DOES honor
+                        #     non_retryable_exceptions and re-raises instead of
+                        #     re-running its whole subtree.
+                        # Regression symptom if this is ever reverted to a bare
+                        # ValueError: a single failing leaf re-runs the entire
+                        # parent subtree — retries multiply N×M×K across nesting
+                        # levels. See the OutputValidationExhaustedError docstring.
                         if isinstance(verdict, str):
-                            last_exception = ValueError("Output validation failed", verdict)
+                            last_exception = OutputValidationExhaustedError(
+                                "Output validation failed", verdict
+                            )
                         else:
-                            last_exception = ValueError("Output validation failed")
+                            last_exception = OutputValidationExhaustedError(
+                                "Output validation failed"
+                            )
                         transition_exception = last_exception
                         total_attempts_across_chain += 1
 
                         # ON_FIRST_FAILURE for primary: validator failure triggers immediate transition
-                        if is_primary and has_fallback and fallback_mode == FallbackMode.ON_FIRST_FAILURE:
+                        if (
+                            is_primary
+                            and has_fallback
+                            and fallback_mode == FallbackMode.ON_FIRST_FAILURE
+                        ):
                             break  # break inner for to transition
 
                         # Fire on_retry_callback for validation failure
                         if on_retry_callback:
-                            await maybe_await(on_retry_callback(attempt, last_exception))
+                            await maybe_await(
+                                on_retry_callback(attempt, last_exception)
+                            )
 
                         if attempt < current_max_attempts - 1:
                             wait_time = random.uniform(min_retry_wait, max_retry_wait)
@@ -343,6 +377,11 @@ async def async_execute_with_retry(
                     await _sleep_with_budget(wait_time)
 
             except retry_on_exceptions as e:
+                # Terminal-type gate. An OutputValidationExhaustedError that
+                # escaped a NESTED callable's own validation loop lands here; it is
+                # listed in non_retryable_exceptions, so we re-raise (do NOT retry)
+                # — this is what prevents a spent guardrail from re-running this
+                # whole subtree. (Same mechanism as HopelessOutputError.)
                 if non_retryable_exceptions and isinstance(e, non_retryable_exceptions):
                     raise
 
@@ -386,12 +425,16 @@ async def async_execute_with_retry(
         if on_fallback_callback is not None:
             next_func = callable_chain[chain_idx + 1]
             await maybe_await(
-                on_fallback_callback(current_func, next_func, transition_exception, total_attempts_across_chain)
+                on_fallback_callback(
+                    current_func,
+                    next_func,
+                    transition_exception,
+                    total_attempts_across_chain,
+                )
             )
 
     # Should not reach here, but just in case
     return _default_return_or_raise_terminal()
-
 
 
 def _run_async(coro) -> Any:
@@ -427,6 +470,9 @@ def _run_async(coro) -> Any:
             "Use 'await coro' directly instead."
         )
     except RuntimeError as e:
-        if "no running event loop" in str(e).lower() or "no current event loop" in str(e).lower():
+        if (
+            "no running event loop" in str(e).lower()
+            or "no current event loop" in str(e).lower()
+        ):
             return asyncio.run(coro)
         raise

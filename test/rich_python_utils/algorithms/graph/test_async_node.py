@@ -8,7 +8,6 @@ broadcast vs targeted send, mixed modes, and error handling.
 import asyncio
 
 import pytest
-
 from rich_python_utils.algorithms.graph.async_node import AsyncNode
 from rich_python_utils.algorithms.graph.node import Node
 
@@ -16,6 +15,7 @@ from rich_python_utils.algorithms.graph.node import Node
 # ---------------------------------------------------------------------------
 # Helper subclass that records received messages (direct mode)
 # ---------------------------------------------------------------------------
+
 
 class RecordingNode(AsyncNode):
     """AsyncNode subclass that records messages received via on_receive."""
@@ -32,8 +32,8 @@ class RecordingNode(AsyncNode):
 # Construction
 # ---------------------------------------------------------------------------
 
-class TestAsyncNodeConstruction:
 
+class TestAsyncNodeConstruction:
     def test_inherits_node(self):
         node = AsyncNode("A")
         assert isinstance(node, Node)
@@ -62,8 +62,8 @@ class TestAsyncNodeConstruction:
 # Direct mode
 # ---------------------------------------------------------------------------
 
-class TestDirectMode:
 
+class TestDirectMode:
     def test_send_triggers_on_receive(self):
         async def _test():
             a = AsyncNode("A")
@@ -71,6 +71,7 @@ class TestDirectMode:
             a.add_next(b)
             await a.send("hello")
             assert b.received == ["hello"]
+
         asyncio.run(_test())
 
     def test_send_multiple_messages(self):
@@ -82,15 +83,18 @@ class TestDirectMode:
             await a.send("m2")
             await a.send("m3")
             assert b.received == ["m1", "m2", "m3"]
+
         asyncio.run(_test())
 
     def test_default_on_receive_is_noop(self):
         """Default on_receive does nothing and doesn't raise."""
+
         async def _test():
             a = AsyncNode("A")
             b = AsyncNode("B")
             a.add_next(b)
             await a.send("ignored")
+
         asyncio.run(_test())
 
 
@@ -98,8 +102,8 @@ class TestDirectMode:
 # Queue mode
 # ---------------------------------------------------------------------------
 
-class TestQueueMode:
 
+class TestQueueMode:
     def test_send_enqueues(self):
         async def _test():
             a = AsyncNode("A")
@@ -107,6 +111,7 @@ class TestQueueMode:
             a.add_next(b)
             await a.send("msg")
             assert not b._queue.empty()
+
         asyncio.run(_test())
 
     def test_receive_dequeues(self):
@@ -118,6 +123,7 @@ class TestQueueMode:
             result = await b.receive()
             assert result == "msg"
             assert b._queue.empty()
+
         asyncio.run(_test())
 
     def test_fifo_order(self):
@@ -131,6 +137,7 @@ class TestQueueMode:
             assert await b.receive() == "first"
             assert await b.receive() == "second"
             assert await b.receive() == "third"
+
         asyncio.run(_test())
 
     def test_receive_without_queue_raises(self):
@@ -138,6 +145,7 @@ class TestQueueMode:
             node = AsyncNode("A")
             with pytest.raises(RuntimeError, match="queue mode"):
                 await node.receive()
+
         asyncio.run(_test())
 
 
@@ -145,8 +153,8 @@ class TestQueueMode:
 # Broadcast vs targeted send
 # ---------------------------------------------------------------------------
 
-class TestBroadcastAndTargeted:
 
+class TestBroadcastAndTargeted:
     def test_broadcast_to_all_next(self):
         async def _test():
             a = AsyncNode("A")
@@ -157,6 +165,7 @@ class TestBroadcastAndTargeted:
             await a.send("broadcast")
             assert b.received == ["broadcast"]
             assert c.received == ["broadcast"]
+
         asyncio.run(_test())
 
     def test_targeted_single_node(self):
@@ -169,6 +178,7 @@ class TestBroadcastAndTargeted:
             await a.send("only-b", target=b)
             assert b.received == ["only-b"]
             assert c.received == []
+
         asyncio.run(_test())
 
     def test_targeted_list_of_nodes(self):
@@ -184,13 +194,16 @@ class TestBroadcastAndTargeted:
             assert b.received == ["subset"]
             assert c.received == []
             assert d.received == ["subset"]
+
         asyncio.run(_test())
 
     def test_send_with_no_next_nodes(self):
         """send() on a node with no next nodes should be a no-op."""
+
         async def _test():
             a = AsyncNode("A")
             await a.send("void")
+
         asyncio.run(_test())
 
 
@@ -198,8 +211,8 @@ class TestBroadcastAndTargeted:
 # Mixed modes
 # ---------------------------------------------------------------------------
 
-class TestMixedModes:
 
+class TestMixedModes:
     def test_mixed_queue_and_direct_targets(self):
         async def _test():
             a = AsyncNode("A")
@@ -210,10 +223,12 @@ class TestMixedModes:
             await a.send("mixed")
             assert b.received == ["mixed"]
             assert await c.receive() == "mixed"
+
         asyncio.run(_test())
 
     def test_plain_node_neighbors_are_skipped(self):
         """Plain Node instances in next list should be silently skipped."""
+
         async def _test():
             a = AsyncNode("A")
             plain = Node("plain")
@@ -222,6 +237,7 @@ class TestMixedModes:
             a.add_next(b)
             await a.send("hello")
             assert b.received == ["hello"]
+
         asyncio.run(_test())
 
 
@@ -229,8 +245,8 @@ class TestMixedModes:
 # Node inheritance behavior
 # ---------------------------------------------------------------------------
 
-class TestInheritedBehavior:
 
+class TestInheritedBehavior:
     def test_bfs_still_works(self):
         a = AsyncNode("A")
         b = AsyncNode("B")

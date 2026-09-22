@@ -25,19 +25,21 @@ from pathlib import Path
 
 # Add src to path
 project_root = Path(__file__).parent.parent.parent.parent.parent
-sys.path.insert(0, str(project_root / 'src'))
+sys.path.insert(0, str(project_root / "src"))
 
-from rich_python_utils.service_utils.queue_service.redis_queue_service import RedisQueueService
+from rich_python_utils.service_utils.queue_service.redis_queue_service import (
+    RedisQueueService,
+)
 
 
 def test_connection():
     """Test connection to Redis server."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 1: Connection to Redis Server")
-    print("="*80)
+    print("=" * 80)
 
     try:
-        service = RedisQueueService(host='localhost', port=6379)
+        service = RedisQueueService(host="localhost", port=6379)
         print(f"[OK] Connected to Redis at localhost:6379")
         print(f"  Service: {service}")
 
@@ -58,14 +60,14 @@ def test_connection():
 
 def test_create_queue():
     """Test creating queues."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 2: Create Queue")
-    print("="*80)
+    print("=" * 80)
 
     service = RedisQueueService()
 
     # Create queue
-    queue_id = 'test_queue_1'
+    queue_id = "test_queue_1"
     created = service.create_queue(queue_id)
     print(f"[OK] Created queue: {queue_id} (created={created})")
 
@@ -81,27 +83,27 @@ def test_create_queue():
 
 def test_put_get():
     """Test putting and getting objects."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 3: Put and Get Objects")
-    print("="*80)
+    print("=" * 80)
 
     service = RedisQueueService()
-    queue_id = 'test_queue_2'
+    queue_id = "test_queue_2"
 
     # Test different object types
     test_objects = [
         42,
         "hello world",
         [1, 2, 3],
-        {'key': 'value', 'number': 123},
-        ('tuple', 'data'),
-        {'nested': {'dict': {'with': ['list', 'inside']}}},
+        {"key": "value", "number": 123},
+        ("tuple", "data"),
+        {"nested": {"dict": {"with": ["list", "inside"]}}},
     ]
 
     print(f"\nPutting {len(test_objects)} objects onto queue '{queue_id}':")
     for i, obj in enumerate(test_objects):
         service.put(queue_id, obj)
-        print(f"  [{i+1}] Put: {obj}")
+        print(f"  [{i + 1}] Put: {obj}")
 
     # Check size
     size = service.size(queue_id)
@@ -112,7 +114,7 @@ def test_put_get():
     print(f"\nGetting objects from queue:")
     for i in range(len(test_objects)):
         obj = service.get(queue_id, blocking=False)
-        print(f"  [{i+1}] Got: {obj}")
+        print(f"  [{i + 1}] Got: {obj}")
         assert obj == test_objects[i], f"Expected {test_objects[i]}, got {obj}"
 
     print(f"\n[OK] All objects retrieved correctly")
@@ -135,16 +137,17 @@ def test_put_get():
 
 def test_blocking_get():
     """Test blocking get with timeout."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 4: Blocking Get with Timeout")
-    print("="*80)
+    print("=" * 80)
 
     service = RedisQueueService()
-    queue_id = 'test_queue_3'
+    queue_id = "test_queue_3"
 
     # Get from empty queue with timeout
     print(f"Getting from empty queue with 2 second timeout...")
     import time
+
     start = time.time()
     obj = service.get(queue_id, blocking=True, timeout=2.0)
     elapsed = time.time() - start
@@ -169,15 +172,15 @@ def test_blocking_get():
 
 def test_peek():
     """Test peeking at queue without removing items."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 5: Peek Operation")
-    print("="*80)
+    print("=" * 80)
 
     service = RedisQueueService()
-    queue_id = 'test_queue_4'
+    queue_id = "test_queue_4"
 
     # Put multiple items
-    items = ['first', 'second', 'third']
+    items = ["first", "second", "third"]
     for item in items:
         service.put(queue_id, item)
 
@@ -186,12 +189,12 @@ def test_peek():
     # Peek at tail (last item to be retrieved)
     tail = service.peek(queue_id, index=-1)
     print(f"[OK] Peek at tail (index=-1): {tail}")
-    assert tail == 'first', f"Expected 'first', got {tail}"
+    assert tail == "first", f"Expected 'first', got {tail}"
 
     # Peek at head (first item to be retrieved)
     head = service.peek(queue_id, index=0)
     print(f"[OK] Peek at head (index=0): {head}")
-    assert head == 'third', f"Expected 'third', got {head}"
+    assert head == "third", f"Expected 'third', got {head}"
 
     # Check size didn't change
     size = service.size(queue_id)
@@ -206,17 +209,17 @@ def test_peek():
 
 def test_multiple_queues():
     """Test multiple independent queues."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 6: Multiple Independent Queues")
-    print("="*80)
+    print("=" * 80)
 
     service = RedisQueueService()
 
     # Create multiple queues
     queues = {
-        'queue_a': [1, 2, 3],
-        'queue_b': ['a', 'b', 'c'],
-        'queue_c': [{'key': 'value'}]
+        "queue_a": [1, 2, 3],
+        "queue_b": ["a", "b", "c"],
+        "queue_c": [{"key": "value"}],
     }
 
     # Put items
@@ -261,12 +264,12 @@ def test_multiple_queues():
 
 def test_clear_and_delete():
     """Test clearing and deleting queues."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 7: Clear and Delete Operations")
-    print("="*80)
+    print("=" * 80)
 
     service = RedisQueueService()
-    queue_id = 'test_queue_5'
+    queue_id = "test_queue_5"
 
     # Put items
     for i in range(5):
@@ -296,11 +299,11 @@ def test_clear_and_delete():
 
 def test_context_manager():
     """Test using service as context manager."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 8: Context Manager")
-    print("="*80)
+    print("=" * 80)
 
-    queue_id = 'test_queue_6'
+    queue_id = "test_queue_6"
 
     with RedisQueueService() as service:
         service.put(queue_id, "test_data")
@@ -341,13 +344,14 @@ def run_all_tests():
         except Exception as e:
             print(f"\n[X] Test failed with exception: {e}")
             import traceback
+
             traceback.print_exc()
             results.append((name, False))
 
     # Summary
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST SUMMARY")
-    print("="*80)
+    print("=" * 80)
 
     for name, success in results:
         status = "[OK] PASS" if success else "[X] FAIL"
@@ -366,6 +370,6 @@ def run_all_tests():
         return False
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     success = run_all_tests()
     sys.exit(0 if success else 1)

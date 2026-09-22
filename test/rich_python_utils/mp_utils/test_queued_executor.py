@@ -15,31 +15,35 @@ Usage:
     python test_queued_executor.py
 """
 
-import sys
-import time
-import threading
-import uuid
-import tempfile
-import shutil
 import math
-from pathlib import Path
+import shutil
+import sys
+import tempfile
+import threading
+import time
+import uuid
 from functools import partial
 from multiprocessing import Manager
+from pathlib import Path
 
 # Add src to path
 project_root = Path(__file__).parent.parent.parent.parent
-sys.path.insert(0, str(project_root / 'src'))
+sys.path.insert(0, str(project_root / "src"))
 
-from rich_python_utils.mp_utils.task import Task, TaskState, TaskStatus
 from rich_python_utils.mp_utils.queued_executor import (
     QueuedExecutorBase,
-    SingleThreadExecutor,
-    SimulatedMultiThreadExecutor,
-    QueuedThreadPoolExecutor,
     QueuedProcessPoolExecutor,
+    QueuedThreadPoolExecutor,
+    SimulatedMultiThreadExecutor,
+    SingleThreadExecutor,
 )
-from rich_python_utils.service_utils.queue_service.thread_queue_service import ThreadQueueService
-from rich_python_utils.service_utils.queue_service.storage_based_queue_service import StorageBasedQueueService
+from rich_python_utils.mp_utils.task import Task, TaskState, TaskStatus
+from rich_python_utils.service_utils.queue_service.storage_based_queue_service import (
+    StorageBasedQueueService,
+)
+from rich_python_utils.service_utils.queue_service.thread_queue_service import (
+    ThreadQueueService,
+)
 
 
 # =============================================================================
@@ -50,12 +54,12 @@ from rich_python_utils.service_utils.queue_service.storage_based_queue_service i
 _test_counter = 0
 
 
-def unique_queue_ids(prefix='test'):
+def unique_queue_ids(prefix="test"):
     """Generate unique queue IDs to avoid test contamination."""
     global _test_counter
     _test_counter += 1
     unique = f"{_test_counter}_{uuid.uuid4().hex[:6]}"
-    return f'{prefix}_in_{unique}', f'{prefix}_out_{unique}'
+    return f"{prefix}_in_{unique}", f"{prefix}_out_{unique}"
 
 
 def create_queue_service():
@@ -103,6 +107,7 @@ def constant_42():
 # Module-level functions for QueuedProcessPoolExecutor tests (must be picklable)
 # =============================================================================
 
+
 def create_storage_queue_service(root_path):
     """Factory function to create StorageBasedQueueService instances.
 
@@ -115,7 +120,7 @@ def create_storage_queue_service(root_path):
 def compute_primes_for_test(limit):
     """Find prime numbers up to limit (CPU-intensive, picklable)."""
     if limit < 2:
-        return {'limit': limit, 'count': 0}
+        return {"limit": limit, "count": 0}
     primes = []
     for num in range(2, limit + 1):
         is_prime = True
@@ -125,7 +130,7 @@ def compute_primes_for_test(limit):
                 break
         if is_prime:
             primes.append(num)
-    return {'limit': limit, 'count': len(primes)}
+    return {"limit": limit, "count": len(primes)}
 
 
 def add_numbers_for_process(a, b):
@@ -148,6 +153,7 @@ def failing_process_function():
 # SingleThreadExecutor Tests
 # =============================================================================
 
+
 def test_single_thread_executor_creation():
     """Test SingleThreadExecutor creation."""
     print("\n" + "=" * 80)
@@ -155,21 +161,21 @@ def test_single_thread_executor_creation():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('create')
+    input_q, output_q = unique_queue_ids("create")
 
     executor = SingleThreadExecutor(
         input_queue_service=service,
         output_queue_service=service,
         input_queue_id=input_q,
         output_queue_id=output_q,
-        name='TestExecutor',
-        verbose=False
+        name="TestExecutor",
+        verbose=False,
     )
 
     assert executor.num_workers == 1, "SingleThreadExecutor should have 1 worker"
     print(f"[OK] num_workers: {executor.num_workers}")
 
-    assert executor.name == 'TestExecutor'
+    assert executor.name == "TestExecutor"
     print(f"[OK] name: {executor.name}")
 
     assert not executor.is_running
@@ -190,14 +196,14 @@ def test_single_thread_executor_non_blocking():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('nonblock')
+    input_q, output_q = unique_queue_ids("nonblock")
 
     executor = SingleThreadExecutor(
         input_queue_service=service,
         output_queue_service=service,
         input_queue_id=input_q,
         output_queue_id=output_q,
-        verbose=False
+        verbose=False,
     )
 
     # Submit tasks before starting
@@ -248,14 +254,14 @@ def test_single_thread_executor_blocking():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('block')
+    input_q, output_q = unique_queue_ids("block")
 
     executor = SingleThreadExecutor(
         input_queue_service=service,
         output_queue_service=service,
         input_queue_id=input_q,
         output_queue_id=output_q,
-        verbose=False
+        verbose=False,
     )
 
     # Submit task
@@ -295,14 +301,14 @@ def test_single_thread_executor_start_alias():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('alias')
+    input_q, output_q = unique_queue_ids("alias")
 
     executor = SingleThreadExecutor(
         input_queue_service=service,
         output_queue_service=service,
         input_queue_id=input_q,
         output_queue_id=output_q,
-        verbose=False
+        verbose=False,
     )
 
     # Use start() instead of run(blocking=False)
@@ -322,6 +328,7 @@ def test_single_thread_executor_start_alias():
 # SimulatedMultiThreadExecutor Tests
 # =============================================================================
 
+
 def test_simulated_executor_creation():
     """Test SimulatedMultiThreadExecutor creation."""
     print("\n" + "=" * 80)
@@ -329,14 +336,14 @@ def test_simulated_executor_creation():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('simcreate')
+    input_q, output_q = unique_queue_ids("simcreate")
 
     executor = SimulatedMultiThreadExecutor(
         input_queue_service=service,
         output_queue_service=service,
         input_queue_id=input_q,
         output_queue_id=output_q,
-        verbose=False
+        verbose=False,
     )
 
     assert executor.num_workers == 1
@@ -355,14 +362,14 @@ def test_simulated_executor_process_one():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('procone')
+    input_q, output_q = unique_queue_ids("procone")
 
     executor = SimulatedMultiThreadExecutor(
         input_queue_service=service,
         output_queue_service=service,
         input_queue_id=input_q,
         output_queue_id=output_q,
-        verbose=False
+        verbose=False,
     )
 
     # Submit task
@@ -403,14 +410,14 @@ def test_simulated_executor_process_one_blocking():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('proconeblock')
+    input_q, output_q = unique_queue_ids("proconeblock")
 
     executor = SimulatedMultiThreadExecutor(
         input_queue_service=service,
         output_queue_service=service,
         input_queue_id=input_q,
         output_queue_id=output_q,
-        verbose=False
+        verbose=False,
     )
 
     # Try to get with timeout on empty queue
@@ -432,14 +439,14 @@ def test_simulated_executor_process_all():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('procall')
+    input_q, output_q = unique_queue_ids("procall")
 
     executor = SimulatedMultiThreadExecutor(
         input_queue_service=service,
         output_queue_service=service,
         input_queue_id=input_q,
         output_queue_id=output_q,
-        verbose=False
+        verbose=False,
     )
 
     # Submit multiple tasks
@@ -478,14 +485,14 @@ def test_simulated_executor_run_in_thread():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('runinthread')
+    input_q, output_q = unique_queue_ids("runinthread")
 
     executor = SimulatedMultiThreadExecutor(
         input_queue_service=service,
         output_queue_service=service,
         input_queue_id=input_q,
         output_queue_id=output_q,
-        verbose=False
+        verbose=False,
     )
 
     # Start in thread
@@ -524,14 +531,14 @@ def test_simulated_executor_failed_task():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('failedtask')
+    input_q, output_q = unique_queue_ids("failedtask")
 
     executor = SimulatedMultiThreadExecutor(
         input_queue_service=service,
         output_queue_service=service,
         input_queue_id=input_q,
         output_queue_id=output_q,
-        verbose=False
+        verbose=False,
     )
 
     # Submit failing task
@@ -558,14 +565,14 @@ def test_simulated_executor_invalid_queue_item():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('invaliditem')
+    input_q, output_q = unique_queue_ids("invaliditem")
 
     executor = SimulatedMultiThreadExecutor(
         input_queue_service=service,
         output_queue_service=service,
         input_queue_id=input_q,
         output_queue_id=output_q,
-        verbose=False
+        verbose=False,
     )
 
     # Put non-Task item directly
@@ -588,6 +595,7 @@ def test_simulated_executor_invalid_queue_item():
 # QueuedThreadPoolExecutor Tests
 # =============================================================================
 
+
 def test_thread_pool_executor_creation():
     """Test QueuedThreadPoolExecutor creation."""
     print("\n" + "=" * 80)
@@ -595,7 +603,7 @@ def test_thread_pool_executor_creation():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('poolcreate')
+    input_q, output_q = unique_queue_ids("poolcreate")
 
     executor = QueuedThreadPoolExecutor(
         input_queue_service=service,
@@ -603,7 +611,7 @@ def test_thread_pool_executor_creation():
         input_queue_id=input_q,
         output_queue_id=output_q,
         num_workers=4,
-        verbose=False
+        verbose=False,
     )
 
     assert executor.num_workers == 4
@@ -619,7 +627,7 @@ def test_thread_pool_executor_parallel_execution():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('parallel')
+    input_q, output_q = unique_queue_ids("parallel")
 
     executor = QueuedThreadPoolExecutor(
         input_queue_service=service,
@@ -627,7 +635,7 @@ def test_thread_pool_executor_parallel_execution():
         input_queue_id=input_q,
         output_queue_id=output_q,
         num_workers=4,
-        verbose=False
+        verbose=False,
     )
 
     # Submit 8 slow tasks
@@ -658,7 +666,9 @@ def test_thread_pool_executor_parallel_execution():
 
     # With 4 workers, 8 tasks of 0.2s should take ~0.4-0.6s, not 8*0.2=1.6s
     assert elapsed < 1.5, f"Expected parallel execution, but took {elapsed:.2f}s"
-    print(f"[OK] Parallel execution confirmed (sequential would take ~{num_tasks * task_duration}s)")
+    print(
+        f"[OK] Parallel execution confirmed (sequential would take ~{num_tasks * task_duration}s)"
+    )
 
     # Verify all completed
     assert len(results) == num_tasks
@@ -676,7 +686,7 @@ def test_thread_pool_executor_worker_ids():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('workerids')
+    input_q, output_q = unique_queue_ids("workerids")
 
     executor = QueuedThreadPoolExecutor(
         input_queue_service=service,
@@ -684,7 +694,7 @@ def test_thread_pool_executor_worker_ids():
         input_queue_id=input_q,
         output_queue_id=output_q,
         num_workers=3,
-        verbose=False
+        verbose=False,
     )
 
     # Submit tasks that take some time
@@ -716,6 +726,7 @@ def test_thread_pool_executor_worker_ids():
 # Executor Stats and Properties Tests
 # =============================================================================
 
+
 def test_executor_get_stats():
     """Test executor get_stats() method."""
     print("\n" + "=" * 80)
@@ -723,7 +734,7 @@ def test_executor_get_stats():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('stats')
+    input_q, output_q = unique_queue_ids("stats")
 
     executor = QueuedThreadPoolExecutor(
         input_queue_service=service,
@@ -731,8 +742,8 @@ def test_executor_get_stats():
         input_queue_id=input_q,
         output_queue_id=output_q,
         num_workers=2,
-        name='StatsTest',
-        verbose=False
+        name="StatsTest",
+        verbose=False,
     )
 
     # Submit tasks
@@ -742,11 +753,11 @@ def test_executor_get_stats():
     stats = executor.get_stats()
     print(f"[OK] Stats before start: {stats}")
 
-    assert stats['name'] == 'StatsTest'
-    assert stats['num_workers'] == 2
-    assert stats['is_running'] is False
-    assert stats['input_queue_size'] == 3
-    assert stats['output_queue_size'] == 0
+    assert stats["name"] == "StatsTest"
+    assert stats["num_workers"] == 2
+    assert stats["is_running"] is False
+    assert stats["input_queue_size"] == 3
+    assert stats["output_queue_size"] == 0
 
     # Start executor
     flag = executor.start()
@@ -755,8 +766,8 @@ def test_executor_get_stats():
     stats = executor.get_stats()
     print(f"[OK] Stats while running: {stats}")
 
-    assert stats['is_running'] is True
-    assert stats['workers_alive'] >= 1
+    assert stats["is_running"] is True
+    assert stats["workers_alive"] >= 1
 
     executor.stop(flag)
 
@@ -770,22 +781,22 @@ def test_executor_repr():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('repr')
+    input_q, output_q = unique_queue_ids("repr")
 
     executor = SingleThreadExecutor(
         input_queue_service=service,
         output_queue_service=service,
         input_queue_id=input_q,
         output_queue_id=output_q,
-        name='ReprTest',
-        verbose=False
+        name="ReprTest",
+        verbose=False,
     )
 
     repr_str = repr(executor)
     print(f"[OK] repr: {repr_str}")
 
-    assert 'SingleThreadExecutor' in repr_str
-    assert 'ReprTest' in repr_str
+    assert "SingleThreadExecutor" in repr_str
+    assert "ReprTest" in repr_str
 
     service.close()
 
@@ -793,6 +804,7 @@ def test_executor_repr():
 # =============================================================================
 # Validation Tests
 # =============================================================================
+
 
 def test_executor_validation():
     """Test executor parameter validation."""
@@ -807,9 +819,9 @@ def test_executor_validation():
         SingleThreadExecutor(
             input_queue_service=service,
             output_queue_service=service,
-            input_queue_id='input',
-            output_queue_id='output',
-            poll_interval=0
+            input_queue_id="input",
+            output_queue_id="output",
+            poll_interval=0,
         )
         print(f"[X] Should have raised ValueError for poll_interval=0")
         service.close()
@@ -822,9 +834,9 @@ def test_executor_validation():
         SingleThreadExecutor(
             input_queue_service=service,
             output_queue_service=service,
-            input_queue_id='input',
-            output_queue_id='output',
-            poll_interval=-1
+            input_queue_id="input",
+            output_queue_id="output",
+            poll_interval=-1,
         )
         print(f"[X] Should have raised ValueError for poll_interval=-1")
         service.close()
@@ -837,8 +849,8 @@ def test_executor_validation():
         SingleThreadExecutor(
             input_queue_service=service,
             output_queue_service=service,
-            input_queue_id='',
-            output_queue_id='output'
+            input_queue_id="",
+            output_queue_id="output",
         )
         print(f"[X] Should have raised ValueError for empty input_queue_id")
         service.close()
@@ -851,8 +863,8 @@ def test_executor_validation():
         SingleThreadExecutor(
             input_queue_service=service,
             output_queue_service=service,
-            input_queue_id='input',
-            output_queue_id=''
+            input_queue_id="input",
+            output_queue_id="",
         )
         print(f"[X] Should have raised ValueError for empty output_queue_id")
         service.close()
@@ -876,9 +888,9 @@ def test_executor_num_workers_validation():
         QueuedThreadPoolExecutor(
             input_queue_service=service,
             output_queue_service=service,
-            input_queue_id='input',
-            output_queue_id='output',
-            num_workers=0
+            input_queue_id="input",
+            output_queue_id="output",
+            num_workers=0,
         )
         print(f"[X] Should have raised ValueError for num_workers=0")
         service.close()
@@ -890,9 +902,9 @@ def test_executor_num_workers_validation():
         QueuedThreadPoolExecutor(
             input_queue_service=service,
             output_queue_service=service,
-            input_queue_id='input',
-            output_queue_id='output',
-            num_workers=-1
+            input_queue_id="input",
+            output_queue_id="output",
+            num_workers=-1,
         )
         print(f"[X] Should have raised ValueError for num_workers=-1")
         service.close()
@@ -907,6 +919,7 @@ def test_executor_num_workers_validation():
 # Graceful Shutdown Tests
 # =============================================================================
 
+
 def test_executor_graceful_stop():
     """Test executor graceful stop."""
     print("\n" + "=" * 80)
@@ -914,7 +927,7 @@ def test_executor_graceful_stop():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('graceful')
+    input_q, output_q = unique_queue_ids("graceful")
 
     executor = QueuedThreadPoolExecutor(
         input_queue_service=service,
@@ -922,7 +935,7 @@ def test_executor_graceful_stop():
         input_queue_id=input_q,
         output_queue_id=output_q,
         num_workers=2,
-        verbose=False
+        verbose=False,
     )
 
     flag = executor.start()
@@ -930,7 +943,7 @@ def test_executor_graceful_stop():
 
     time.sleep(0.1)
     stats = executor.get_stats()
-    assert stats['workers_alive'] == 2
+    assert stats["workers_alive"] == 2
     print(f"[OK] 2 workers alive")
 
     # Graceful stop
@@ -951,14 +964,14 @@ def test_executor_stop_without_flag():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('noflag')
+    input_q, output_q = unique_queue_ids("noflag")
 
     executor = SingleThreadExecutor(
         input_queue_service=service,
         output_queue_service=service,
         input_queue_id=input_q,
         output_queue_id=output_q,
-        verbose=False
+        verbose=False,
     )
 
     executor.start()  # Don't store the flag
@@ -980,6 +993,7 @@ def test_executor_stop_without_flag():
 # Integration Tests
 # =============================================================================
 
+
 def test_submit_during_execution():
     """Test submitting tasks while executor is running."""
     print("\n" + "=" * 80)
@@ -987,14 +1001,14 @@ def test_submit_during_execution():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('submitduring')
+    input_q, output_q = unique_queue_ids("submitduring")
 
     executor = SingleThreadExecutor(
         input_queue_service=service,
         output_queue_service=service,
         input_queue_id=input_q,
         output_queue_id=output_q,
-        verbose=False
+        verbose=False,
     )
 
     flag = executor.start()
@@ -1018,7 +1032,9 @@ def test_submit_during_execution():
     print(f"[OK] Got results: {results}")
 
     # Results may be in different order, so use set comparison
-    assert set(results) == set(expected_results), f"Expected {expected_results}, got {results}"
+    assert set(results) == set(expected_results), (
+        f"Expected {expected_results}, got {results}"
+    )
     print(f"[OK] All expected results received")
 
     executor.stop(flag)
@@ -1032,14 +1048,14 @@ def test_mixed_success_and_failure():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('mixed')
+    input_q, output_q = unique_queue_ids("mixed")
 
     executor = SimulatedMultiThreadExecutor(
         input_queue_service=service,
         output_queue_service=service,
         input_queue_id=input_q,
         output_queue_id=output_q,
-        verbose=False
+        verbose=False,
     )
 
     # Submit mix of tasks
@@ -1073,14 +1089,14 @@ def test_result_timing():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('timing')
+    input_q, output_q = unique_queue_ids("timing")
 
     executor = SimulatedMultiThreadExecutor(
         input_queue_service=service,
         output_queue_service=service,
         input_queue_id=input_q,
         output_queue_id=output_q,
-        verbose=False
+        verbose=False,
     )
 
     # Submit slow task
@@ -1104,6 +1120,7 @@ def test_result_timing():
 # Additional QueuedThreadPoolExecutor Tests
 # =============================================================================
 
+
 def test_thread_pool_executor_failed_tasks():
     """Test QueuedThreadPoolExecutor with failing tasks."""
     print("\n" + "=" * 80)
@@ -1111,7 +1128,7 @@ def test_thread_pool_executor_failed_tasks():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('threadfail')
+    input_q, output_q = unique_queue_ids("threadfail")
 
     executor = QueuedThreadPoolExecutor(
         input_queue_service=service,
@@ -1119,7 +1136,7 @@ def test_thread_pool_executor_failed_tasks():
         input_queue_id=input_q,
         output_queue_id=output_q,
         num_workers=2,
-        verbose=False
+        verbose=False,
     )
 
     # Submit mix of success and failure tasks
@@ -1165,7 +1182,7 @@ def test_thread_pool_executor_dynamic_submission():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('threaddyn')
+    input_q, output_q = unique_queue_ids("threaddyn")
 
     executor = QueuedThreadPoolExecutor(
         input_queue_service=service,
@@ -1173,7 +1190,7 @@ def test_thread_pool_executor_dynamic_submission():
         input_queue_id=input_q,
         output_queue_id=output_q,
         num_workers=2,
-        verbose=False
+        verbose=False,
     )
 
     flag = executor.start()
@@ -1209,7 +1226,7 @@ def test_thread_pool_executor_graceful_shutdown_with_pending():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('threadshutdown')
+    input_q, output_q = unique_queue_ids("threadshutdown")
 
     executor = QueuedThreadPoolExecutor(
         input_queue_service=service,
@@ -1217,7 +1234,7 @@ def test_thread_pool_executor_graceful_shutdown_with_pending():
         input_queue_id=input_q,
         output_queue_id=output_q,
         num_workers=2,
-        verbose=False
+        verbose=False,
     )
 
     # Submit many tasks
@@ -1243,6 +1260,7 @@ def test_thread_pool_executor_graceful_shutdown_with_pending():
 # QueuedProcessPoolExecutor Comprehensive Tests
 # =============================================================================
 
+
 def test_process_pool_executor_requires_factory():
     """Test QueuedProcessPoolExecutor requires queue_service_factory."""
     print("\n" + "=" * 80)
@@ -1250,7 +1268,7 @@ def test_process_pool_executor_requires_factory():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('procfactory')
+    input_q, output_q = unique_queue_ids("procfactory")
 
     try:
         executor = QueuedProcessPoolExecutor(
@@ -1259,7 +1277,7 @@ def test_process_pool_executor_requires_factory():
             input_queue_id=input_q,
             output_queue_id=output_q,
             num_workers=2,
-            verbose=False
+            verbose=False,
             # No queue_service_factory provided
         )
         print(f"[X] Should have raised ValueError")
@@ -1278,7 +1296,7 @@ def test_process_pool_executor_basic_execution():
     print("=" * 80)
 
     # Create temp directory for queue storage
-    queue_dir = tempfile.mkdtemp(prefix='test_process_pool_')
+    queue_dir = tempfile.mkdtemp(prefix="test_process_pool_")
     print(f"[OK] Queue storage: {queue_dir}")
 
     try:
@@ -1290,7 +1308,7 @@ def test_process_pool_executor_basic_execution():
         manager = Manager()
         active_flag = manager.list([True])
 
-        input_q, output_q = unique_queue_ids('procbasic')
+        input_q, output_q = unique_queue_ids("procbasic")
 
         executor = QueuedProcessPoolExecutor(
             input_queue_service=queue_service,
@@ -1299,17 +1317,17 @@ def test_process_pool_executor_basic_execution():
             output_queue_id=output_q,
             num_workers=2,
             verbose=False,
-            queue_service_factory=queue_factory
+            queue_service_factory=queue_factory,
         )
 
         # Submit simple tasks
         num_tasks = 4
         for i in range(num_tasks):
-            executor.submit(Task(
-                callable=add_numbers_for_process,
-                args=(i, i * 10),
-                name=f'Add-{i}'
-            ))
+            executor.submit(
+                Task(
+                    callable=add_numbers_for_process, args=(i, i * 10), name=f"Add-{i}"
+                )
+            )
         print(f"[OK] Submitted {num_tasks} tasks")
 
         # Start executor
@@ -1325,7 +1343,9 @@ def test_process_pool_executor_basic_execution():
 
         executor.stop(active_flag)
 
-        assert len(results) == num_tasks, f"Expected {num_tasks} results, got {len(results)}"
+        assert len(results) == num_tasks, (
+            f"Expected {num_tasks} results, got {len(results)}"
+        )
         print(f"[OK] Got {len(results)} results")
 
         # Verify results
@@ -1352,7 +1372,7 @@ def test_process_pool_executor_parallel_speedup():
     print("TEST 29: QueuedProcessPoolExecutor Parallel Speedup")
     print("=" * 80)
 
-    queue_dir = tempfile.mkdtemp(prefix='test_process_speedup_')
+    queue_dir = tempfile.mkdtemp(prefix="test_process_speedup_")
     print(f"[OK] Queue storage: {queue_dir}")
 
     try:
@@ -1374,7 +1394,7 @@ def test_process_pool_executor_parallel_speedup():
 
         # Parallel execution
         active_flag = manager.list([True])
-        input_q, output_q = unique_queue_ids('procspeedup')
+        input_q, output_q = unique_queue_ids("procspeedup")
 
         executor = QueuedProcessPoolExecutor(
             input_queue_service=queue_service,
@@ -1383,14 +1403,11 @@ def test_process_pool_executor_parallel_speedup():
             output_queue_id=output_q,
             num_workers=NUM_WORKERS,
             verbose=False,
-            queue_service_factory=queue_factory
+            queue_service_factory=queue_factory,
         )
 
         for i in range(NUM_TASKS):
-            executor.submit(Task(
-                callable=slow_process_function,
-                args=(TASK_DURATION,)
-            ))
+            executor.submit(Task(callable=slow_process_function, args=(TASK_DURATION,)))
 
         par_start = time.time()
         executor.start(active_flag)
@@ -1417,8 +1434,12 @@ def test_process_pool_executor_parallel_speedup():
         if speedup > 1.0:
             print(f"[OK] Parallel execution achieved {speedup:.2f}x speedup")
         else:
-            print(f"[INFO] Speedup {speedup:.2f}x (IPC overhead exceeded parallelism benefit)")
-            print(f"[INFO] This is expected on Windows with file-based queues for short tasks")
+            print(
+                f"[INFO] Speedup {speedup:.2f}x (IPC overhead exceeded parallelism benefit)"
+            )
+            print(
+                f"[INFO] This is expected on Windows with file-based queues for short tasks"
+            )
 
         # Verify all results are correct
         for r in results:
@@ -1437,7 +1458,7 @@ def test_process_pool_executor_worker_distribution():
     print("TEST 30: QueuedProcessPoolExecutor Worker Distribution")
     print("=" * 80)
 
-    queue_dir = tempfile.mkdtemp(prefix='test_process_dist_')
+    queue_dir = tempfile.mkdtemp(prefix="test_process_dist_")
     print(f"[OK] Queue storage: {queue_dir}")
 
     try:
@@ -1448,7 +1469,7 @@ def test_process_pool_executor_worker_distribution():
 
         NUM_TASKS = 8
         NUM_WORKERS = 4
-        input_q, output_q = unique_queue_ids('procdist')
+        input_q, output_q = unique_queue_ids("procdist")
 
         executor = QueuedProcessPoolExecutor(
             input_queue_service=queue_service,
@@ -1457,15 +1478,12 @@ def test_process_pool_executor_worker_distribution():
             output_queue_id=output_q,
             num_workers=NUM_WORKERS,
             verbose=False,
-            queue_service_factory=queue_factory
+            queue_service_factory=queue_factory,
         )
 
         # Submit tasks that take some time
         for i in range(NUM_TASKS):
-            executor.submit(Task(
-                callable=slow_process_function,
-                args=(0.1,)
-            ))
+            executor.submit(Task(callable=slow_process_function, args=(0.1,)))
         print(f"[OK] Submitted {NUM_TASKS} tasks")
 
         executor.start(active_flag)
@@ -1497,7 +1515,7 @@ def test_process_pool_executor_failed_tasks():
     print("TEST 31: QueuedProcessPoolExecutor Failed Tasks")
     print("=" * 80)
 
-    queue_dir = tempfile.mkdtemp(prefix='test_process_fail_')
+    queue_dir = tempfile.mkdtemp(prefix="test_process_fail_")
     print(f"[OK] Queue storage: {queue_dir}")
 
     try:
@@ -1506,7 +1524,7 @@ def test_process_pool_executor_failed_tasks():
         manager = Manager()
         active_flag = manager.list([True])
 
-        input_q, output_q = unique_queue_ids('procfail')
+        input_q, output_q = unique_queue_ids("procfail")
 
         executor = QueuedProcessPoolExecutor(
             input_queue_service=queue_service,
@@ -1515,7 +1533,7 @@ def test_process_pool_executor_failed_tasks():
             output_queue_id=output_q,
             num_workers=2,
             verbose=False,
-            queue_service_factory=queue_factory
+            queue_service_factory=queue_factory,
         )
 
         # Submit mix of success and failure
@@ -1560,7 +1578,7 @@ def test_process_pool_executor_cpu_bound():
     print("TEST 32: QueuedProcessPoolExecutor CPU-Bound Tasks")
     print("=" * 80)
 
-    queue_dir = tempfile.mkdtemp(prefix='test_process_cpu_')
+    queue_dir = tempfile.mkdtemp(prefix="test_process_cpu_")
     print(f"[OK] Queue storage: {queue_dir}")
 
     try:
@@ -1569,7 +1587,7 @@ def test_process_pool_executor_cpu_bound():
         manager = Manager()
         active_flag = manager.list([True])
 
-        input_q, output_q = unique_queue_ids('proccpu')
+        input_q, output_q = unique_queue_ids("proccpu")
 
         executor = QueuedProcessPoolExecutor(
             input_queue_service=queue_service,
@@ -1578,16 +1596,13 @@ def test_process_pool_executor_cpu_bound():
             output_queue_id=output_q,
             num_workers=2,
             verbose=False,
-            queue_service_factory=queue_factory
+            queue_service_factory=queue_factory,
         )
 
         # Submit CPU-intensive prime calculation tasks
         limits = [10000, 15000, 20000, 25000]
         for limit in limits:
-            executor.submit(Task(
-                callable=compute_primes_for_test,
-                args=(limit,)
-            ))
+            executor.submit(Task(callable=compute_primes_for_test, args=(limit,)))
         print(f"[OK] Submitted {len(limits)} prime calculation tasks")
 
         executor.start(active_flag)
@@ -1608,7 +1623,7 @@ def test_process_pool_executor_cpu_bound():
             assert r.is_success(), f"Task failed: {r.exception}"
 
         # Verify results are correct (known prime counts)
-        result_map = {r.result['limit']: r.result['count'] for r in results}
+        result_map = {r.result["limit"]: r.result["count"] for r in results}
         print(f"[OK] Prime counts: {result_map}")
 
         # Basic sanity check - more primes as limit increases
@@ -1628,7 +1643,7 @@ def test_process_pool_executor_result_timing():
     print("TEST 33: QueuedProcessPoolExecutor Result Timing")
     print("=" * 80)
 
-    queue_dir = tempfile.mkdtemp(prefix='test_process_timing_')
+    queue_dir = tempfile.mkdtemp(prefix="test_process_timing_")
     print(f"[OK] Queue storage: {queue_dir}")
 
     try:
@@ -1637,7 +1652,7 @@ def test_process_pool_executor_result_timing():
         manager = Manager()
         active_flag = manager.list([True])
 
-        input_q, output_q = unique_queue_ids('proctiming')
+        input_q, output_q = unique_queue_ids("proctiming")
 
         executor = QueuedProcessPoolExecutor(
             input_queue_service=queue_service,
@@ -1646,15 +1661,12 @@ def test_process_pool_executor_result_timing():
             output_queue_id=output_q,
             num_workers=1,
             verbose=False,
-            queue_service_factory=queue_factory
+            queue_service_factory=queue_factory,
         )
 
         # Submit slow task
         SLEEP_DURATION = 0.2
-        executor.submit(Task(
-            callable=slow_process_function,
-            args=(SLEEP_DURATION,)
-        ))
+        executor.submit(Task(callable=slow_process_function, args=(SLEEP_DURATION,)))
 
         executor.start(active_flag)
 
@@ -1669,7 +1681,9 @@ def test_process_pool_executor_result_timing():
 
         print(f"[OK] start_time: {result.start_time}")
         print(f"[OK] end_time: {result.end_time}")
-        print(f"[OK] execution_time: {result.execution_time:.4f}s (expected ~{SLEEP_DURATION}s)")
+        print(
+            f"[OK] execution_time: {result.execution_time:.4f}s (expected ~{SLEEP_DURATION}s)"
+        )
 
         queue_service.close()
 
@@ -1681,6 +1695,7 @@ def test_process_pool_executor_result_timing():
 # Additional Edge Case Tests
 # =============================================================================
 
+
 def test_process_one_with_zero_timeout():
     """Test SimulatedMultiThreadExecutor.process_one() with timeout=0."""
     print("\n" + "=" * 80)
@@ -1688,14 +1703,14 @@ def test_process_one_with_zero_timeout():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('zerotimeout')
+    input_q, output_q = unique_queue_ids("zerotimeout")
 
     executor = SimulatedMultiThreadExecutor(
         input_queue_service=service,
         output_queue_service=service,
         input_queue_id=input_q,
         output_queue_id=output_q,
-        verbose=False
+        verbose=False,
     )
 
     # Try to get with timeout=0 on empty queue - should return immediately
@@ -1717,14 +1732,14 @@ def test_get_result_timeout_expiration():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('gettimeout')
+    input_q, output_q = unique_queue_ids("gettimeout")
 
     executor = SingleThreadExecutor(
         input_queue_service=service,
         output_queue_service=service,
         input_queue_id=input_q,
         output_queue_id=output_q,
-        verbose=False
+        verbose=False,
     )
 
     # Start executor but don't submit any tasks
@@ -1753,7 +1768,7 @@ def test_stop_multiple_times():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('multistop')
+    input_q, output_q = unique_queue_ids("multistop")
 
     executor = QueuedThreadPoolExecutor(
         input_queue_service=service,
@@ -1761,7 +1776,7 @@ def test_stop_multiple_times():
         input_queue_id=input_q,
         output_queue_id=output_q,
         num_workers=2,
-        verbose=False
+        verbose=False,
     )
 
     flag = executor.start()
@@ -1798,14 +1813,14 @@ def test_submit_to_stopped_executor():
     print("=" * 80)
 
     service = create_queue_service()
-    input_q, output_q = unique_queue_ids('submitstop')
+    input_q, output_q = unique_queue_ids("submitstop")
 
     executor = SingleThreadExecutor(
         input_queue_service=service,
         output_queue_service=service,
         input_queue_id=input_q,
         output_queue_id=output_q,
-        verbose=False
+        verbose=False,
     )
 
     # Submit task before starting (executor not running)
@@ -1847,6 +1862,7 @@ def test_submit_to_stopped_executor():
 # Test Runner
 # =============================================================================
 
+
 def run_all_tests():
     """Run all tests."""
     print("""
@@ -1861,50 +1877,96 @@ def run_all_tests():
         ("SingleThreadExecutor Non-Blocking", test_single_thread_executor_non_blocking),
         ("SingleThreadExecutor Blocking", test_single_thread_executor_blocking),
         ("SingleThreadExecutor start() Alias", test_single_thread_executor_start_alias),
-
         # SimulatedMultiThreadExecutor tests
         ("SimulatedMultiThreadExecutor Creation", test_simulated_executor_creation),
-        ("SimulatedMultiThreadExecutor process_one()", test_simulated_executor_process_one),
-        ("SimulatedMultiThreadExecutor process_one() Blocking", test_simulated_executor_process_one_blocking),
-        ("SimulatedMultiThreadExecutor process_all()", test_simulated_executor_process_all),
-        ("SimulatedMultiThreadExecutor run_in_thread()", test_simulated_executor_run_in_thread),
-        ("SimulatedMultiThreadExecutor Failed Task", test_simulated_executor_failed_task),
-        ("SimulatedMultiThreadExecutor Invalid Queue Item", test_simulated_executor_invalid_queue_item),
-
+        (
+            "SimulatedMultiThreadExecutor process_one()",
+            test_simulated_executor_process_one,
+        ),
+        (
+            "SimulatedMultiThreadExecutor process_one() Blocking",
+            test_simulated_executor_process_one_blocking,
+        ),
+        (
+            "SimulatedMultiThreadExecutor process_all()",
+            test_simulated_executor_process_all,
+        ),
+        (
+            "SimulatedMultiThreadExecutor run_in_thread()",
+            test_simulated_executor_run_in_thread,
+        ),
+        (
+            "SimulatedMultiThreadExecutor Failed Task",
+            test_simulated_executor_failed_task,
+        ),
+        (
+            "SimulatedMultiThreadExecutor Invalid Queue Item",
+            test_simulated_executor_invalid_queue_item,
+        ),
         # QueuedThreadPoolExecutor tests
         ("QueuedThreadPoolExecutor Creation", test_thread_pool_executor_creation),
-        ("QueuedThreadPoolExecutor Parallel Execution", test_thread_pool_executor_parallel_execution),
-        ("QueuedThreadPoolExecutor Worker Distribution", test_thread_pool_executor_worker_ids),
-        ("QueuedThreadPoolExecutor Failed Tasks", test_thread_pool_executor_failed_tasks),
-        ("QueuedThreadPoolExecutor Dynamic Submission", test_thread_pool_executor_dynamic_submission),
-        ("QueuedThreadPoolExecutor Graceful Shutdown", test_thread_pool_executor_graceful_shutdown_with_pending),
-
+        (
+            "QueuedThreadPoolExecutor Parallel Execution",
+            test_thread_pool_executor_parallel_execution,
+        ),
+        (
+            "QueuedThreadPoolExecutor Worker Distribution",
+            test_thread_pool_executor_worker_ids,
+        ),
+        (
+            "QueuedThreadPoolExecutor Failed Tasks",
+            test_thread_pool_executor_failed_tasks,
+        ),
+        (
+            "QueuedThreadPoolExecutor Dynamic Submission",
+            test_thread_pool_executor_dynamic_submission,
+        ),
+        (
+            "QueuedThreadPoolExecutor Graceful Shutdown",
+            test_thread_pool_executor_graceful_shutdown_with_pending,
+        ),
         # Stats and properties tests
         ("Executor get_stats()", test_executor_get_stats),
         ("Executor __repr__", test_executor_repr),
-
         # Validation tests
         ("Executor Parameter Validation", test_executor_validation),
         ("Executor num_workers Validation", test_executor_num_workers_validation),
-
         # Graceful shutdown tests
         ("Executor Graceful Stop", test_executor_graceful_stop),
         ("Executor Stop Without Flag", test_executor_stop_without_flag),
-
         # Integration tests
         ("Submit During Execution", test_submit_during_execution),
         ("Mixed Success and Failure Tasks", test_mixed_success_and_failure),
         ("Result Timing Information", test_result_timing),
-
         # QueuedProcessPoolExecutor comprehensive tests
-        ("QueuedProcessPoolExecutor Requires Factory", test_process_pool_executor_requires_factory),
-        ("QueuedProcessPoolExecutor Basic Execution", test_process_pool_executor_basic_execution),
-        ("QueuedProcessPoolExecutor Parallel Speedup", test_process_pool_executor_parallel_speedup),
-        ("QueuedProcessPoolExecutor Worker Distribution", test_process_pool_executor_worker_distribution),
-        ("QueuedProcessPoolExecutor Failed Tasks", test_process_pool_executor_failed_tasks),
-        ("QueuedProcessPoolExecutor CPU-Bound Tasks", test_process_pool_executor_cpu_bound),
-        ("QueuedProcessPoolExecutor Result Timing", test_process_pool_executor_result_timing),
-
+        (
+            "QueuedProcessPoolExecutor Requires Factory",
+            test_process_pool_executor_requires_factory,
+        ),
+        (
+            "QueuedProcessPoolExecutor Basic Execution",
+            test_process_pool_executor_basic_execution,
+        ),
+        (
+            "QueuedProcessPoolExecutor Parallel Speedup",
+            test_process_pool_executor_parallel_speedup,
+        ),
+        (
+            "QueuedProcessPoolExecutor Worker Distribution",
+            test_process_pool_executor_worker_distribution,
+        ),
+        (
+            "QueuedProcessPoolExecutor Failed Tasks",
+            test_process_pool_executor_failed_tasks,
+        ),
+        (
+            "QueuedProcessPoolExecutor CPU-Bound Tasks",
+            test_process_pool_executor_cpu_bound,
+        ),
+        (
+            "QueuedProcessPoolExecutor Result Timing",
+            test_process_pool_executor_result_timing,
+        ),
         # Additional edge case tests
         ("process_one() with timeout=0", test_process_one_with_zero_timeout),
         ("get_result() Timeout Expiration", test_get_result_timeout_expiration),
@@ -1921,6 +1983,7 @@ def run_all_tests():
         except Exception as e:
             print(f"\n[X] Test failed with exception: {e}")
             import traceback
+
             traceback.print_exc()
             results.append((name, False))
 
@@ -1946,6 +2009,6 @@ def run_all_tests():
         return False
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     success = run_all_tests()
     sys.exit(0 if success else 1)

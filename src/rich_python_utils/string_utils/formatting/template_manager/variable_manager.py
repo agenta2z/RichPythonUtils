@@ -21,23 +21,21 @@ Key features (inherited from FileBasedVariableManager):
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
+
+# Re-export exceptions for backward compatibility
 
 # Import from common_objects
 from rich_python_utils.common_objects.variable_manager import (
-    FileBasedVariableManager,
-    KeyDiscoveryMode,
-    VariableManagerConfig,
-    VariableSyntax,
-    VariableExtractor,
-    VariableSyntaxMapping,
-)
-
-# Re-export exceptions for backward compatibility
-from rich_python_utils.common_objects.variable_manager import (
     AmbiguousVariableError,
     CircularReferenceError,
+    FileBasedVariableManager,
+    KeyDiscoveryMode,
     MaxDepthExceededError,
+    VariableExtractor,
+    VariableManagerConfig,
+    VariableSyntax,
+    VariableSyntaxMapping,
 )
 
 
@@ -113,6 +111,8 @@ class TemplateVariableManager(FileBasedVariableManager):
         version: str = "",
         master_version: Optional[str] = None,
         skip_vars: Optional[set] = None,
+        extra_roots: Optional[List[Path]] = None,
+        extra_roots_skip_keys: Optional[Set[str]] = None,
     ) -> Dict[str, str]:
         """Auto-detect and resolve all variables from template content.
 
@@ -128,6 +128,9 @@ class TemplateVariableManager(FileBasedVariableManager):
                 a ``<var_name>/<master_version>/`` subdirectory.
             skip_vars: Variable names to skip (already resolved by
                 load_variables with per-variable versions).
+            extra_roots: Extra variable roots (per-inferencer extensions),
+                most-derived first; prepended to every cascade. None -> no-op.
+            extra_roots_skip_keys: Keys opted out of ``extra_roots``.
 
         Returns:
             Dictionary mapping variable names to resolved content.
@@ -140,6 +143,8 @@ class TemplateVariableManager(FileBasedVariableManager):
             version=version,
             master_version=master_version,
             skip_vars=skip_vars,
+            extra_roots=extra_roots,
+            extra_roots_skip_keys=extra_roots_skip_keys,
         )
 
 

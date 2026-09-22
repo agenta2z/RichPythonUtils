@@ -1,9 +1,11 @@
-from time import strptime, strftime
-from datetime import timedelta, datetime
+from datetime import datetime, timedelta
+from time import strftime, strptime
 from typing import Union
 
 
-def reformat_datetime_str(datetime_string, src_format='%m/%d/%Y', dst_format='%y%m%d') -> str:
+def reformat_datetime_str(
+    datetime_string, src_format="%m/%d/%Y", dst_format="%y%m%d"
+) -> str:
     """
     Reformats the datetime string from the source format to the destination format.
 
@@ -24,8 +26,9 @@ def reformat_datetime_str(datetime_string, src_format='%m/%d/%Y', dst_format='%y
     )
 
 
-def minus_n_days(date: Union[datetime, str], n: int, date_str_format: str = '%m/%d/%Y') \
-        -> Union[datetime, str]:
+def minus_n_days(
+    date: Union[datetime, str], n: int, date_str_format: str = "%m/%d/%Y"
+) -> Union[datetime, str]:
     """
     Subtract 'n' days from the provided date.
 
@@ -59,8 +62,9 @@ def minus_n_days(date: Union[datetime, str], n: int, date_str_format: str = '%m/
         return date - timedelta(days=n)
 
 
-def add_n_days(date: Union[datetime, str], n: int, date_str_format: str = '%m/%d/%Y') \
-        -> Union[datetime, str]:
+def add_n_days(
+    date: Union[datetime, str], n: int, date_str_format: str = "%m/%d/%Y"
+) -> Union[datetime, str]:
     """
     Add 'n' days to the provided date.
 

@@ -15,9 +15,12 @@ Usage:
 """
 
 from resolve_path import resolve_path
+
 resolve_path()  # Add project src to sys.path
 
-from rich_python_utils.service_utils.queue_service.thread_queue_service import ThreadQueueService
+from rich_python_utils.service_utils.queue_service.thread_queue_service import (
+    ThreadQueueService,
+)
 
 
 def main():
@@ -34,7 +37,7 @@ def main():
 
     # 2. Create a queue
     print("\n2. Creating a queue...")
-    queue_id = 'my_example_queue'
+    queue_id = "my_example_queue"
     service.create_queue(queue_id)
     print(f"   [OK] Queue created: {queue_id}")
 
@@ -47,26 +50,18 @@ def main():
         "Hello, Multiprocessing Queue!",
         3.14159,
         True,
-
         # Collections
         [1, 2, 3, 4, 5],
-        {'name': 'Alice', 'age': 30, 'city': 'Seattle'},
-        ('tuple', 'data', 123),
-
+        {"name": "Alice", "age": 30, "city": "Seattle"},
+        ("tuple", "data", 123),
         # Nested structures
         {
-            'user': {
-                'id': 1,
-                'profile': {
-                    'name': 'Bob',
-                    'interests': ['coding', 'music', 'reading']
-                }
+            "user": {
+                "id": 1,
+                "profile": {"name": "Bob", "interests": ["coding", "music", "reading"]},
             },
-            'metadata': {
-                'timestamp': '2025-01-05T12:00:00',
-                'version': '1.0'
-            }
-        }
+            "metadata": {"timestamp": "2025-01-05T12:00:00", "version": "1.0"},
+        },
     ]
 
     for i, obj in enumerate(objects_to_put, 1):
@@ -120,7 +115,7 @@ def main():
 
     # 10. Test auto-create on put
     print("\n10. Testing auto-create on put...")
-    auto_queue = 'auto_created_queue'
+    auto_queue = "auto_created_queue"
     service.put(auto_queue, "This queue was auto-created!")
     print(f"   [OK] Queue '{auto_queue}' auto-created on put")
     print(f"   [OK] Exists: {service.exists(auto_queue)}")
@@ -129,7 +124,7 @@ def main():
 
     # 11. Test clear operation
     print("\n11. Testing clear operation...")
-    test_queue = 'test_clear_queue'
+    test_queue = "test_clear_queue"
     for i in range(5):
         service.put(test_queue, f"item_{i}")
     print(f"   [OK] Put 5 items, size: {service.size(test_queue)}")
@@ -148,16 +143,17 @@ def main():
     service.close()
     print(f"   [OK] Service closed")
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("[OK] Example completed successfully!")
-    print("="*80 + "\n")
+    print("=" * 80 + "\n")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         main()
     except Exception as e:
         print(f"\n[X] Error: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

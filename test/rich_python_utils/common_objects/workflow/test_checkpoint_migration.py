@@ -4,16 +4,18 @@ Covers:
 - v1 checkpoint (no expansions key) loads cleanly
 - Migration is transparent — no user action required
 """
+
 import os
 import shutil
 import tempfile
 
 import pytest
 from attr import attrs
-
-from rich_python_utils.common_objects.workflow.workflow import Workflow
+from rich_python_utils.common_objects.workflow.common.step_result_save_options import (
+    StepResultSaveOptions,
+)
 from rich_python_utils.common_objects.workflow.common.step_wrapper import StepWrapper
-from rich_python_utils.common_objects.workflow.common.step_result_save_options import StepResultSaveOptions
+from rich_python_utils.common_objects.workflow.workflow import Workflow
 
 
 @attrs(slots=False)

@@ -44,8 +44,7 @@ def example_1_console_rate_limiting():
             for epoch in range(epochs):
                 # This will only print every 0.5 seconds
                 self.log_info(
-                    {'epoch': epoch, 'loss': 1.0 / (epoch + 1)},
-                    log_type='Training'
+                    {"epoch": epoch, "loss": 1.0 / (epoch + 1)}, log_type="Training"
                 )
                 time.sleep(0.1)  # Simulating fast training iterations
 
@@ -53,7 +52,7 @@ def example_1_console_rate_limiting():
         logger=print,
         always_add_logging_based_logger=False,
         log_time=False,
-        console_display_rate_limit=0.5  # Only display every 0.5 seconds
+        console_display_rate_limit=0.5,  # Only display every 0.5 seconds
     )
     trainer.train()
     print("-" * 60)
@@ -88,17 +87,14 @@ def example_2_backend_logging_rate_limiting():
     class DataProcessor(Debuggable):
         def process(self, items=15):
             for i in range(items):
-                self.log_info(
-                    {'item': i, 'status': 'processed'},
-                    log_type='Progress'
-                )
+                self.log_info({"item": i, "status": "processed"}, log_type="Progress")
                 time.sleep(0.1)
 
     processor = DataProcessor(
         logger=file_logger,
         always_add_logging_based_logger=False,
         log_time=False,
-        logging_rate_limit=0.3  # Only log to backend every 0.3 seconds
+        logging_rate_limit=0.3,  # Only log to backend every 0.3 seconds
     )
     processor.process()
     print("-" * 60)
@@ -134,12 +130,12 @@ def example_3_custom_message_id_generator():
         def run(self):
             for i in range(5):
                 # These will all share the same message_id because log_type is the same
-                self.log_info({'phase': 'init', 'step': i}, log_type='Initialization')
+                self.log_info({"phase": "init", "step": i}, log_type="Initialization")
                 time.sleep(0.15)
 
             for i in range(5):
                 # These share a different message_id
-                self.log_info({'phase': 'process', 'step': i}, log_type='Processing')
+                self.log_info({"phase": "process", "step": i}, log_type="Processing")
                 time.sleep(0.15)
 
     process = MultiPhaseProcess(
@@ -147,7 +143,7 @@ def example_3_custom_message_id_generator():
         always_add_logging_based_logger=False,
         log_time=False,
         console_display_rate_limit=0.3,
-        default_message_id_gen=custom_id_gen
+        default_message_id_gen=custom_id_gen,
     )
     process.run()
     print("-" * 60)
@@ -184,10 +180,7 @@ def example_4_separate_console_and_backend_rates():
     class Monitor(Debuggable):
         def monitor(self, samples=20):
             for i in range(samples):
-                self.log_info(
-                    {'sample': i, 'value': i * 10},
-                    log_type='Metric'
-                )
+                self.log_info({"sample": i, "value": i * 10}, log_type="Metric")
                 time.sleep(0.05)
 
     monitor = Monitor(
@@ -195,7 +188,7 @@ def example_4_separate_console_and_backend_rates():
         always_add_logging_based_logger=False,
         log_time=False,
         console_display_rate_limit=0.3,  # Console: every 0.3 seconds
-        logging_rate_limit=0.0  # Backend: no limit (log everything)
+        logging_rate_limit=0.0,  # Backend: no limit (log everything)
     )
     monitor.monitor()
     print("-" * 60)
@@ -232,15 +225,15 @@ def example_5_explicit_message_id():
             for i in range(10):
                 # Track loss with its own rate limit bucket
                 self.log_info(
-                    {'loss': 1.0 / (i + 1)},
-                    log_type='Training',
-                    message_id='loss_tracker'
+                    {"loss": 1.0 / (i + 1)},
+                    log_type="Training",
+                    message_id="loss_tracker",
                 )
                 # Track accuracy with its own rate limit bucket
                 self.log_info(
-                    {'accuracy': (i + 1) * 10},
-                    log_type='Training',
-                    message_id='accuracy_tracker'
+                    {"accuracy": (i + 1) * 10},
+                    log_type="Training",
+                    message_id="accuracy_tracker",
                 )
                 time.sleep(0.1)
 
@@ -248,7 +241,7 @@ def example_5_explicit_message_id():
         logger=print,
         always_add_logging_based_logger=False,
         log_time=False,
-        console_display_rate_limit=0.25
+        console_display_rate_limit=0.25,
     )
     tracker.track()
     print("-" * 60)
@@ -277,31 +270,36 @@ def example_6_console_update():
 
     def update_aware_logger(log_data, message_id=None, update_previous=False, **kwargs):
         """A logger that supports message_id and update_previous."""
-        received_params.append({
-            'message_id': message_id,
-            'update_previous': update_previous
-        })
+        received_params.append(
+            {"message_id": message_id, "update_previous": update_previous}
+        )
         update_str = " [UPDATE]" if update_previous else " [NEW]"
         print(f"  {update_str} id={message_id}: {log_data['item']}")
 
     class ProgressTracker(Debuggable):
         def run(self):
             for i in range(5):
-                self.log_info({'step': i, 'progress': f'{i*25}%'}, log_type='Progress')
+                self.log_info(
+                    {"step": i, "progress": f"{i * 25}%"}, log_type="Progress"
+                )
                 time.sleep(0.1)
 
     tracker = ProgressTracker(
         logger=update_aware_logger,
         always_add_logging_based_logger=False,
         log_time=False,
-        enable_console_update=True  # Enable console update feature
+        enable_console_update=True,  # Enable console update feature
     )
     tracker.run()
     print("-" * 60)
     print(f"Messages sent: {len(received_params)}")
     print(f"First message update_previous: {received_params[0]['update_previous']}")
-    print(f"Subsequent messages update_previous: {received_params[1]['update_previous'] if len(received_params) > 1 else 'N/A'}")
-    print("Note: All messages have update_previous=True when enable_console_update=True")
+    print(
+        f"Subsequent messages update_previous: {received_params[1]['update_previous'] if len(received_params) > 1 else 'N/A'}"
+    )
+    print(
+        "Note: All messages have update_previous=True when enable_console_update=True"
+    )
 
 
 def example_7_console_update_with_rate_limit():
@@ -333,15 +331,14 @@ def example_7_console_update_with_rate_limit():
         nonlocal message_count
         message_count += 1
         mode = "UPDATE" if update_previous else "NEW"
-        item = log_data['item']
+        item = log_data["item"]
         print(f"  [{mode}] Epoch {item['epoch']}: loss={item['loss']:.4f}")
 
     class TrainingLoop(Debuggable):
         def train(self, epochs=20):
             for epoch in range(epochs):
                 self.log_info(
-                    {'epoch': epoch, 'loss': 1.0 / (epoch + 1)},
-                    log_type='Training'
+                    {"epoch": epoch, "loss": 1.0 / (epoch + 1)}, log_type="Training"
                 )
                 time.sleep(0.05)
 
@@ -350,8 +347,8 @@ def example_7_console_update_with_rate_limit():
         always_add_logging_based_logger=False,
         log_time=False,
         console_display_rate_limit=0.3,  # Rate limit: every 0.3 seconds
-        enable_console_update=True,       # Enable in-place updates
-        console_loggers_or_logger_types=(training_display,)  # Mark as console logger
+        enable_console_update=True,  # Enable in-place updates
+        console_loggers_or_logger_types=(training_display,),  # Mark as console logger
     )
     trainer.train()
     print("-" * 60)
@@ -380,16 +377,18 @@ def example_8_rate_limit_vs_console_update_comparison():
         messages = []
 
         def test_logger(log_data, message_id=None, update_previous=False, **kwargs):
-            messages.append({
-                'data': log_data,
-                'message_id': message_id,
-                'update_previous': update_previous
-            })
+            messages.append(
+                {
+                    "data": log_data,
+                    "message_id": message_id,
+                    "update_previous": update_previous,
+                }
+            )
 
         class TestLoop(Debuggable):
             def run(self):
                 for i in range(10):
-                    self.log_info({'step': i}, log_type='Test')
+                    self.log_info({"step": i}, log_type="Test")
                     time.sleep(0.1)
 
         loop = TestLoop(
@@ -398,11 +397,11 @@ def example_8_rate_limit_vs_console_update_comparison():
             log_time=False,
             console_display_rate_limit=rate_limit,
             enable_console_update=console_update,
-            console_loggers_or_logger_types=(test_logger,)
+            console_loggers_or_logger_types=(test_logger,),
         )
         loop.run()
 
-        update_count = sum(1 for m in messages if m['update_previous'])
+        update_count = sum(1 for m in messages if m["update_previous"])
         return len(messages), update_count
 
     print("-" * 60)
@@ -411,19 +410,27 @@ def example_8_rate_limit_vs_console_update_comparison():
 
     # Test 1: No features
     count1, updates1 = run_test("No features", 0.0, False)
-    print(f"1. No features:           {count1} messages, {updates1} with update_previous=True")
+    print(
+        f"1. No features:           {count1} messages, {updates1} with update_previous=True"
+    )
 
     # Test 2: Rate limiting only
     count2, updates2 = run_test("Rate limit only", 0.25, False)
-    print(f"2. Rate limit (0.25s):    {count2} messages, {updates2} with update_previous=True")
+    print(
+        f"2. Rate limit (0.25s):    {count2} messages, {updates2} with update_previous=True"
+    )
 
     # Test 3: Console update only
     count3, updates3 = run_test("Console update only", 0.0, True)
-    print(f"3. Console update only:   {count3} messages, {updates3} with update_previous=True")
+    print(
+        f"3. Console update only:   {count3} messages, {updates3} with update_previous=True"
+    )
 
     # Test 4: Both combined
     count4, updates4 = run_test("Both combined", 0.25, True)
-    print(f"4. Both combined:         {count4} messages, {updates4} with update_previous=True")
+    print(
+        f"4. Both combined:         {count4} messages, {updates4} with update_previous=True"
+    )
 
     print("-" * 60)
     print("Expected results:")
@@ -433,7 +440,7 @@ def example_8_rate_limit_vs_console_update_comparison():
     print("  4. ~4 messages, ~4 updates (rate limited + in-place)")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     example_1_console_rate_limiting()
     example_2_backend_logging_rate_limiting()
     example_3_custom_message_id_generator()

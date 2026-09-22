@@ -5,10 +5,18 @@ This script tests if colors are displaying correctly in your terminal.
 """
 
 import sys
-sys.path.insert(0, r'C:\Users\yxinl\OneDrive\Projects\PythonProjects\SciencePythonUtils\src')
+
+sys.path.insert(
+    0, r"C:\Users\yxinl\OneDrive\Projects\PythonProjects\SciencePythonUtils\src"
+)
 
 from rich_python_utils.console_utils.rich_console_utils import (
-    console, hprint, eprint, wprint, hprint_message, cprint_message
+    console,
+    cprint_message,
+    eprint,
+    hprint,
+    hprint_message,
+    wprint,
 )
 
 print("=== COLOR TEST ===\n")
@@ -33,7 +41,9 @@ print()
 # Test 3: Message printing
 print("Test 3: Message printing")
 hprint_message(title="Info", content="This should have cyan title")
-cprint_message("Success", "This should be green", title_color="green", content_color="white")
+cprint_message(
+    "Success", "This should be green", title_color="green", content_color="white"
+)
 print()
 
 # Test 4: Check console capabilities

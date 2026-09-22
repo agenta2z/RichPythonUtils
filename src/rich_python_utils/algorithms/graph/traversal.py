@@ -1,18 +1,19 @@
 """
 Graph traversal algorithms supporting heterogeneous node types.
 """
+
 from collections import deque
-from typing import Dict, Type, Iterator, Optional, Callable, Any, Set
+from typing import Any, Callable, Dict, Iterator, Optional, Set, Type
 
 from rich_python_utils.common_utils.iter_helper import iter__
 
 
 def bfs_traversal(
-        start_node: Any,
-        children_attr_map: Dict[Type, str],
-        atom_types=(str,),
-        visit_func: Optional[Callable[[Any], None]] = None,
-        yield_nodes: bool = True
+    start_node: Any,
+    children_attr_map: Dict[Type, str],
+    atom_types=(str,),
+    visit_func: Optional[Callable[[Any], None]] = None,
+    yield_nodes: bool = True,
 ) -> Iterator:
     """
     Perform breadth-first search (BFS) traversal on a graph with heterogeneous node types.
@@ -126,12 +127,12 @@ def bfs_traversal(
 
 
 def dfs_traversal(
-        start_node: Any,
-        children_attr_map: Dict[Type, str],
-        atom_types=(str,),
-        visit_func: Optional[Callable[[Any], None]] = None,
-        yield_nodes: bool = True,
-        preorder: bool = True
+    start_node: Any,
+    children_attr_map: Dict[Type, str],
+    atom_types=(str,),
+    visit_func: Optional[Callable[[Any], None]] = None,
+    yield_nodes: bool = True,
+    preorder: bool = True,
 ) -> Iterator:
     """
     Perform depth-first search (DFS) traversal on a graph with heterogeneous node types.

@@ -3,11 +3,11 @@ Unit tests for async_utils: call_maybe_async, maybe_await, and async_execute_wit
 
 Validates: Requirements 12.1, 12.2, 12.3, 12.4, 12.6, 7.6
 """
+
 import asyncio
 import functools
 
 import pytest
-
 from rich_python_utils.common_utils.async_utils import (
     async_execute_with_retry,
     call_maybe_async,
@@ -18,6 +18,7 @@ from rich_python_utils.common_utils.async_utils import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def sync_add(a, b):
     return a + b
@@ -40,6 +41,7 @@ class AsyncCallable:
 # ---------------------------------------------------------------------------
 # call_maybe_async
 # ---------------------------------------------------------------------------
+
 
 class TestCallMaybeAsync:
     """Tests for call_maybe_async — Req 12.1, 12.2, 12.3, 12.4."""
@@ -76,6 +78,7 @@ class TestCallMaybeAsync:
 # ---------------------------------------------------------------------------
 # maybe_await
 # ---------------------------------------------------------------------------
+
 
 class TestMaybeAwait:
     """Tests for maybe_await — Req 12.1, 12.2, 12.3."""
@@ -119,6 +122,7 @@ class TestMaybeAwait:
 # ---------------------------------------------------------------------------
 # async_execute_with_retry — output_validator
 # ---------------------------------------------------------------------------
+
 
 class TestAsyncExecuteWithRetryOutputValidator:
     """Tests for output_validator in async_execute_with_retry — Req 7.6."""
@@ -168,6 +172,7 @@ class TestAsyncExecuteWithRetryOutputValidator:
 # ---------------------------------------------------------------------------
 # async_execute_with_retry — pre_condition
 # ---------------------------------------------------------------------------
+
 
 class TestAsyncExecuteWithRetryPreCondition:
     """Tests for pre_condition in async_execute_with_retry — Req 7.6."""
@@ -228,6 +233,7 @@ class TestAsyncExecuteWithRetryPreCondition:
 # async_execute_with_retry — backward compatibility (on_retry_callback)
 # ---------------------------------------------------------------------------
 
+
 class TestAsyncExecuteWithRetryBackwardCompat:
     """Backward compat: existing callers using only on_retry_callback still work."""
 
@@ -270,15 +276,22 @@ class TestAsyncExecuteWithRetryBackwardCompat:
 # Backward-compat imports from async_function_helper.py
 # ---------------------------------------------------------------------------
 
+
 class TestBackwardCompatImports:
     """Verify imports from async_function_helper.py still work — Req 12.6."""
 
     def test_import_async_execute_with_retry(self):
-        from rich_python_utils.common_utils.async_function_helper import async_execute_with_retry as fn
+        from rich_python_utils.common_utils.async_function_helper import (
+            async_execute_with_retry as fn,
+        )
+
         assert callable(fn)
 
     def test_import_run_async(self):
-        from rich_python_utils.common_utils.async_function_helper import _run_async as fn
+        from rich_python_utils.common_utils.async_function_helper import (
+            _run_async as fn,
+        )
+
         assert callable(fn)
 
 
@@ -290,6 +303,7 @@ if __name__ == "__main__":
 # Backward compatibility verification — structural assertions
 # ---------------------------------------------------------------------------
 
+
 class TestBackwardCompatibility:
     """Verify backward compatibility: imports, sync path unchanged.
 
@@ -299,61 +313,84 @@ class TestBackwardCompatibility:
     # -- Import checks from async_function_helper (Req 14.7) --
 
     def test_import_async_execute_with_retry_from_helper(self):
-        from rich_python_utils.common_utils.async_function_helper import async_execute_with_retry
+        from rich_python_utils.common_utils.async_function_helper import (
+            async_execute_with_retry,
+        )
+
         assert callable(async_execute_with_retry)
 
     def test_import_run_async_from_helper(self):
         from rich_python_utils.common_utils.async_function_helper import _run_async
+
         assert callable(_run_async)
 
     def test_import_call_maybe_async_from_helper(self):
-        from rich_python_utils.common_utils.async_function_helper import call_maybe_async
+        from rich_python_utils.common_utils.async_function_helper import (
+            call_maybe_async,
+        )
+
         assert callable(call_maybe_async)
 
     def test_import_maybe_await_from_helper(self):
         from rich_python_utils.common_utils.async_function_helper import maybe_await
+
         assert callable(maybe_await)
 
     # -- Import checks from workflow/__init__.py (Req 13.8) --
 
     def test_import_call_maybe_async_from_workflow_init(self):
         from rich_python_utils.common_objects.workflow import call_maybe_async
+
         assert callable(call_maybe_async)
 
     def test_import_maybe_await_from_workflow_init(self):
         from rich_python_utils.common_objects.workflow import maybe_await
+
         assert callable(maybe_await)
 
     # -- Structural assertions: sync path unchanged (Req 14.1–14.5) --
 
     def test_worknode_base_has_run_and_arun(self):
         """WorkNodeBase has both run and arun methods (Req 14.1)."""
-        from rich_python_utils.common_objects.workflow.common.worknode_base import WorkNodeBase
-        assert hasattr(WorkNodeBase, 'run')
-        assert hasattr(WorkNodeBase, 'arun')
+        from rich_python_utils.common_objects.workflow.common.worknode_base import (
+            WorkNodeBase,
+        )
+
+        assert hasattr(WorkNodeBase, "run")
+        assert hasattr(WorkNodeBase, "arun")
 
     def test_worknode_base_run_is_not_async(self):
         """WorkNodeBase.run is NOT async — sync path unchanged (Req 14.1)."""
         import asyncio
-        from rich_python_utils.common_objects.workflow.common.worknode_base import WorkNodeBase
+
+        from rich_python_utils.common_objects.workflow.common.worknode_base import (
+            WorkNodeBase,
+        )
+
         assert not asyncio.iscoroutinefunction(WorkNodeBase.run)
 
     def test_workflow_run_is_not_async(self):
         """Workflow._run is NOT async — sync path unchanged (Req 14.2)."""
         import asyncio
+
         from rich_python_utils.common_objects.workflow.workflow import Workflow
+
         assert not asyncio.iscoroutinefunction(Workflow._run)
 
     def test_workgraphnode_run_is_not_async(self):
         """WorkGraphNode._run is NOT async — sync path unchanged (Req 14.3)."""
         import asyncio
+
         from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode
+
         assert not asyncio.iscoroutinefunction(WorkGraphNode._run)
 
     def test_workgraph_run_is_not_async(self):
         """WorkGraph._run is NOT async — sync path unchanged (Req 14.4)."""
         import asyncio
+
         from rich_python_utils.common_objects.workflow.workgraph import WorkGraph
+
         assert not asyncio.iscoroutinefunction(WorkGraph._run)
 
 
@@ -381,7 +418,8 @@ class TestRetryTerminalExceptionLogging:
                 retry_on_exceptions=(ValueError,),
             )
         warnings = [
-            r for r in caplog.records
+            r
+            for r in caplog.records
             if r.levelname == "WARNING" and "retry chain exhausted" in r.message.lower()
         ]
         assert len(warnings) == 1

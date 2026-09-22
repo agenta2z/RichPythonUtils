@@ -9,7 +9,7 @@ This ensures a consistent API across different backend implementations
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional, List, Dict
+from typing import Any, Dict, List, Optional
 
 from attr import attrs
 
@@ -198,7 +198,9 @@ class KeyValueServiceBase(ABC):
 
     # ── Concrete batch methods (overridable for optimized implementations) ──
 
-    def get_many(self, keys: List[str], namespace: Optional[str] = None) -> Dict[str, Any]:
+    def get_many(
+        self, keys: List[str], namespace: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Get multiple values by keys.
 
@@ -215,7 +217,11 @@ class KeyValueServiceBase(ABC):
             Dictionary mapping keys to their values.
             Keys with no stored value are omitted from the result.
         """
-        return {k: v for k, v in ((k, self.get(k, namespace)) for k in keys) if v is not None}
+        return {
+            k: v
+            for k, v in ((k, self.get(k, namespace)) for k in keys)
+            if v is not None
+        }
 
     def put_many(self, items: Dict[str, Any], namespace: Optional[str] = None) -> None:
         """

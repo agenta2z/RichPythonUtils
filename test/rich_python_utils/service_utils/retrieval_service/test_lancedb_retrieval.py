@@ -13,15 +13,12 @@ import pytest
 
 lancedb = pytest.importorskip("lancedb")
 
-from hypothesis import given, settings, assume, HealthCheck
-from hypothesis import strategies as st
-
+from conftest import document_strategy
+from hypothesis import assume, given, HealthCheck, settings, strategies as st
+from rich_python_utils.service_utils.retrieval_service.document import Document
 from rich_python_utils.service_utils.retrieval_service.lancedb_retrieval_service import (
     LanceDBRetrievalService,
 )
-from rich_python_utils.service_utils.retrieval_service.document import Document
-
-from conftest import document_strategy
 
 pytestmark = pytest.mark.requires_lancedb
 
@@ -35,8 +32,9 @@ _fx_settings = settings(
 def _dummy_embed(text: str) -> list:
     """Deterministic dummy embedding for testing (8-dim)."""
     import hashlib
+
     h = hashlib.md5(text.encode()).hexdigest()
-    return [int(h[i:i+2], 16) / 255.0 for i in range(0, 16, 2)]
+    return [int(h[i : i + 2], 16) / 255.0 for i in range(0, 16, 2)]
 
 
 def _unique_namespace():
@@ -59,6 +57,7 @@ def lance_svc(tmp_path):
 
 # ── Property 7: Document add/get round-trip ──
 
+
 class TestLanceDocRoundTrip:
     """**Validates: Requirements 6.1**"""
 
@@ -76,6 +75,7 @@ class TestLanceDocRoundTrip:
 
 # ── Property 8: Duplicate add raises error ──
 
+
 class TestLanceDuplicateAdd:
     """**Validates: Requirements 6.2**"""
 
@@ -90,8 +90,8 @@ class TestLanceDuplicateAdd:
 
 # ── Unit tests ──
 
-class TestLanceUnit:
 
+class TestLanceUnit:
     def test_get_nonexistent_returns_none(self, lance_svc):
         assert lance_svc.get_by_id("no_such_doc") is None
 

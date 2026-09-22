@@ -8,6 +8,10 @@ from os import path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, Union
 
 from rich_python_utils.common_utils import all_of_same_type
+from rich_python_utils.common_utils.arg_utils.arg_naming import (
+    solve_arg_full_and_short_name,
+    solve_parameter_info,
+)
 from rich_python_utils.common_utils.environment_helper import is_ipython, path_import
 from rich_python_utils.common_utils.slot_tuple import NamedTuple
 from rich_python_utils.common_utils.typing_helper import (
@@ -15,10 +19,6 @@ from rich_python_utils.common_utils.typing_helper import (
     element_type,
     map_iterable_elements,
     nonstr_iterable,
-)
-from rich_python_utils.common_utils.arg_utils.arg_naming import (
-    solve_arg_full_and_short_name,
-    solve_parameter_info,
 )
 from rich_python_utils.console_utils import hprint_message
 from rich_python_utils.string_utils.parsing import (
@@ -1074,5 +1074,3 @@ def get_args(preset=None, argv=None, **kwargs) -> Namespace:
             setattr(args, arg, json.loads(value))
 
     return args
-
-

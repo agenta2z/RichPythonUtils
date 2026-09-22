@@ -3,8 +3,7 @@
 import functools
 
 import pytest
-
-from rich_python_utils.config_utils import load_config, instantiate
+from rich_python_utils.config_utils import instantiate, load_config
 from rich_python_utils.config_utils._instantiate import (
     _deep_merge,
     _ImportFactory,
@@ -62,9 +61,7 @@ def import_dir(tmp_path):
     (tmp_path / "middle.yaml").write_text(
         "_target_: Middle\ninner:\n  _import_: leaf.yaml\n"
     )
-    (tmp_path / "top.yaml").write_text(
-        "root:\n  _import_: middle.yaml\n"
-    )
+    (tmp_path / "top.yaml").write_text("root:\n  _import_: middle.yaml\n")
     # Subdirectory
     sub = tmp_path / "sub"
     sub.mkdir()
@@ -176,9 +173,7 @@ class TestImportInLoadConfig:
 @pytest.fixture
 def shared_import_dir(tmp_path):
     """YAML files using _import_shared_ (old behavior under new name)."""
-    (tmp_path / "base.yaml").write_text(
-        "_target_: MyClass\nfield_a: 1\nfield_b: 2\n"
-    )
+    (tmp_path / "base.yaml").write_text("_target_: MyClass\nfield_a: 1\nfield_b: 2\n")
     (tmp_path / "parent_shared.yaml").write_text(
         "top_level: true\nchild:\n  _import_shared_: base.yaml\n  field_b: 99\n"
     )

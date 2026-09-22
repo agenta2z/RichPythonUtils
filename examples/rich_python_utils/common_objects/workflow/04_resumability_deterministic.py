@@ -16,6 +16,7 @@ the expansion_id + the factory in `expansion_step_registry`.
 
 Run: python 04_resumability_deterministic.py
 """
+
 from __future__ import annotations
 
 import os
@@ -28,15 +29,15 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from resolve_path import resolve_path
+
 resolve_path()
 
-from attr import attrs, attrib
-
+from attr import attrib, attrs
 from rich_python_utils.common_objects.workflow import ExpansionResult, StepWrapper
-from rich_python_utils.common_objects.workflow.workflow import Workflow
 from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
     ResultPassDownMode,
 )
+from rich_python_utils.common_objects.workflow.workflow import Workflow
 
 
 # =============================================================
@@ -47,10 +48,13 @@ from rich_python_utils.common_objects.workflow.common.result_pass_down_mode impo
 # ref-reconstructible on resume.
 TOPICS = ["alpha", "beta", "gamma"]
 
+
 def make_worker_step(topic):
     """Factory that returns a worker step for a given topic."""
+
     def worker(prev):
         return f"{prev}|{topic}"
+
     return StepWrapper(worker, name=f"work_{topic}")
 
 
@@ -74,7 +78,7 @@ def planner(input_text):
     return ExpansionResult(
         result=input_text,
         new_steps=worker_steps_factory("my_plan"),
-        expansion_id="my_plan",           # ← key into expansion_step_registry
+        expansion_id="my_plan",  # ← key into expansion_step_registry
     )
 
 
@@ -84,6 +88,7 @@ def finalize(prev):
 
 def build_workflow(save_dir, crash_on_step=None):
     """crash_on_step is a step name to intentionally fail at (simulates a crash)."""
+
     def maybe_crash(prev):
         if crash_on_step == "finalize":
             raise RuntimeError("simulated crash")
@@ -107,6 +112,7 @@ def build_workflow(save_dir, crash_on_step=None):
 # DRIVER
 # =============================================================
 
+
 def main():
     tmp = Path(tempfile.mkdtemp(prefix="example04_"))
     observations = {
@@ -117,21 +123,27 @@ def main():
         # Patch modules' functions to count calls (for observation only)
         global planner, make_worker_step
         original_planner = planner
+
         def counted_planner(x):
             observations["planner_calls"] += 1
             return original_planner(x)
+
         planner = counted_planner
 
         original_make = make_worker_step
+
         def counted_make(topic):
             base = original_make(topic)
             inner = base._fn
+
             def counted(prev):
                 observations["worker_calls"][topic] = (
                     observations["worker_calls"].get(topic, 0) + 1
                 )
                 return inner(prev)
+
             return StepWrapper(counted, name=f"work_{topic}")
+
         make_worker_step = counted_make
 
         # ---- Run 1: crash at finalize ----
@@ -165,6 +177,7 @@ def main():
 # =============================================================
 # NARRATION
 # =============================================================
+
 
 def banner(text):
     print(f"\n{'=' * 60}\n  {text}\n{'=' * 60}")

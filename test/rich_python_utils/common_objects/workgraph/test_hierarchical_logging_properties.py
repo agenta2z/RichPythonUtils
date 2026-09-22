@@ -6,8 +6,8 @@ This test suite focuses on verifying the hierarchical logging features:
 2. full_log_group_id computation
 3. logger and debug_mode inheritance from parents
 """
-import pytest
 
+import pytest
 from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode
 
 
@@ -49,18 +49,30 @@ class TestHierarchicalLoggingSetup:
 
     def test_full_log_group_id_with_single_parent(self):
         """Test full_log_group_id with one level of hierarchy."""
-        parent = WorkGraphNode(dummy_func, log_group_id="Parent", log_group_hierarchy_separator=' > ')
-        child = WorkGraphNode(dummy_func, parent_log_group_id=parent, log_group_id="Child")
+        parent = WorkGraphNode(
+            dummy_func, log_group_id="Parent", log_group_hierarchy_separator=" > "
+        )
+        child = WorkGraphNode(
+            dummy_func, parent_log_group_id=parent, log_group_id="Child"
+        )
 
         expected = f"Parent > Child"
         assert child.full_log_group_id == expected
 
     def test_full_log_group_id_with_deep_hierarchy(self):
         """Test full_log_group_id with multiple levels."""
-        level1 = WorkGraphNode(dummy_func, log_group_id="Level1", log_group_hierarchy_separator=' > ')
-        level2 = WorkGraphNode(dummy_func, parent_log_group_id=level1, log_group_id="Level2")
-        level3 = WorkGraphNode(dummy_func, parent_log_group_id=level2, log_group_id="Level3")
-        level4 = WorkGraphNode(dummy_func, parent_log_group_id=level3, log_group_id="Level4")
+        level1 = WorkGraphNode(
+            dummy_func, log_group_id="Level1", log_group_hierarchy_separator=" > "
+        )
+        level2 = WorkGraphNode(
+            dummy_func, parent_log_group_id=level1, log_group_id="Level2"
+        )
+        level3 = WorkGraphNode(
+            dummy_func, parent_log_group_id=level2, log_group_id="Level3"
+        )
+        level4 = WorkGraphNode(
+            dummy_func, parent_log_group_id=level3, log_group_id="Level4"
+        )
 
         expected = "Level1 > Level2 > Level3 > Level4"
         assert level4.full_log_group_id == expected
@@ -72,7 +84,7 @@ class TestHierarchicalLoggingSetup:
 
     def test_full_log_group_id_contains_all_ancestors(self):
         """Test that full_log_group_id includes all ancestor IDs."""
-        grandparent = WorkGraphNode(dummy_func, log_group_hierarchy_separator=' > ')
+        grandparent = WorkGraphNode(dummy_func, log_group_hierarchy_separator=" > ")
         parent = WorkGraphNode(dummy_func, parent_log_group_id=grandparent)
         child = WorkGraphNode(dummy_func, parent_log_group_id=parent)
 
@@ -97,7 +109,9 @@ class TestLoggerInheritance:
         def custom_logger(log_data):
             pass
 
-        parent = WorkGraphNode(dummy_func, logger=custom_logger, always_add_logging_based_logger=False)
+        parent = WorkGraphNode(
+            dummy_func, logger=custom_logger, always_add_logging_based_logger=False
+        )
         child = WorkGraphNode(dummy_func, parent_log_group_id=parent)
 
         # Child should inherit parent's logger
@@ -109,14 +123,13 @@ class TestLoggerInheritance:
         def parent_logger(log_data):
             pass
 
-        parent = WorkGraphNode(dummy_func, logger=parent_logger, always_add_logging_based_logger=False)
+        parent = WorkGraphNode(
+            dummy_func, logger=parent_logger, always_add_logging_based_logger=False
+        )
 
         # When we explicitly pass logger (even as None), inheritance doesn't apply
         # This test just verifies that having a parent doesn't break explicit logger setting
-        child = WorkGraphNode(
-            dummy_func,
-            parent_log_group_id=parent
-        )
+        child = WorkGraphNode(dummy_func, parent_log_group_id=parent)
 
         # Child inherits parent's logger
         assert child.logger is parent.logger
@@ -161,18 +174,21 @@ class TestAlwaysAddLoggingBasedLoggerInheritance:
         child = WorkGraphNode(dummy_func, parent_log_group_id=parent)
 
         # Child should inherit parent's setting
-        assert child.always_add_logging_based_logger == parent.always_add_logging_based_logger
+        assert (
+            child.always_add_logging_based_logger
+            == parent.always_add_logging_based_logger
+        )
 
     def test_always_add_logging_based_logger_inheritance_works(self):
         """Test that always_add_logging_based_logger inherits correctly."""
         parent = WorkGraphNode(dummy_func, always_add_logging_based_logger=False)
-        child = WorkGraphNode(
-            dummy_func,
-            parent_log_group_id=parent
-        )
+        child = WorkGraphNode(dummy_func, parent_log_group_id=parent)
 
         # Child inherits parent's setting
-        assert child.always_add_logging_based_logger == parent.always_add_logging_based_logger
+        assert (
+            child.always_add_logging_based_logger
+            == parent.always_add_logging_based_logger
+        )
         assert child.always_add_logging_based_logger is False
 
 
@@ -182,8 +198,12 @@ class TestParallelBranches:
     def test_parallel_branches_share_parent(self):
         """Test that parallel branches both reference the same parent."""
         parent = WorkGraphNode(dummy_func, log_group_id="Parent")
-        branch_a = WorkGraphNode(dummy_func, parent_log_group_id=parent, log_group_id="BranchA")
-        branch_b = WorkGraphNode(dummy_func, parent_log_group_id=parent, log_group_id="BranchB")
+        branch_a = WorkGraphNode(
+            dummy_func, parent_log_group_id=parent, log_group_id="BranchA"
+        )
+        branch_b = WorkGraphNode(
+            dummy_func, parent_log_group_id=parent, log_group_id="BranchB"
+        )
 
         # Both branches should have the same parent ID (string, not object)
         assert branch_a.parent_log_group_id == branch_b.parent_log_group_id
@@ -206,7 +226,7 @@ class TestParallelBranches:
             dummy_func,
             logger=custom_logger,
             debug_mode=True,
-            always_add_logging_based_logger=False
+            always_add_logging_based_logger=False,
         )
 
         branch_a = WorkGraphNode(dummy_func, parent_log_group_id=parent)
@@ -226,7 +246,9 @@ class TestRebuildFullLogGroupId:
         """Test that full_log_group_id updates when parent changes."""
         parent1 = WorkGraphNode(dummy_func, log_group_id="Parent1")
         parent2 = WorkGraphNode(dummy_func, log_group_id="Parent2")
-        child = WorkGraphNode(dummy_func, parent_log_group_id=parent1, log_group_id="Child")
+        child = WorkGraphNode(
+            dummy_func, parent_log_group_id=parent1, log_group_id="Child"
+        )
 
         # Initial state
         assert "Parent1" in child.full_log_group_id
@@ -239,6 +261,6 @@ class TestRebuildFullLogGroupId:
         assert "Parent1" not in child.full_log_group_id
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Run tests with pytest
-    pytest.main([__file__, '-v', '--tb=short'])
+    pytest.main([__file__, "-v", "--tb=short"])

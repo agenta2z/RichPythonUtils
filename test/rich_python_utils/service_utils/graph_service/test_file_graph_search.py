@@ -3,11 +3,10 @@ Unit tests for FileGraphService search_nodes() term-overlap search.
 """
 
 import pytest
-
-from rich_python_utils.service_utils.graph_service.graph_node import GraphNode
 from rich_python_utils.service_utils.graph_service.file_graph_service import (
     FileGraphService,
 )
+from rich_python_utils.service_utils.graph_service.graph_node import GraphNode
 
 
 class TestFileGraphServiceSearch:
@@ -45,10 +44,14 @@ class TestFileGraphServiceSearch:
 
     def test_search_matches_properties(self, tmp_path):
         svc = FileGraphService(base_dir=str(tmp_path))
-        svc.add_node(GraphNode(
-            node_id="n1", node_type="person", label="Alice",
-            properties={"city": "Seattle", "role": "engineer"},
-        ))
+        svc.add_node(
+            GraphNode(
+                node_id="n1",
+                node_type="person",
+                label="Alice",
+                properties={"city": "Seattle", "role": "engineer"},
+            )
+        )
         results = svc.search_nodes("seattle")
         assert len(results) == 1
         assert results[0][0].node_id == "n1"
@@ -61,9 +64,13 @@ class TestFileGraphServiceSearch:
     def test_search_top_k_limits_results(self, tmp_path):
         svc = FileGraphService(base_dir=str(tmp_path))
         for i in range(10):
-            svc.add_node(GraphNode(
-                node_id=f"n{i}", node_type="person", label=f"Person {i}",
-            ))
+            svc.add_node(
+                GraphNode(
+                    node_id=f"n{i}",
+                    node_type="person",
+                    label=f"Person {i}",
+                )
+            )
         results = svc.search_nodes("person", top_k=3)
         assert len(results) == 3
 
@@ -92,10 +99,14 @@ class TestFileGraphServiceSearch:
     def test_search_scores_ordered_descending(self, tmp_path):
         svc = FileGraphService(base_dir=str(tmp_path))
         svc.add_node(GraphNode(node_id="n1", node_type="person", label="Alice"))
-        svc.add_node(GraphNode(
-            node_id="n2", node_type="person", label="Alice",
-            properties={"nickname": "alice"},
-        ))
+        svc.add_node(
+            GraphNode(
+                node_id="n2",
+                node_type="person",
+                label="Alice",
+                properties={"nickname": "alice"},
+            )
+        )
         results = svc.search_nodes("alice")
         assert len(results) == 2
         assert results[0][1] >= results[1][1]
@@ -108,10 +119,14 @@ class TestFileGraphServiceSearch:
 
     def test_search_multi_term_query(self, tmp_path):
         svc = FileGraphService(base_dir=str(tmp_path))
-        svc.add_node(GraphNode(
-            node_id="n1", node_type="person", label="Alice",
-            properties={"city": "Seattle"},
-        ))
+        svc.add_node(
+            GraphNode(
+                node_id="n1",
+                node_type="person",
+                label="Alice",
+                properties={"city": "Seattle"},
+            )
+        )
         svc.add_node(GraphNode(node_id="n2", node_type="person", label="Bob"))
         results = svc.search_nodes("alice seattle")
         assert len(results) >= 1
@@ -119,10 +134,14 @@ class TestFileGraphServiceSearch:
 
     def test_search_skips_embedding_text_property(self, tmp_path):
         svc = FileGraphService(base_dir=str(tmp_path))
-        svc.add_node(GraphNode(
-            node_id="n1", node_type="item", label="Widget",
-            properties={"embedding_text": "secret keyword"},
-        ))
+        svc.add_node(
+            GraphNode(
+                node_id="n1",
+                node_type="item",
+                label="Widget",
+                properties={"embedding_text": "secret keyword"},
+            )
+        )
         # "secret" should NOT match because embedding_text is skipped
         results = svc.search_nodes("secret")
         assert results == []

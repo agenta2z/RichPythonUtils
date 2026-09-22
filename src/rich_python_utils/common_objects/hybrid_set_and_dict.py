@@ -79,7 +79,7 @@ class HybridSetAndDict:
     def __init__(self, set_class=set, dict_class=dict, set_portion_value=True):
         # Internal storage
         self._none_keys = set_class()  # for keys whose value is None
-        self._values = dict_class()        # for keys with non-None values
+        self._values = dict_class()  # for keys with non-None values
         self._set_portion_value = set_portion_value
 
     def __setitem__(self, key, value):

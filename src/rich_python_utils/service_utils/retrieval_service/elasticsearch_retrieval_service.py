@@ -26,7 +26,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from attr import attrs, attrib
+from attr import attrib, attrs
 
 from .document import Document
 from .filter_utils import matches_filters
@@ -95,7 +95,9 @@ class ElasticsearchRetrievalService(RetrievalServiceBase):
             "doc_id": doc.doc_id,
             "content": doc.content,
             "embedding_text": doc.embedding_text or "",
-            "metadata": json.dumps(doc.metadata, ensure_ascii=False) if doc.metadata else "{}",
+            "metadata": json.dumps(doc.metadata, ensure_ascii=False)
+            if doc.metadata
+            else "{}",
             "namespace": namespace,
             "created_at": doc.created_at or "",
             "updated_at": doc.updated_at or "",
@@ -136,11 +138,15 @@ class ElasticsearchRetrievalService(RetrievalServiceBase):
                 op_type="create",
             )
         except ConflictError:
-            raise ValueError(f"Duplicate doc_id: '{doc.doc_id}' already exists in namespace '{ns}'")
+            raise ValueError(
+                f"Duplicate doc_id: '{doc.doc_id}' already exists in namespace '{ns}'"
+            )
         self._client.indices.refresh(index=self.index_name)
         return doc.doc_id
 
-    def get_by_id(self, doc_id: str, namespace: Optional[str] = None) -> Optional[Document]:
+    def get_by_id(
+        self, doc_id: str, namespace: Optional[str] = None
+    ) -> Optional[Document]:
         from elasticsearch import NotFoundError
 
         ns = self._resolve_namespace(namespace)

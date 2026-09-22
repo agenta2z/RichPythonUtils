@@ -12,11 +12,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from rich_python_utils.common_objects.variable_manager.file_based import (
-    FileBasedVariableManager,
-)
 from rich_python_utils.common_objects.variable_manager.config import (
     VariableManagerConfig,
+)
+from rich_python_utils.common_objects.variable_manager.file_based import (
+    FileBasedVariableManager,
 )
 
 
@@ -34,12 +34,15 @@ def _write(path: Path, content: str) -> None:
 
 
 class TestMasterVersionAutoDiscovery(unittest.TestCase):
-
     def test_resolves_from_master_version_subdirectory(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             _write(
-                root / "_variables" / "task_preamble" / "aggregation" / "default.jinja2",
+                root
+                / "_variables"
+                / "task_preamble"
+                / "aggregation"
+                / "default.jinja2",
                 "You are aggregating upstream artifacts.",
             )
             _write(
@@ -85,7 +88,11 @@ class TestMasterVersionAutoDiscovery(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             _write(
-                root / "_variables" / "task_preamble" / "aggregation" / "default.jinja2",
+                root
+                / "_variables"
+                / "task_preamble"
+                / "aggregation"
+                / "default.jinja2",
                 "Aggregation-specific.",
             )
             _write(
@@ -107,11 +114,19 @@ class TestMasterVersionAutoDiscovery(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             _write(
-                root / "_variables" / "task_instructions" / "aggregation" / "create_role.jinja2",
+                root
+                / "_variables"
+                / "task_instructions"
+                / "aggregation"
+                / "create_role.jinja2",
                 "Role-specific aggregation instructions.",
             )
             _write(
-                root / "_variables" / "task_instructions" / "aggregation" / "default.jinja2",
+                root
+                / "_variables"
+                / "task_instructions"
+                / "aggregation"
+                / "default.jinja2",
                 "Default aggregation instructions.",
             )
 
@@ -132,7 +147,11 @@ class TestMasterVersionAutoDiscovery(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             _write(
-                root / "_variables" / "task_instructions" / "aggregation" / "default.jinja2",
+                root
+                / "_variables"
+                / "task_instructions"
+                / "aggregation"
+                / "default.jinja2",
                 "Default aggregation instructions.",
             )
 
@@ -153,11 +172,19 @@ class TestMasterVersionAutoDiscovery(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             _write(
-                root / "_variables" / "task_preamble" / "aggregation" / "default.jinja2",
+                root
+                / "_variables"
+                / "task_preamble"
+                / "aggregation"
+                / "default.jinja2",
                 "Aggregation preamble.",
             )
             _write(
-                root / "_variables" / "task_instructions" / "aggregation" / "default.jinja2",
+                root
+                / "_variables"
+                / "task_instructions"
+                / "aggregation"
+                / "default.jinja2",
                 "Aggregation instructions.",
             )
             _write(
@@ -175,7 +202,9 @@ class TestMasterVersionAutoDiscovery(unittest.TestCase):
             )
             self.assertEqual(result["task_preamble"], "Aggregation preamble.")
             self.assertEqual(result["task_instructions"], "Aggregation instructions.")
-            self.assertEqual(result["other_var"], "Other variable (no aggregation subdir).")
+            self.assertEqual(
+                result["other_var"], "Other variable (no aggregation subdir)."
+            )
 
 
 class TestMasterVersionRecursiveComposition(unittest.TestCase):
@@ -193,7 +222,11 @@ class TestMasterVersionRecursiveComposition(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             _write(
-                root / "_variables" / "task_preamble" / "aggregation" / "default.jinja2",
+                root
+                / "_variables"
+                / "task_preamble"
+                / "aggregation"
+                / "default.jinja2",
                 "AGGREGATION preamble content.",
             )
             _write(
@@ -201,7 +234,10 @@ class TestMasterVersionRecursiveComposition(unittest.TestCase):
                 "GENERIC preamble content.",
             )
             _write(
-                root / "_variables" / "context" / "user_request_with_task_preamble.jinja2",
+                root
+                / "_variables"
+                / "context"
+                / "user_request_with_task_preamble.jinja2",
                 "{{ task_preamble }}\n\nUser request: {{ input }}",
             )
 
@@ -215,15 +251,22 @@ class TestMasterVersionRecursiveComposition(unittest.TestCase):
             )
             # resolve_from_content returns flat keys (dot-notation)
             composed = result.get("context.user_request_with_task_preamble", "")
-            self.assertIn("AGGREGATION preamble content", composed,
-                          f"Expected aggregation preamble in composed result. Got: {result}")
+            self.assertIn(
+                "AGGREGATION preamble content",
+                composed,
+                f"Expected aggregation preamble in composed result. Got: {result}",
+            )
             self.assertNotIn("GENERIC preamble content", composed)
 
     def test_nested_variable_without_master_version_uses_flat(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             _write(
-                root / "_variables" / "task_preamble" / "aggregation" / "default.jinja2",
+                root
+                / "_variables"
+                / "task_preamble"
+                / "aggregation"
+                / "default.jinja2",
                 "AGGREGATION preamble.",
             )
             _write(
@@ -231,7 +274,10 @@ class TestMasterVersionRecursiveComposition(unittest.TestCase):
                 "GENERIC preamble.",
             )
             _write(
-                root / "_variables" / "context" / "user_request_with_task_preamble.jinja2",
+                root
+                / "_variables"
+                / "context"
+                / "user_request_with_task_preamble.jinja2",
                 "{{ task_preamble }}\n\nUser request: {{ input }}",
             )
 
@@ -244,8 +290,11 @@ class TestMasterVersionRecursiveComposition(unittest.TestCase):
                 master_version=None,
             )
             composed = result.get("context.user_request_with_task_preamble", "")
-            self.assertIn("GENERIC preamble", composed,
-                          f"Expected generic preamble. Got: {result}")
+            self.assertIn(
+                "GENERIC preamble",
+                composed,
+                f"Expected generic preamble. Got: {result}",
+            )
             self.assertNotIn("AGGREGATION preamble", composed)
 
 

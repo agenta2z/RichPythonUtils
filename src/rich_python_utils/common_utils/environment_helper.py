@@ -17,6 +17,7 @@ def add_to_path(p):
     Allows temporarily adding a path to environment for the context.
     """
     import sys
+
     old_path = sys.path
     sys.path = sys.path[:]
     sys.path.insert(0, p)
@@ -31,6 +32,7 @@ def path_import(pathstr):
     Loads a module from the specified path.
     """
     from rich_python_utils.path_utils.path_string_operations import abspath_
+
     pathstr = abspath_(pathstr)
     with add_to_path(os.path.dirname(pathstr)):
         spec = importlib.util.spec_from_file_location(pathstr, pathstr)

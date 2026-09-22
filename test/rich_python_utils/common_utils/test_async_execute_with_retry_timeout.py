@@ -11,6 +11,7 @@ Tests correctness properties from the design document:
 
 **Validates: Requirements 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 5.2, 5.3, 13.3, 13.4**
 """
+
 import asyncio
 import sys
 import time
@@ -28,7 +29,6 @@ if _src_dir.exists() and str(_src_dir) not in sys.path:
 
 import pytest
 from hypothesis import given, settings, strategies as st
-
 from rich_python_utils.common_utils.async_utils import async_execute_with_retry
 
 
@@ -38,20 +38,25 @@ from rich_python_utils.common_utils.async_utils import async_execute_with_retry
 
 # Very small total_timeout values that will expire before the function completes
 small_total_timeout_strategy = st.floats(
-    min_value=0.01, max_value=0.1,
-    allow_nan=False, allow_infinity=False,
+    min_value=0.01,
+    max_value=0.1,
+    allow_nan=False,
+    allow_infinity=False,
 )
 
 # Small per-attempt timeout values
 small_attempt_timeout_strategy = st.floats(
-    min_value=0.01, max_value=0.1,
-    allow_nan=False, allow_infinity=False,
+    min_value=0.01,
+    max_value=0.1,
+    allow_nan=False,
+    allow_infinity=False,
 )
 
 
 # ---------------------------------------------------------------------------
 # Property 5: Error Normalization Invariant (async)
 # ---------------------------------------------------------------------------
+
 
 class TestAsyncErrorNormalizationInvariant:
     """Property 5: Error Normalization Invariant (async).
@@ -188,6 +193,7 @@ class TestAsyncErrorNormalizationInvariant:
 # Property 2: Total Timeout Monotonic Bound (async) — Timed Integration Tests
 # ---------------------------------------------------------------------------
 
+
 class TestAsyncTotalTimeoutMonotonicBound:
     """Property 2: Total Timeout Monotonic Bound (async).
 
@@ -287,6 +293,7 @@ class TestAsyncTotalTimeoutMonotonicBound:
 # ---------------------------------------------------------------------------
 # Property 3: Per-Attempt Timeout Bound (async) — Timed Integration Tests
 # ---------------------------------------------------------------------------
+
 
 class TestAsyncPerAttemptTimeoutBound:
     """Property 3: Per-Attempt Timeout Bound (async).

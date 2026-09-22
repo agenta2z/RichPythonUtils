@@ -19,6 +19,7 @@ Scenario:
 
 Run: python 04_resumability_mid_subgraph.py
 """
+
 from __future__ import annotations
 
 import os
@@ -31,15 +32,14 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from resolve_path import resolve_path
+
 resolve_path()
 
-from rich_python_utils.common_objects.workflow import (
-    GraphExpansionResult, SubgraphSpec,
-)
-from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode, WorkGraph
+from rich_python_utils.common_objects.workflow import GraphExpansionResult, SubgraphSpec
 from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
     ResultPassDownMode,
 )
+from rich_python_utils.common_objects.workflow.workgraph import WorkGraph, WorkGraphNode
 
 
 # =============================================================
@@ -71,8 +71,11 @@ def _worker_impl(i, x):
 def _make_worker(i, save_dir):
     def fn(x, i=i):
         return _worker_impl(i, x)
+
     return SavingNode(
-        name=f"w_{i}", value=fn, save_dir=save_dir,
+        name=f"w_{i}",
+        value=fn,
+        save_dir=save_dir,
         result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         enable_result_save=True,
         resume_with_saved_results=True,
@@ -96,9 +99,12 @@ def build_graph(save_dir):
         )
 
     planner = SavingNode(
-        name="planner", value=planner_fn, save_dir=save_dir,
+        name="planner",
+        value=planner_fn,
+        save_dir=save_dir,
         result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
-        enable_result_save=True, resume_with_saved_results=True,
+        enable_result_save=True,
+        resume_with_saved_results=True,
     )
 
     class GraphWithSave(WorkGraph):
@@ -122,6 +128,7 @@ def build_graph(save_dir):
 # =============================================================
 # DRIVER
 # =============================================================
+
 
 def main():
     tmp = Path(tempfile.mkdtemp(prefix="wg_example04_"))
@@ -153,6 +160,7 @@ def main():
 # =============================================================
 # NARRATION
 # =============================================================
+
 
 def banner(text):
     print(f"\n{'=' * 60}\n  {text}\n{'=' * 60}")

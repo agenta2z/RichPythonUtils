@@ -1,6 +1,7 @@
 """
 Enhanced ``functools.partial`` with parameter remapping.
 """
+
 from collections.abc import Mapping
 
 
@@ -64,7 +65,9 @@ class Partial:
     _PARAM_MAP = {}
     _FIRST_ARG_VALUES_TO_PARAM_MAP = {}
 
-    def __init__(self, func, *, param_map=None, first_arg_values_to_param_map=None, **kwargs):
+    def __init__(
+        self, func, *, param_map=None, first_arg_values_to_param_map=None, **kwargs
+    ):
         self._func = func
         self._kwargs = kwargs
         # Instance-level overrides class-level (later wins).
@@ -74,7 +77,10 @@ class Partial:
             self._param_map = self._PARAM_MAP
 
         if first_arg_values_to_param_map is not None:
-            self._first_arg_values_to_param_map = {**self._FIRST_ARG_VALUES_TO_PARAM_MAP, **first_arg_values_to_param_map}
+            self._first_arg_values_to_param_map = {
+                **self._FIRST_ARG_VALUES_TO_PARAM_MAP,
+                **first_arg_values_to_param_map,
+            }
         else:
             self._first_arg_values_to_param_map = self._FIRST_ARG_VALUES_TO_PARAM_MAP
 
@@ -110,9 +116,9 @@ class Partial:
         return self._func(*args, **merged)
 
     def __repr__(self):
-        func_name = getattr(self._func, '__name__', repr(self._func))
+        func_name = getattr(self._func, "__name__", repr(self._func))
         cls_name = type(self).__name__
-        params = ', '.join(f'{k}={v!r}' for k, v in self._kwargs.items())
+        params = ", ".join(f"{k}={v!r}" for k, v in self._kwargs.items())
         if params:
-            return f'{cls_name}({func_name}, {params})'
-        return f'{cls_name}({func_name})'
+            return f"{cls_name}({func_name}, {params})"
+        return f"{cls_name}({func_name})"

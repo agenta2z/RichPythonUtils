@@ -30,6 +30,7 @@ appear at runtime via insert-mode expansion between planner and aggregator.
 
 Run: python 02_bta_diamond_pattern.py
 """
+
 from __future__ import annotations
 
 import os
@@ -42,20 +43,20 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from resolve_path import resolve_path
+
 resolve_path()
 
-from rich_python_utils.common_objects.workflow import (
-    GraphExpansionResult, SubgraphSpec,
-)
-from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode, WorkGraph
+from rich_python_utils.common_objects.workflow import GraphExpansionResult, SubgraphSpec
 from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
     ResultPassDownMode,
 )
+from rich_python_utils.common_objects.workflow.workgraph import WorkGraph, WorkGraphNode
 
 
 # =============================================================
 # CORE CODE
 # =============================================================
+
 
 class SavingNode(WorkGraphNode):
     def __init__(self, save_dir=None, **kwargs):
@@ -69,7 +70,9 @@ class SavingNode(WorkGraphNode):
 
 def _make(name, fn, save_dir):
     return SavingNode(
-        name=name, value=fn, save_dir=save_dir,
+        name=name,
+        value=fn,
+        save_dir=save_dir,
         result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
     )
 
@@ -97,27 +100,32 @@ def build_graph(save_dir):
         # attach_mode='insert' (default) rewires planner's existing downstream
         # so each worker leaf feeds the aggregator.
         return GraphExpansionResult(
-            result=task,                           # passed to each worker
+            result=task,  # passed to each worker
             subgraph=SubgraphSpec(
                 nodes=worker_nodes,
-                entry_nodes=worker_nodes,          # all workers are entry points
+                entry_nodes=worker_nodes,  # all workers are entry points
             ),
-            attach_mode='insert',                  # ← preserves aggregator downstream
+            attach_mode="insert",  # ← preserves aggregator downstream
         )
 
     planner = _make("planner", planner_fn, save_dir)
-    planner.add_next(aggregator)                   # static edge
+    planner.add_next(aggregator)  # static edge
 
-    return WorkGraph(
-        start_nodes=[planner],
-        max_expansion_depth=1,
-        max_total_nodes=50,
-    ), planner, aggregator
+    return (
+        WorkGraph(
+            start_nodes=[planner],
+            max_expansion_depth=1,
+            max_total_nodes=50,
+        ),
+        planner,
+        aggregator,
+    )
 
 
 # =============================================================
 # DRIVER
 # =============================================================
+
 
 def main():
     tmp = Path(tempfile.mkdtemp(prefix="wg_example02_"))
@@ -142,6 +150,7 @@ def main():
 # =============================================================
 # NARRATION
 # =============================================================
+
 
 def banner(text):
     print(f"\n{'=' * 60}\n  {text}\n{'=' * 60}")

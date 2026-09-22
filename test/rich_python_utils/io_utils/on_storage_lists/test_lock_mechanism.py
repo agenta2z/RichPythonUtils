@@ -13,44 +13,34 @@ Note: OnStorageLists doesn't have built-in file locking like StorageBasedQueueSe
 so these tests verify how it behaves under concurrent access from multiple processes.
 """
 
+import multiprocessing as mp
+import shutil
 import sys
 import tempfile
-import shutil
 import time
-import multiprocessing as mp
-from pathlib import Path
 from collections import Counter
+from pathlib import Path
 
 # Add src to path
 project_root = Path(__file__).parent.parent.parent.parent.parent
-sys.path.insert(0, str(project_root / 'src'))
+sys.path.insert(0, str(project_root / "src"))
 
 from rich_python_utils.io_utils.on_storage_lists import OnStorageLists
 
 
-def concurrent_writer(root_path, process_id, num_items, list_key='concurrent_list'):
+def concurrent_writer(root_path, process_id, num_items, list_key="concurrent_list"):
     """Writer process that appends items."""
-    storage = OnStorageLists(
-        root_path=root_path,
-        default_list_key='default'
-    )
+    storage = OnStorageLists(root_path=root_path, default_list_key="default")
 
     for i in range(num_items):
-        item = {
-            'process_id': process_id,
-            'item_number': i,
-            'timestamp': time.time()
-        }
+        item = {"process_id": process_id, "item_number": i, "timestamp": time.time()}
         storage.append(item, list_key=list_key)
         time.sleep(0.01)  # Small delay to simulate work
 
 
-def concurrent_reader(root_path, process_id, results_queue, list_key='concurrent_list'):
+def concurrent_reader(root_path, process_id, results_queue, list_key="concurrent_list"):
     """Reader process that reads all items."""
-    storage = OnStorageLists(
-        root_path=root_path,
-        default_list_key='default'
-    )
+    storage = OnStorageLists(root_path=root_path, default_list_key="default")
 
     # Wait a bit for writers to finish
     time.sleep(0.5)
@@ -61,9 +51,9 @@ def concurrent_reader(root_path, process_id, results_queue, list_key='concurrent
 
 def test_concurrent_writers():
     """Test multiple processes writing simultaneously."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 1: Concurrent Writers (Data Integrity)")
-    print("="*80)
+    print("=" * 80)
 
     tmpdir = tempfile.mkdtemp()
 
@@ -85,9 +75,9 @@ def test_concurrent_writers():
         print("   [OK] All writers finished")
 
         print("\n2. Verifying data integrity...")
-        storage = OnStorageLists(root_path=tmpdir, default_list_key='default')
+        storage = OnStorageLists(root_path=tmpdir, default_list_key="default")
 
-        items = storage.get(list_key='concurrent_list')
+        items = storage.get(list_key="concurrent_list")
         print(f"   [OK] Total items written: {len(items)}")
 
         expected_total = num_writers * items_per_writer
@@ -96,7 +86,9 @@ def test_concurrent_writers():
         # Check if we have the right number of items (within tolerance for file system race conditions)
         if len(items) != expected_total:
             print(f"   [WARNING] Got {len(items)} items, expected {expected_total}")
-            print(f"   [WARNING] Possible race condition - OnStorageLists doesn't have locking")
+            print(
+                f"   [WARNING] Possible race condition - OnStorageLists doesn't have locking"
+            )
 
         print("\n3. Checking for data corruption...")
         corrupted = 0
@@ -104,7 +96,7 @@ def test_concurrent_writers():
             if not isinstance(item, dict):
                 corrupted += 1
                 continue
-            if 'process_id' not in item or 'item_number' not in item:
+            if "process_id" not in item or "item_number" not in item:
                 corrupted += 1
 
         if corrupted == 0:
@@ -115,18 +107,20 @@ def test_concurrent_writers():
         print("\n4. Grouping items by process...")
         items_by_process = {}
         for item in items:
-            if isinstance(item, dict) and 'process_id' in item:
-                pid = item['process_id']
+            if isinstance(item, dict) and "process_id" in item:
+                pid = item["process_id"]
                 if pid not in items_by_process:
                     items_by_process[pid] = []
-                items_by_process[pid].append(item['item_number'])
+                items_by_process[pid].append(item["item_number"])
 
         for pid in range(num_writers):
             count = len(items_by_process.get(pid, []))
             print(f"   Process {pid}: {count} items")
 
         print("\n[OK] Concurrent writers test completed")
-        print("[NOTE] OnStorageLists may lose some writes under high concurrency without locking")
+        print(
+            "[NOTE] OnStorageLists may lose some writes under high concurrency without locking"
+        )
         return True
 
     finally:
@@ -135,19 +129,19 @@ def test_concurrent_writers():
 
 def test_concurrent_readers():
     """Test multiple processes reading simultaneously."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 2: Concurrent Readers (Read Consistency)")
-    print("="*80)
+    print("=" * 80)
 
     tmpdir = tempfile.mkdtemp()
 
     try:
         print("\n1. Creating test data...")
-        storage = OnStorageLists(root_path=tmpdir, default_list_key='default')
+        storage = OnStorageLists(root_path=tmpdir, default_list_key="default")
 
         num_items = 50
         for i in range(num_items):
-            storage.append({'id': i, 'data': f'item_{i}'}, list_key='read_test')
+            storage.append({"id": i, "data": f"item_{i}"}, list_key="read_test")
 
         print(f"   [OK] Created {num_items} items")
 
@@ -157,7 +151,9 @@ def test_concurrent_readers():
 
         processes = []
         for i in range(num_readers):
-            p = mp.Process(target=concurrent_reader, args=(tmpdir, i, results_queue, 'read_test'))
+            p = mp.Process(
+                target=concurrent_reader, args=(tmpdir, i, results_queue, "read_test")
+            )
             p.start()
             processes.append(p)
 
@@ -179,7 +175,9 @@ def test_concurrent_readers():
         consistent = all(len(result) == len(first_result) for result in all_results)
 
         if consistent:
-            print(f"   [OK] All readers see consistent data ({len(first_result)} items)")
+            print(
+                f"   [OK] All readers see consistent data ({len(first_result)} items)"
+            )
         else:
             print(f"   [WARNING] Readers see different data lengths")
             for i, result in enumerate(all_results):
@@ -194,7 +192,7 @@ def test_concurrent_readers():
 
 def writer_with_list_ops(root_path, process_id, num_ops, results_queue):
     """Process that performs various list operations."""
-    storage = OnStorageLists(root_path=root_path, default_list_key='default')
+    storage = OnStorageLists(root_path=root_path, default_list_key="default")
 
     operations_completed = 0
     errors = []
@@ -202,15 +200,15 @@ def writer_with_list_ops(root_path, process_id, num_ops, results_queue):
     for i in range(num_ops):
         try:
             # Append
-            storage.append(f'P{process_id}-I{i}', list_key='stress_list')
+            storage.append(f"P{process_id}-I{i}", list_key="stress_list")
             operations_completed += 1
 
             # Get size
-            size = storage._get_list_size(list_key='stress_list')
+            size = storage._get_list_size(list_key="stress_list")
 
             # Occasionally read
             if i % 5 == 0:
-                items = storage.get(list_key='stress_list')
+                items = storage.get(list_key="stress_list")
 
         except Exception as e:
             errors.append(str(e))
@@ -220,12 +218,12 @@ def writer_with_list_ops(root_path, process_id, num_ops, results_queue):
 
 def pop_worker(root_path, worker_id, results_queue):
     """Worker process that pops items from the list."""
-    storage = OnStorageLists(root_path=root_path, default_list_key='default')
+    storage = OnStorageLists(root_path=root_path, default_list_key="default")
     popped = []
 
     for _ in range(10):
         try:
-            item = storage.pop(index=0, list_key='pop_test')
+            item = storage.pop(index=0, list_key="pop_test")
             if item is not None:
                 popped.append(item)
             time.sleep(0.01)
@@ -237,13 +235,13 @@ def pop_worker(root_path, worker_id, results_queue):
 
 def insert_worker(root_path, worker_id, num_inserts):
     """Worker process that inserts items into the list."""
-    storage = OnStorageLists(root_path=root_path, default_list_key='default')
+    storage = OnStorageLists(root_path=root_path, default_list_key="default")
 
     for i in range(num_inserts):
         try:
             # Insert at various positions
             index = (worker_id * num_inserts + i) % 15
-            storage.insert(index, f'W{worker_id}-I{i}', list_key='insert_test')
+            storage.insert(index, f"W{worker_id}-I{i}", list_key="insert_test")
             time.sleep(0.01)
         except Exception as e:
             pass
@@ -251,9 +249,9 @@ def insert_worker(root_path, worker_id, num_inserts):
 
 def test_stress_concurrent_operations():
     """Stress test with many concurrent operations."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 3: Stress Test - Concurrent Operations")
-    print("="*80)
+    print("=" * 80)
 
     tmpdir = tempfile.mkdtemp()
 
@@ -268,7 +266,10 @@ def test_stress_concurrent_operations():
         start_time = time.time()
 
         for i in range(num_processes):
-            p = mp.Process(target=writer_with_list_ops, args=(tmpdir, i, ops_per_process, results_queue))
+            p = mp.Process(
+                target=writer_with_list_ops,
+                args=(tmpdir, i, ops_per_process, results_queue),
+            )
             p.start()
             processes.append(p)
 
@@ -293,11 +294,11 @@ def test_stress_concurrent_operations():
         print(f"\n3. Summary:")
         print(f"   Total operations: {total_operations}/{expected_operations}")
         print(f"   Total errors: {total_errors}")
-        print(f"   Throughput: {total_operations/elapsed:.1f} ops/sec")
+        print(f"   Throughput: {total_operations / elapsed:.1f} ops/sec")
 
         print("\n4. Verifying final data...")
-        storage = OnStorageLists(root_path=tmpdir, default_list_key='default')
-        final_items = storage.get(list_key='stress_list')
+        storage = OnStorageLists(root_path=tmpdir, default_list_key="default")
+        final_items = storage.get(list_key="stress_list")
         print(f"   [OK] Final list size: {len(final_items)}")
 
         if len(final_items) < expected_operations:
@@ -314,19 +315,19 @@ def test_stress_concurrent_operations():
 
 def test_pop_concurrency():
     """Test concurrent pop operations."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 4: Concurrent Pop Operations")
-    print("="*80)
+    print("=" * 80)
 
     tmpdir = tempfile.mkdtemp()
 
     try:
         print("\n1. Creating test data...")
-        storage = OnStorageLists(root_path=tmpdir, default_list_key='default')
+        storage = OnStorageLists(root_path=tmpdir, default_list_key="default")
 
         num_items = 30
         for i in range(num_items):
-            storage.append(i, list_key='pop_test')
+            storage.append(i, list_key="pop_test")
 
         print(f"   [OK] Created {num_items} items")
 
@@ -358,14 +359,18 @@ def test_pop_concurrency():
         # Check for duplicates
         duplicates = [item for item, count in Counter(all_popped).items() if count > 1]
         if duplicates:
-            print(f"   [WARNING] Found {len(duplicates)} duplicate items: {duplicates[:5]}...")
-            print(f"   [NOTE] Race condition detected - concurrent pops caused duplicates")
+            print(
+                f"   [WARNING] Found {len(duplicates)} duplicate items: {duplicates[:5]}..."
+            )
+            print(
+                f"   [NOTE] Race condition detected - concurrent pops caused duplicates"
+            )
         else:
             print(f"   [OK] No duplicate items detected")
 
         # Check remaining items
-        storage = OnStorageLists(root_path=tmpdir, default_list_key='default')
-        remaining = storage._get_list_size(list_key='pop_test')
+        storage = OnStorageLists(root_path=tmpdir, default_list_key="default")
+        remaining = storage._get_list_size(list_key="pop_test")
         print(f"   Remaining items in list: {remaining}")
         print(f"   Items popped + remaining: {len(all_popped) + remaining}")
         print(f"   Original count: {num_items}")
@@ -380,19 +385,19 @@ def test_pop_concurrency():
 
 def test_insert_concurrency():
     """Test concurrent insert operations."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 5: Concurrent Insert Operations")
-    print("="*80)
+    print("=" * 80)
 
     tmpdir = tempfile.mkdtemp()
 
     try:
         print("\n1. Creating base list...")
-        storage = OnStorageLists(root_path=tmpdir, default_list_key='default')
+        storage = OnStorageLists(root_path=tmpdir, default_list_key="default")
 
         # Create initial list
         for i in range(10):
-            storage.append(f'base_{i}', list_key='insert_test')
+            storage.append(f"base_{i}", list_key="insert_test")
 
         print(f"   [OK] Created base list with 10 items")
 
@@ -412,8 +417,8 @@ def test_insert_concurrency():
         print("   [OK] All workers finished")
 
         print("\n3. Verifying final list...")
-        storage = OnStorageLists(root_path=tmpdir, default_list_key='default')
-        final_items = storage.get(list_key='insert_test')
+        storage = OnStorageLists(root_path=tmpdir, default_list_key="default")
+        final_items = storage.get(list_key="insert_test")
 
         expected = 10 + (num_workers * inserts_per_worker)
         print(f"   Final list size: {len(final_items)}")
@@ -470,13 +475,14 @@ For production use with concurrent access, consider:
         except Exception as e:
             print(f"\n[X] Test failed with exception: {e}")
             import traceback
+
             traceback.print_exc()
             results.append((name, False))
 
     # Summary
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("CONCURRENCY TEST SUMMARY")
-    print("="*80)
+    print("=" * 80)
 
     for name, success in results:
         status = "[OK] COMPLETED" if success else "[X] FAILED"
@@ -487,21 +493,23 @@ For production use with concurrent access, consider:
 
     print(f"\nTotal: {passed}/{total} tests completed")
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("CONCLUSION")
-    print("="*80)
-    print("OnStorageLists demonstrates various race conditions under concurrent access.")
+    print("=" * 80)
+    print(
+        "OnStorageLists demonstrates various race conditions under concurrent access."
+    )
     print("This is expected behavior WITHOUT file locking.")
     print("")
     print("For safe concurrent access, use:")
     print("  - StorageBasedQueueService (has built-in locking)")
     print("  - External file locking library")
     print("  - Single-process coordination")
-    print("="*80)
+    print("=" * 80)
 
     return True
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     success = run_all_tests()
     sys.exit(0 if success else 1)

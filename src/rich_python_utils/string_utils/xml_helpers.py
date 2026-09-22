@@ -1,17 +1,19 @@
 import html
 import re
 from collections.abc import Sequence
-from typing import Any, Dict, Union, List, Mapping, Iterable, Optional
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Union
 from xml.dom.minidom import parseString
-from xml.etree.ElementTree import Element, fromstring, tostring, SubElement
+from xml.etree.ElementTree import Element, fromstring, SubElement, tostring
 from xml.sax import saxutils
 
 from rich_python_utils.common_utils import dict_
 from rich_python_utils.string_utils import remove_first_line
-from rich_python_utils.string_utils.string_sanitization import apply_with_pattern_protection
+from rich_python_utils.string_utils.string_sanitization import (
+    apply_with_pattern_protection,
+)
 
 
-def xml_format(tag: str, content: str, sep: str = '') -> str:
+def xml_format(tag: str, content: str, sep: str = "") -> str:
     """
     Formats the given content with the specified XML tag.
 
@@ -30,7 +32,7 @@ def xml_format(tag: str, content: str, sep: str = '') -> str:
         >>> xml_format('item', 'Apple', sep='\\n')
         '<item>\\nApple\\n</item>'
     """
-    return f'<{tag}>{sep}{content}{sep}</{tag}>'
+    return f"<{tag}>{sep}{content}{sep}</{tag}>"
 
 
 def unwrap_xml_simple(xml_string: str) -> str:
@@ -44,8 +46,8 @@ def unwrap_xml_simple(xml_string: str) -> str:
         str: The XML string without the outermost root tags.
     """
     # Find the first and last angle brackets of the root element
-    start = xml_string.find('>') + 1
-    end = xml_string.rfind('<')
+    start = xml_string.find(">") + 1
+    end = xml_string.rfind("<")
 
     # Extract and return the content between these brackets
     return xml_string[start:end].strip()
@@ -127,13 +129,13 @@ def unescape_xml(s: str, unescape_for_html: bool = False) -> str:
 
     # Define a regex pattern to find numeric character references
     # This includes both decimal (e.g., &#38;) and hexadecimal (e.g., &#x26;)
-    numeric_entity_pattern = re.compile(r'&#([xX]?)([0-9a-fA-F]+);')
+    numeric_entity_pattern = re.compile(r"&#([xX]?)([0-9a-fA-F]+);")
 
     # Function to replace each numeric entity with the corresponding character
     def replace_numeric_entity(match):
         is_hex, num = match.groups()
         try:
-            if is_hex.lower() == 'x':
+            if is_hex.lower() == "x":
                 return chr(int(num, 16))
             else:
                 return chr(int(num))
@@ -148,9 +150,9 @@ def unescape_xml(s: str, unescape_for_html: bool = False) -> str:
 
 
 def _build_xml_element(
-        elem: Element,
-        data: Union[Dict[str, Any], List[Any], Any],
-        item_tag: Union[str, Mapping[str, str]]
+    elem: Element,
+    data: Union[Dict[str, Any], List[Any], Any],
+    item_tag: Union[str, Mapping[str, str]],
 ) -> None:
     """
     Recursively builds XML elements from Python data structures.
@@ -178,7 +180,9 @@ def _build_xml_element(
         # Example: {"name": "John", "age": 30} creates <name>John</name> and <age>30</age>
         for key, value in data.items():
             sub_elem = SubElement(elem, key)
-            _build_xml_element(sub_elem, value, item_tag)  # Recursively process the value
+            _build_xml_element(
+                sub_elem, value, item_tag
+            )  # Recursively process the value
     elif isinstance(data, list):
         # Process list: create multiple child elements with the same tag (item_tag)
         # Determine which item tag to use based on configuration
@@ -187,7 +191,7 @@ def _build_xml_element(
             # Example: {"children": "child", "books": "book"}
             if elem is None or elem.tag not in item_tag:
                 # Parent tag not in mapping, use default or 'item'
-                _item_tag = item_tag.get('default', 'item')
+                _item_tag = item_tag.get("default", "item")
             else:
                 # Parent tag found in mapping, use the specified item tag
                 _item_tag = item_tag[elem.tag]
@@ -199,7 +203,9 @@ def _build_xml_element(
         # Example: ["apple", "banana"] -> <item>apple</item><item>banana</item>
         for item in data:
             item_elem = SubElement(elem, _item_tag)
-            _build_xml_element(item_elem, item, item_tag)  # Recursively process the item
+            _build_xml_element(
+                item_elem, item, item_tag
+            )  # Recursively process the item
     else:
         # Base case: primitive value (string, int, etc.) becomes text content
         # Example: "John" -> element.text = "John"
@@ -207,12 +213,12 @@ def _build_xml_element(
 
 
 def _mapping_to_xml(
-        d: Union[Mapping, Sequence[Mapping], Any, Sequence[Any]],
-        root_tag: str = None,
-        item_tag: Union[str, Mapping[str, str]] = "item",
-        include_root: bool = True,
-        include_xml_declaration: bool = False,
-        indent: str = "    "
+    d: Union[Mapping, Sequence[Mapping], Any, Sequence[Any]],
+    root_tag: str = None,
+    item_tag: Union[str, Mapping[str, str]] = "item",
+    include_root: bool = True,
+    include_xml_declaration: bool = False,
+    indent: str = "    ",
 ) -> str:
     # Handle the case where input is a sequence (list) of items
     # Exclude str and bytes as they are sequences but not the type we want to process
@@ -221,17 +227,15 @@ def _mapping_to_xml(
         # Convert each item in the sequence to XML separately and join them with newlines
         # Example: [{"name": "John"}, {"age": 30}] -> "<name>John</name>\n<age>30</age>"
         if root_tag is None or not include_root:
-            return '\n'.join(
+            return "\n".join(
                 (
                     _mapping_to_xml(
                         _d,
                         item_tag=item_tag,
                         # Only include XML declaration for the first item to avoid duplication
                         include_xml_declaration=(
-                            include_xml_declaration
-                            if i == 0
-                            else False
-                        )
+                            include_xml_declaration if i == 0 else False
+                        ),
                     )
                     for i, _d in enumerate(d)
                 )
@@ -245,10 +249,7 @@ def _mapping_to_xml(
         # </people>
         else:
             # Ensure all items in the sequence are Mappings (convert if needed using dict_())
-            d = [
-                (_d if isinstance(_d, Mapping) else dict_(_d))
-                for _d in d
-            ]
+            d = [(_d if isinstance(_d, Mapping) else dict_(_d)) for _d in d]
             # Recursively process by wrapping sequence in a dict with root_tag as key
             # Set root_tag=None and include_root=False to avoid double-wrapping
             return _mapping_to_xml(
@@ -256,7 +257,7 @@ def _mapping_to_xml(
                 root_tag=None,
                 item_tag=item_tag,
                 include_root=False,
-                include_xml_declaration=include_xml_declaration
+                include_xml_declaration=include_xml_declaration,
             )
     # Handle non-Mapping input by attempting conversion to dict
     elif not isinstance(d, Mapping):
@@ -279,7 +280,7 @@ def _mapping_to_xml(
         else:
             # General case: dict has multiple key-value pairs, process each separately
             # Example: {"name": "John", "age": 30} -> "<name>John</name>\n<age>30</age>"
-            return '\n'.join(
+            return "\n".join(
                 (
                     # Recursively convert each key-value pair to XML
                     # Wrap each in its own dict so the key becomes the tag name
@@ -288,10 +289,8 @@ def _mapping_to_xml(
                         item_tag=item_tag,
                         # Only include XML declaration on the first element to avoid duplication
                         include_xml_declaration=(
-                            include_xml_declaration
-                            if i == 0
-                            else False
-                        )
+                            include_xml_declaration if i == 0 else False
+                        ),
                     )
                     for i, (k, v) in enumerate(d.items())
                 )
@@ -305,23 +304,25 @@ def _mapping_to_xml(
 
     # Convert to XML string and format with proper indentation
     formatted_xml = tostring(root)  # Convert Element tree to bytes
-    formatted_xml = parseString(formatted_xml).toprettyxml(indent=indent)  # Pretty-print with indentation
+    formatted_xml = parseString(formatted_xml).toprettyxml(
+        indent=indent
+    )  # Pretty-print with indentation
     if not include_xml_declaration:
         # Remove the XML declaration line (<?xml version="1.0" ?>)
         formatted_xml = remove_first_line(formatted_xml, lstrip=True)
 
     # Remove trailing newlines and return the formatted XML string
-    return formatted_xml.rstrip('\n')
+    return formatted_xml.rstrip("\n")
 
 
 def mapping_to_xml(
-        d: Union[Mapping, Sequence[Mapping], Any, Sequence[Any]],
-        root_tag: str = None,
-        item_tag: Union[str, Mapping[str, str]] = "item",
-        include_root: bool = True,
-        include_xml_declaration: bool = False,
-        indent: str = "    ",
-        unescape: bool = False
+    d: Union[Mapping, Sequence[Mapping], Any, Sequence[Any]],
+    root_tag: str = None,
+    item_tag: Union[str, Mapping[str, str]] = "item",
+    include_root: bool = True,
+    include_xml_declaration: bool = False,
+    indent: str = "    ",
+    unescape: bool = False,
 ) -> str:
     """
     Converts a dictionary or a sequence of dictionaries to an XML string.
@@ -575,7 +576,7 @@ def mapping_to_xml(
         </persons>
     """
     if not item_tag:
-        item_tag = 'item'
+        item_tag = "item"
     if not isinstance(item_tag, (Mapping, str)):
         raise TypeError("'item_tag' must be an instance of 'Mapping' or 'str'")
 
@@ -585,7 +586,7 @@ def mapping_to_xml(
         item_tag=item_tag,
         include_root=include_root,
         include_xml_declaration=include_xml_declaration,
-        indent=indent
+        indent=indent,
     )
     if unescape:
         xml_string = unescape_xml(xml_string, unescape_for_html=True)
@@ -593,21 +594,21 @@ def mapping_to_xml(
 
 
 def xml_to_dict(
-        element: Union[Element, str],
-        use_xmltodict: bool = False,
-        allows_xml_lines_without_root: bool = False,
-        merge_same_tag_elements_as_list: bool = True,
-        always_interpret_children_as_list: Union[bool, Iterable[str]] = False,
-        always_interpret_children_as_string: Iterable[str] = (),
-        exclude_paths: Iterable[str] = None,
-        current_path: str = "",
-        use_lxml_parser: bool = False,
-        lenient_parsing: bool = True,
-        unescape: bool = False,
-        dummy_root_tag='root',
-        protect_code_blocks: bool = True,
-        code_block_patterns: Union[str, List[str], List[re.Pattern]] = None,
-        code_block_restore_group: Union[None, int, List[int]] = None
+    element: Union[Element, str],
+    use_xmltodict: bool = False,
+    allows_xml_lines_without_root: bool = False,
+    merge_same_tag_elements_as_list: bool = True,
+    always_interpret_children_as_list: Union[bool, Iterable[str]] = False,
+    always_interpret_children_as_string: Iterable[str] = (),
+    exclude_paths: Iterable[str] = None,
+    current_path: str = "",
+    use_lxml_parser: bool = False,
+    lenient_parsing: bool = True,
+    unescape: bool = False,
+    dummy_root_tag="root",
+    protect_code_blocks: bool = True,
+    code_block_patterns: Union[str, List[str], List[re.Pattern]] = None,
+    code_block_restore_group: Union[None, int, List[int]] = None,
 ) -> Dict[str, Any]:
     """
     Parses an XML string or Element and converts it into a dictionary.
@@ -936,10 +937,12 @@ def xml_to_dict(
     if protect_code_blocks and isinstance(element, str):
         # Default pattern for markdown fenced code blocks
         if code_block_patterns is None:
-            code_block_patterns = r'```([a-zA-Z0-9_+-]*)\n(.*?)```'
+            code_block_patterns = r"```([a-zA-Z0-9_+-]*)\n(.*?)```"
 
         # Default restore_group: None (preserve full markdown format)
-        restore_group = code_block_restore_group if code_block_restore_group is not None else None
+        restore_group = (
+            code_block_restore_group if code_block_restore_group is not None else None
+        )
 
         # Define operation that performs XML parsing
         def xml_parse_operation(protected_str: str) -> Dict[str, Any]:
@@ -957,7 +960,7 @@ def xml_to_dict(
                 lenient_parsing=lenient_parsing,
                 unescape=unescape,
                 dummy_root_tag=dummy_root_tag,
-                protect_code_blocks=False  # Disable protection to avoid infinite recursion
+                protect_code_blocks=False,  # Disable protection to avoid infinite recursion
             )
 
         # Apply protection and parse
@@ -965,12 +968,13 @@ def xml_to_dict(
             text=element,
             operation=xml_parse_operation,
             protection_patterns=code_block_patterns,
-            restore_group=restore_group
+            restore_group=restore_group,
         )
 
     # If not protecting or not a string, continue with original logic
     if use_lxml_parser:
         import lxml.etree as etree
+
         _XMLParser = etree.XMLParser
         _fromstring = etree.fromstring
         _tostring = etree.tostring
@@ -992,10 +996,9 @@ def xml_to_dict(
                 "Cannot set 'merge_same_tag_elements_as_list' as True when using xmltodict package"
             )
         if exclude_paths:
-            raise ValueError(
-                "Cannot set 'exclude_paths' when using xmltodict package"
-            )
+            raise ValueError("Cannot set 'exclude_paths' when using xmltodict package")
         import xmltodict
+
         result = xmltodict.parse(element)
         if allows_xml_lines_without_root:
             result = result[dummy_root_tag]
@@ -1006,14 +1009,16 @@ def xml_to_dict(
                 element = _fromstring(element, parser=parser)
             else:
                 if lenient_parsing:
-                    element = re.sub(r'&(?!\w+;)', '&amp;', element)
+                    element = re.sub(r"&(?!\w+;)", "&amp;", element)
                 element = _fromstring(element)
 
         def element_to_dict(elem: _Element, _path: str) -> Union[Dict[str, Any], str]:
             # Check if path matches any in exclude_paths
             if exclude_paths and _path in exclude_paths:
                 # Extract only the inner content of the element as a raw string
-                inner_content = ''.join(_tostring(child, encoding='unicode') for child in elem)
+                inner_content = "".join(
+                    _tostring(child, encoding="unicode") for child in elem
+                )
                 return inner_content.strip()
 
             # Handle text-only elements
@@ -1032,26 +1037,30 @@ def xml_to_dict(
                 if elem.text:
                     raw_pieces.append(elem.text)
                 for child in elem:
-                    raw_pieces.append(_tostring(child, encoding='unicode'))
+                    raw_pieces.append(_tostring(child, encoding="unicode"))
                 # Combine and unescape if requested
-                raw_xml = ''.join(raw_pieces).strip()
-                return unescape_xml(raw_xml, unescape_for_html=True) if unescape else raw_xml
+                raw_xml = "".join(raw_pieces).strip()
+                return (
+                    unescape_xml(raw_xml, unescape_for_html=True)
+                    if unescape
+                    else raw_xml
+                )
 
             _force_interpret_children_as_list = (
-                    (always_interpret_children_as_list is True)
-                    or (
-                            isinstance(always_interpret_children_as_list, Iterable)
-                            and (elem.tag is not None and elem.tag in always_interpret_children_as_list)
-                    )
-
+                always_interpret_children_as_list is True
+            ) or (
+                isinstance(always_interpret_children_as_list, Iterable)
+                and (
+                    elem.tag is not None
+                    and elem.tag in always_interpret_children_as_list
+                )
             )
             child_tags = [child.tag for child in elem]
             _has_duplicate_child_tags = len(child_tags) != len(set(child_tags))
             # endregion
 
-            if (
-                    _force_interpret_children_as_list or
-                    (_has_duplicate_child_tags and (not merge_same_tag_elements_as_list))
+            if _force_interpret_children_as_list or (
+                _has_duplicate_child_tags and (not merge_same_tag_elements_as_list)
             ):
                 result = []
                 for child in elem:
@@ -1060,7 +1069,7 @@ def xml_to_dict(
                     result.append({child.tag: child_data})
 
                 if text:
-                    result.append({'#text': text})
+                    result.append({"#text": text})
 
                 return result
             elif merge_same_tag_elements_as_list:
@@ -1079,7 +1088,7 @@ def xml_to_dict(
                         result[child.tag] = child_data
 
                 if text:
-                    result['#text'] = text
+                    result["#text"] = text
 
                 return result
             else:
@@ -1092,7 +1101,7 @@ def xml_to_dict(
                     result[child.tag] = element_to_dict(child, child_path)
 
                 if text:
-                    result['#text'] = text
+                    result["#text"] = text
 
                 return result
 

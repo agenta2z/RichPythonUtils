@@ -9,7 +9,7 @@ This ensures a consistent API across different backend implementations
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional, List, Dict
+from typing import Any, Dict, List, Optional
 
 from attr import attrs
 
@@ -75,10 +75,7 @@ class QueueServiceBase(ABC):
 
     @abstractmethod
     def get(
-        self,
-        queue_id: str,
-        blocking: bool = True,
-        timeout: Optional[float] = None
+        self, queue_id: str, blocking: bool = True, timeout: Optional[float] = None
     ) -> Optional[Any]:
         """
         Get an object from the queue.

@@ -5,8 +5,8 @@ This module enables Virtual Terminal Processing on Windows,
 allowing ANSI escape sequences (colors) to work in the console.
 """
 
-import sys
 import os
+import sys
 
 
 def enable_windows_ansi_support():
@@ -16,7 +16,7 @@ def enable_windows_ansi_support():
     This allows color codes to work in the Windows console.
     Returns True if successful, False otherwise.
     """
-    if sys.platform != 'win32':
+    if sys.platform != "win32":
         # Not Windows, ANSI should work by default
         return True
 

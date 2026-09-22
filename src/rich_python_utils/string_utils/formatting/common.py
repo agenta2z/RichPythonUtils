@@ -1,6 +1,6 @@
+import json
 from collections import deque
 from enum import StrEnum
-import json
 from typing import Any, Callable, Set
 
 from rich_python_utils.string_utils.xml_helpers import xml_format
@@ -18,7 +18,9 @@ class KeyValueStringFormat(StrEnum):
     Other = "other"
 
 
-def format_key_value(value: str, key: str, format_type: KeyValueStringFormat = KeyValueStringFormat.YAML) -> str:
+def format_key_value(
+    value: str, key: str, format_type: KeyValueStringFormat = KeyValueStringFormat.YAML
+) -> str:
     """
     Formats a key-value pair according to the specified format type.
 
@@ -203,8 +205,6 @@ def resolve_templated_feed(
     unresolved = {k for k, deg in in_degree.items() if deg > 0}
     if unresolved:
         cycle_info = {k: sorted(deps_map[k]) for k in sorted(unresolved)}
-        raise ValueError(
-            f"Circular dependency in templated feed values: {cycle_info}."
-        )
+        raise ValueError(f"Circular dependency in templated feed values: {cycle_info}.")
 
     return resolved

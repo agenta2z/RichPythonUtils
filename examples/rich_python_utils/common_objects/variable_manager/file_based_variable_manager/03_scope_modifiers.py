@@ -108,18 +108,28 @@ def main():
 
     print("\n[4] Current level only: .{{var}}")
     print("-" * 50)
-    print(f"    .{{{{local_only}}}} -> {current_level.get('local_only', '<not found>')!r}")
-    print(f"    .{{{{shared}}}}     -> {current_missing.get('shared', '<not in result>')!r}")
+    print(
+        f"    .{{{{local_only}}}} -> {current_level.get('local_only', '<not found>')!r}"
+    )
+    print(
+        f"    .{{{{shared}}}}     -> {current_missing.get('shared', '<not in result>')!r}"
+    )
     print("    (No fallback to global)")
 
     print("\n[5] Optional modifier: {{var}}?")
     print("-" * 50)
-    print(f"    {{{{greeting}}}}?    -> {optional_found.get('greeting', '<not found>')!r}")
-    print(f"    {{{{nonexistent}}}}? -> {optional_missing.get('nonexistent', '<empty>')!r}")
+    print(
+        f"    {{{{greeting}}}}?    -> {optional_found.get('greeting', '<not found>')!r}"
+    )
+    print(
+        f"    {{{{nonexistent}}}}? -> {optional_missing.get('nonexistent', '<empty>')!r}"
+    )
 
     print("\n[6] Combined: ^{{var}}?")
     print("-" * 50)
-    print(f"    ^{{{{nonexistent}}}}? -> {global_optional.get('nonexistent', '<empty>')!r}")
+    print(
+        f"    ^{{{{nonexistent}}}}? -> {global_optional.get('nonexistent', '<empty>')!r}"
+    )
 
     print("\n" + "=" * 70)
     print("QUICK REFERENCE")

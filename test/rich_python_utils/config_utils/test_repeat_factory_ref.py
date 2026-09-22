@@ -2,12 +2,11 @@
 
 import pytest
 from omegaconf import OmegaConf
-
 from rich_python_utils.config_utils import load_config
 from rich_python_utils.config_utils._instantiate import (
+    _resolve_factory_directives,
     _resolve_repeat_,
     _resolve_sibling_refs,
-    _resolve_factory_directives,
 )
 
 
@@ -18,14 +17,18 @@ from rich_python_utils.config_utils._instantiate import (
 
 class TestRepeatBasic:
     def test_repeat_expands_list(self, tmp_path):
-        (tmp_path / "main.yaml").write_text("items:\n  - _repeat_: 3\n    value: hello\n")
+        (tmp_path / "main.yaml").write_text(
+            "items:\n  - _repeat_: 3\n    value: hello\n"
+        )
         cfg = load_config(str(tmp_path / "main.yaml"))
         d = OmegaConf.to_container(cfg, resolve=True)
         assert len(d["items"]) == 3
         assert all(item == {"value": "hello"} for item in d["items"])
 
     def test_repeat_deep_copies(self, tmp_path):
-        (tmp_path / "main.yaml").write_text("items:\n  - _repeat_: 2\n    nested:\n      x: 1\n")
+        (tmp_path / "main.yaml").write_text(
+            "items:\n  - _repeat_: 2\n    nested:\n      x: 1\n"
+        )
         cfg = load_config(str(tmp_path / "main.yaml"))
         d = OmegaConf.to_container(cfg, resolve=True)
         assert d["items"][0] is not d["items"][1]
@@ -198,7 +201,7 @@ class TestSiblingRefInList:
         }
         result = _resolve_sibling_refs(node)
         assert result["items"][0] == "${_params.x}"  # OmegaConf syntax untouched
-        assert result["items"][1] == "resolved"       # $ref resolved
+        assert result["items"][1] == "resolved"  # $ref resolved
 
     def test_list_item_deep_copy_prevents_sharing(self):
         node = {
@@ -210,7 +213,7 @@ class TestSiblingRefInList:
         assert result["copies"][1] == {"key": "value"}
         result["copies"][0]["key"] = "mutated"
         assert result["copies"][1]["key"] == "value"  # independent copy
-        assert result["template"]["key"] == "value"   # original untouched
+        assert result["template"]["key"] == "value"  # original untouched
 
     def test_list_item_walks_up_scope_chain(self):
         """$ref in a list nested 2+ levels deep still finds ancestors."""
@@ -344,40 +347,40 @@ class TestFactoryDirective:
 
 class TestFalsyChainableUndefined:
     def test_undefined_is_falsy_in_if(self):
+        from jinja2 import Environment
         from rich_python_utils.string_utils.formatting.jinja2_format import (
             _FalsyChainableUndefined,
         )
-        from jinja2 import Environment
 
         env = Environment(undefined=_FalsyChainableUndefined)
         t = env.from_string("{% if flag %}YES{% endif %}")
         assert t.render() == ""
 
     def test_defined_true_renders(self):
+        from jinja2 import Environment
         from rich_python_utils.string_utils.formatting.jinja2_format import (
             _FalsyChainableUndefined,
         )
-        from jinja2 import Environment
 
         env = Environment(undefined=_FalsyChainableUndefined)
         t = env.from_string("{% if flag %}YES{% endif %}")
         assert t.render(flag=True) == "YES"
 
     def test_chained_access_no_crash(self):
+        from jinja2 import Environment
         from rich_python_utils.string_utils.formatting.jinja2_format import (
             _FalsyChainableUndefined,
         )
-        from jinja2 import Environment
 
         env = Environment(undefined=_FalsyChainableUndefined)
         t = env.from_string("{{ a.b.c }}")
         assert t.render() == ""
 
     def test_chained_with_value(self):
+        from jinja2 import Environment
         from rich_python_utils.string_utils.formatting.jinja2_format import (
             _FalsyChainableUndefined,
         )
-        from jinja2 import Environment
 
         env = Environment(undefined=_FalsyChainableUndefined)
         t = env.from_string("{{ a.b }}")

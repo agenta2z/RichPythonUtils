@@ -14,10 +14,7 @@ Run this example:
 
 from pathlib import Path
 
-from rich_python_utils.common_objects import (
-    FileBasedVariableManager,
-    KeyDiscoveryMode,
-)
+from rich_python_utils.common_objects import FileBasedVariableManager, KeyDiscoveryMode
 
 
 def get_mock_variables_dir() -> Path:

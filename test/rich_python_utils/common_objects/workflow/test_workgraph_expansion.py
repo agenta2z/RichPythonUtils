@@ -9,32 +9,35 @@ Covers:
 - 10.6: Error handling (exception propagation, Terminate flag, AbstainResult)
 - 10.7: Settings propagation (enable_result_save, _graph_event_callback)
 """
+
 import asyncio
 import os
 import shutil
 import tempfile
 
 import pytest
-from attr import attrs, attrib
-
-from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode, WorkGraph
+from attr import attrib, attrs
+from rich_python_utils.common_objects.workflow.common.exceptions import (
+    ExpansionLimitExceeded,
+)
 from rich_python_utils.common_objects.workflow.common.expansion import (
     GraphExpansionResult,
     SubgraphSpec,
 )
-from rich_python_utils.common_objects.workflow.common.exceptions import (
-    ExpansionLimitExceeded,
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
 )
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
 from rich_python_utils.common_objects.workflow.common.worknode_base import (
-    WorkGraphStopFlags,
     NextNodesSelector,
+    WorkGraphStopFlags,
 )
+from rich_python_utils.common_objects.workflow.workgraph import WorkGraph, WorkGraphNode
 
 
 # ---------------------------------------------------------------------------
 # Concrete WorkGraphNode subclass for testing (with _get_result_path)
 # ---------------------------------------------------------------------------
+
 
 class _TestNode(WorkGraphNode):
     """WorkGraphNode subclass that implements _get_result_path for expansion tests."""
@@ -51,6 +54,7 @@ class _TestNode(WorkGraphNode):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_node(name, fn, save_dir, pass_down=ResultPassDownMode.ResultAsFirstArg, **kw):
     """Create a _TestNode with common defaults."""
@@ -77,6 +81,7 @@ def _make_subgraph_pair(prefix, save_dir, fn_a=None, fn_b=None):
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def save_dir():
     d = tempfile.mkdtemp(prefix="wg_exp_test_")
@@ -84,10 +89,10 @@ def save_dir():
     shutil.rmtree(d, ignore_errors=True)
 
 
-
 # ===========================================================================
 # 10.1 — Basic WorkGraph expansion
 # ===========================================================================
+
 
 class TestBasicWorkGraphExpansion:
     """Task 10.1: leaf node returns GraphExpansionResult -> subgraph attached and executed."""
@@ -96,8 +101,12 @@ class TestBasicWorkGraphExpansion:
         """A leaf node returning GraphExpansionResult causes subgraph to be attached and run."""
         call_log = []
 
-        sub_a = _make_node("sub_a", lambda x: (call_log.append("sub_a"), x + 10)[1], save_dir)
-        sub_b = _make_node("sub_b", lambda x: (call_log.append("sub_b"), x + 20)[1], save_dir)
+        sub_a = _make_node(
+            "sub_a", lambda x: (call_log.append("sub_a"), x + 10)[1], save_dir
+        )
+        sub_b = _make_node(
+            "sub_b", lambda x: (call_log.append("sub_b"), x + 20)[1], save_dir
+        )
         sub_a.add_next(sub_b)
 
         def expanding_fn(x):
@@ -175,6 +184,7 @@ class TestBasicWorkGraphExpansion:
 # ===========================================================================
 # 10.2 — WorkGraph expansion graph integrity
 # ===========================================================================
+
 
 class TestWorkGraphExpansionGraphIntegrity:
     """Task 10.2: cycle detection, name conflict, entry_nodes validation, bidirectional edges."""
@@ -256,10 +266,10 @@ class TestWorkGraphExpansionGraphIntegrity:
         assert expander in sub_a.previous
 
 
-
 # ===========================================================================
 # 10.3 — WorkGraph expansion termination guarantees
 # ===========================================================================
+
 
 class TestWorkGraphExpansionTermination:
     """Task 10.3: max_expansion_depth, max_total_nodes, depth propagation."""
@@ -269,7 +279,9 @@ class TestWorkGraphExpansionTermination:
         call_log = []
 
         # Create a subgraph that itself tries to expand (chained expansion)
-        inner_sub = _make_node("inner_sub", lambda x: (call_log.append("inner_sub"), x + 100)[1], save_dir)
+        inner_sub = _make_node(
+            "inner_sub", lambda x: (call_log.append("inner_sub"), x + 100)[1], save_dir
+        )
 
         def inner_expanding_fn(x):
             call_log.append("inner_expander")
@@ -339,7 +351,11 @@ class TestWorkGraphExpansionTermination:
         call_log = []
 
         # Level 2 subgraph (should execute since max_depth=3)
-        level2_sub = _make_node("level2_sub", lambda x: (call_log.append("level2_sub"), x + 1000)[1], save_dir)
+        level2_sub = _make_node(
+            "level2_sub",
+            lambda x: (call_log.append("level2_sub"), x + 1000)[1],
+            save_dir,
+        )
 
         def level2_expanding_fn(x):
             call_log.append("level2_expander")
@@ -389,10 +405,10 @@ class TestWorkGraphExpansionTermination:
         assert "level2_sub" in call_log
 
 
-
 # ===========================================================================
 # 10.4 — WorkGraph expansion with NextNodesSelector
 # ===========================================================================
+
 
 class TestWorkGraphExpansionWithNextNodesSelector:
     """Task 10.4: NextNodesSelector inside GraphExpansionResult."""
@@ -401,8 +417,12 @@ class TestWorkGraphExpansionWithNextNodesSelector:
         """NextNodesSelector as the result field of GraphExpansionResult works."""
         call_log = []
 
-        sub_a = _make_node("sub_a", lambda x: (call_log.append("sub_a"), x + 10)[1], save_dir)
-        sub_b = _make_node("sub_b", lambda x: (call_log.append("sub_b"), x + 20)[1], save_dir)
+        sub_a = _make_node(
+            "sub_a", lambda x: (call_log.append("sub_a"), x + 10)[1], save_dir
+        )
+        sub_b = _make_node(
+            "sub_b", lambda x: (call_log.append("sub_b"), x + 20)[1], save_dir
+        )
 
         def expanding_fn(x):
             call_log.append("expander")
@@ -427,8 +447,12 @@ class TestWorkGraphExpansionWithNextNodesSelector:
         """include_others as Set[str] via NextNodesSelector filters which expanded entry nodes execute."""
         call_log = []
 
-        sub_a = _make_node("sub_a", lambda x: (call_log.append("sub_a"), x + 10)[1], save_dir)
-        sub_b = _make_node("sub_b", lambda x: (call_log.append("sub_b"), x + 20)[1], save_dir)
+        sub_a = _make_node(
+            "sub_a", lambda x: (call_log.append("sub_a"), x + 10)[1], save_dir
+        )
+        sub_b = _make_node(
+            "sub_b", lambda x: (call_log.append("sub_b"), x + 20)[1], save_dir
+        )
 
         def expanding_fn(x):
             call_log.append("expander")
@@ -460,7 +484,9 @@ class TestWorkGraphExpansionWithNextNodesSelector:
         call_log = []
         iteration = [0]
 
-        sub_a = _make_node("sub_a", lambda x: (call_log.append("sub_a"), x + 10)[1], save_dir)
+        sub_a = _make_node(
+            "sub_a", lambda x: (call_log.append("sub_a"), x + 10)[1], save_dir
+        )
 
         def expanding_fn(x):
             iteration[0] += 1
@@ -501,6 +527,7 @@ class TestWorkGraphExpansionWithNextNodesSelector:
 # 10.5 — WorkGraph expansion async support
 # ===========================================================================
 
+
 class TestWorkGraphExpansionAsync:
     """Task 10.5: _arun handles GraphExpansionResult, async fan-out."""
 
@@ -509,7 +536,9 @@ class TestWorkGraphExpansionAsync:
         """_arun recognizes GraphExpansionResult and attaches subgraph."""
         call_log = []
 
-        sub_a = _make_node("sub_a", lambda x: (call_log.append("sub_a"), x + 10)[1], save_dir)
+        sub_a = _make_node(
+            "sub_a", lambda x: (call_log.append("sub_a"), x + 10)[1], save_dir
+        )
 
         def expanding_fn(x):
             call_log.append("expander")
@@ -535,8 +564,12 @@ class TestWorkGraphExpansionAsync:
         """Async fan-out to multiple expanded subgraph entry nodes."""
         call_log = []
 
-        sub_a = _make_node("sub_a", lambda x: (call_log.append("sub_a"), x + 10)[1], save_dir)
-        sub_b = _make_node("sub_b", lambda x: (call_log.append("sub_b"), x + 20)[1], save_dir)
+        sub_a = _make_node(
+            "sub_a", lambda x: (call_log.append("sub_a"), x + 10)[1], save_dir
+        )
+        sub_b = _make_node(
+            "sub_b", lambda x: (call_log.append("sub_b"), x + 20)[1], save_dir
+        )
 
         def expanding_fn(x):
             call_log.append("expander")
@@ -561,10 +594,10 @@ class TestWorkGraphExpansionAsync:
         assert "sub_b" in call_log
 
 
-
 # ===========================================================================
 # 10.6 — WorkGraph expansion error handling
 # ===========================================================================
+
 
 class TestWorkGraphExpansionErrorHandling:
     """Task 10.6: exception propagation, Terminate flag, AbstainResult."""
@@ -599,10 +632,15 @@ class TestWorkGraphExpansionErrorHandling:
 
         sub_a = _make_node(
             "sub_a",
-            lambda x: (call_log.append("sub_a"), (WorkGraphStopFlags.Terminate, "stopped"))[1],
+            lambda x: (
+                call_log.append("sub_a"),
+                (WorkGraphStopFlags.Terminate, "stopped"),
+            )[1],
             save_dir,
         )
-        sub_b = _make_node("sub_b", lambda x: (call_log.append("sub_b"), x + 20)[1], save_dir)
+        sub_b = _make_node(
+            "sub_b", lambda x: (call_log.append("sub_b"), x + 20)[1], save_dir
+        )
         sub_a.add_next(sub_b)
 
         def expanding_fn(x):
@@ -674,6 +712,7 @@ class TestWorkGraphExpansionErrorHandling:
 # 10.7 — WorkGraph expansion settings propagation and result saving
 # ===========================================================================
 
+
 class TestWorkGraphExpansionSettingsPropagation:
     """Task 10.7: enable_result_save and _graph_event_callback propagation."""
 
@@ -687,7 +726,9 @@ class TestWorkGraphExpansionSettingsPropagation:
                 subgraph=SubgraphSpec(nodes=[sub_a], entry_nodes=[sub_a]),
             )
 
-        expander = _make_node("expander", expanding_fn, save_dir, enable_result_save=True)
+        expander = _make_node(
+            "expander", expanding_fn, save_dir, enable_result_save=True
+        )
         graph = WorkGraph(
             start_nodes=[expander],
             max_expansion_depth=1,

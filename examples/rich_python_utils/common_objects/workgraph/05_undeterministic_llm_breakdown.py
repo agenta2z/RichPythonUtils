@@ -16,6 +16,7 @@ The planner's value() is never re-invoked on resume.
 
 Run: python 05_undeterministic_llm_breakdown.py
 """
+
 from __future__ import annotations
 
 import os
@@ -28,15 +29,14 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from resolve_path import resolve_path
+
 resolve_path()
 
-from rich_python_utils.common_objects.workflow import (
-    GraphExpansionResult, SubgraphSpec,
-)
-from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode, WorkGraph
+from rich_python_utils.common_objects.workflow import GraphExpansionResult, SubgraphSpec
 from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
     ResultPassDownMode,
 )
+from rich_python_utils.common_objects.workflow.workgraph import WorkGraph, WorkGraphNode
 
 
 # =============================================================
@@ -46,12 +46,18 @@ from rich_python_utils.common_objects.workflow.common.result_pass_down_mode impo
 LLM_CALL_COUNT = [0]
 SAVE_DIR_REF = [None]
 
+
 def mock_llm_breakdown(task):
     """Mock LLM — non-deterministic: second call returns different values."""
     LLM_CALL_COUNT[0] += 1
     if LLM_CALL_COUNT[0] == 1:
         return ["summarize", "extract", "verify"]
-    return ["DIFFERENT", "ANSWER", "ON", "RESUME"]      # if called on resume, we'd see drift
+    return [
+        "DIFFERENT",
+        "ANSWER",
+        "ON",
+        "RESUME",
+    ]  # if called on resume, we'd see drift
 
 
 class SavingNode(WorkGraphNode):
@@ -84,37 +90,44 @@ def _seed_factory(seed):
 
 def build_graph(save_dir):
     def planner_fn(task):
-        topics = mock_llm_breakdown(task)              # LLM call (Run 1 only)
+        topics = mock_llm_breakdown(task)  # LLM call (Run 1 only)
         return GraphExpansionResult(
             result=task,
             subgraph=_seed_factory(topics),
-            seed=topics,                                # ← the frozen LLM output
-            reconstruct_from_seed=_seed_factory,        # ← module-level factory
+            seed=topics,  # ← the frozen LLM output
+            reconstruct_from_seed=_seed_factory,  # ← module-level factory
         )
 
     planner = SavingNode(
-        name="planner", value=planner_fn, save_dir=save_dir,
+        name="planner",
+        value=planner_fn,
+        save_dir=save_dir,
         result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
-        enable_result_save=True, resume_with_saved_results=True,
+        enable_result_save=True,
+        resume_with_saved_results=True,
     )
 
     class GraphWithSave(WorkGraph):
         def __init__(self, save_dir, **kw):
             super().__init__(**kw)
             self._save_dir = save_dir
+
         def _get_result_path(self, name, *args, **kwargs):
             os.makedirs(self._save_dir, exist_ok=True)
             return os.path.join(self._save_dir, f"{name}.pkl")
 
     return GraphWithSave(
-        save_dir=save_dir, start_nodes=[planner],
-        max_expansion_depth=1, max_total_nodes=50,
+        save_dir=save_dir,
+        start_nodes=[planner],
+        max_expansion_depth=1,
+        max_total_nodes=50,
     )
 
 
 # =============================================================
 # DRIVER
 # =============================================================
+
 
 def main():
     tmp = Path(tempfile.mkdtemp(prefix="wg_example05_"))
@@ -136,6 +149,7 @@ def main():
 # =============================================================
 # NARRATION
 # =============================================================
+
 
 def banner(text):
     print(f"\n{'=' * 60}\n  {text}\n{'=' * 60}")
@@ -183,7 +197,7 @@ def explain(obs):
 
     banner("If we HAD re-called the LLM...")
     print("")
-    print(f"  mock_llm_breakdown returns different topics on call #{run1+1}+.")
+    print(f"  mock_llm_breakdown returns different topics on call #{run1 + 1}+.")
     print("  Had resume re-invoked the planner, the topics would have been")
     print("  ['DIFFERENT', 'ANSWER', 'ON', 'RESUME'] — 4 topics, not 3 —")
     print("  and the expanded graph shape would have diverged, orphaning")

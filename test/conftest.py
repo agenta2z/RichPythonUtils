@@ -4,6 +4,7 @@ Pytest configuration for SciencePythonUtils tests.
 This file ensures that the src directory is added to the Python path
 so that test modules can import from rich_python_utils.
 """
+
 import sys
 from pathlib import Path
 

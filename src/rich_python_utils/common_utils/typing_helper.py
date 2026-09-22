@@ -1,11 +1,27 @@
 import json
 from ast import literal_eval
 from collections.abc import Iterator
-from typing import Mapping, Callable, Union, List, Tuple, ClassVar, Any, Optional, Set, Iterable, Sequence, TypeVar, \
-    _BaseGenericAlias, Type, Dict
+from typing import (
+    _BaseGenericAlias,
+    Any,
+    Callable,
+    ClassVar,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 
 
 # region type checking
+
 
 def is_str(_obj) -> bool:
     """
@@ -32,7 +48,7 @@ def is_none_or_empty_str(_obj) -> bool:
         >>> assert not is_none_or_empty_str(1)
 
     """
-    return _obj is None or (isinstance(_obj, str) and _obj == '')
+    return _obj is None or (isinstance(_obj, str) and _obj == "")
 
 
 def str_eq(s1, s2) -> bool:
@@ -76,6 +92,7 @@ def is_class_(_obj) -> bool:
         >>> assert not is_class_((List, Tuple))
     """
     from rich_python_utils.common_utils.iter_helper import iter_
+
     return all(isinstance(x, type) for x in iter_(_obj, non_atom_types=(tuple, list)))
 
 
@@ -103,7 +120,11 @@ def is_class_or_type_(_obj) -> bool:
         >>> assert is_class_or_type_((List, Tuple))
     """
     from rich_python_utils.common_utils.iter_helper import iter_
-    return all(isinstance(x, TypeOrGenericAlias) for x in iter_(_obj, non_atom_types=(tuple, list)))
+
+    return all(
+        isinstance(x, TypeOrGenericAlias)
+        for x in iter_(_obj, non_atom_types=(tuple, list))
+    )
 
 
 def is_basic_type(_obj) -> bool:
@@ -144,7 +165,9 @@ def is_basic_type_or_basic_type_iterable(_obj, iterable_type=(list, tuple, set))
     See Also :func:`is_basic_type` and :func:`is_basic_type_iterable`.
 
     """
-    return is_basic_type(_obj) or is_basic_type_iterable(_obj, iterable_type=iterable_type)
+    return is_basic_type(_obj) or is_basic_type_iterable(
+        _obj, iterable_type=iterable_type
+    )
 
 
 def element_type(_container, atom_types=(str,), key=0):
@@ -211,9 +234,9 @@ def iterable__(_obj, atom_types=(str,)):
     """
     return (
         # _obj is not any of atom_types if atom_types is specified
-            (not (atom_types and isinstance(_obj, atom_types)))
-            # and _obj itself is iterable
-            and iterable(_obj)
+        (not (atom_types and isinstance(_obj, atom_types)))
+        # and _obj itself is iterable
+        and iterable(_obj)
     )
 
 
@@ -229,7 +252,7 @@ def nonstr_iterable(_obj) -> bool:
 
 
 def is_named_tuple(obj) -> bool:
-    return isinstance(obj, tuple) and hasattr(obj, '_fields')
+    return isinstance(obj, tuple) and hasattr(obj, "_fields")
 
 
 def sliceable(_obj):
@@ -249,7 +272,7 @@ def sliceable(_obj):
     """
     if _obj is None:
         return False
-    if not hasattr(_obj, '__getitem__'):
+    if not hasattr(_obj, "__getitem__"):
         return False
     try:
         _obj[0:1]
@@ -345,6 +368,7 @@ def all_str(_it):
 
 # endregion
 
+
 # region type conversion
 def str_(x) -> str:
     """
@@ -364,15 +388,15 @@ def str_(x) -> str:
         a
 
     """
-    return '{}'.format(x)
+    return "{}".format(x)
 
 
 def make_list(
-        _x,
-        atom_types=(str,),
-        str_sep=None,
-        ignore_none: bool = False,
-        list_factory: Union[Type, Callable[[Optional[Iterable]], List]] = list
+    _x,
+    atom_types=(str,),
+    str_sep=None,
+    ignore_none: bool = False,
+    list_factory: Union[Type, Callable[[Optional[Iterable]], List]] = list,
 ) -> List:
     """
     Converts an input object into a list based on the specified conditions.
@@ -431,11 +455,7 @@ def make_list(
         - The `atom_types` parameter determines which types are not treated as iterable.
     """
 
-    if (
-            (str_sep is not None) and
-            (str_sep is not False) and
-            isinstance(_x, str)
-    ):
+    if (str_sep is not None) and (str_sep is not False) and isinstance(_x, str):
         if str_sep is True:
             _x = _x.split()
         else:
@@ -456,11 +476,11 @@ def make_list(
 
 
 def make_tuple(
-        _x,
-        atom_types=(str,),
-        str_sep=None,
-        ignore_none: bool = False,
-        tuple_factory: Union[Type, Callable[[Iterable], Tuple]] = tuple
+    _x,
+    atom_types=(str,),
+    str_sep=None,
+    ignore_none: bool = False,
+    tuple_factory: Union[Type, Callable[[Iterable], Tuple]] = tuple,
 ):
     """
     Converts an input object into a tuple based on the specified conditions.
@@ -503,11 +523,7 @@ def make_tuple(
         >>> custom_tuple = namedtuple('CustomTuple', 'values')
         >>> assert make_tuple(3, tuple_factory=custom_tuple) == custom_tuple((3,))
     """
-    if (
-            (str_sep is not None) and
-            (str_sep is not False) and
-            isinstance(_x, str)
-    ):
+    if (str_sep is not None) and (str_sep is not False) and isinstance(_x, str):
         if str_sep is True:
             _x = _x.split()
         else:
@@ -526,11 +542,11 @@ def make_tuple(
 
 
 def make_set(
-        _x,
-        atom_types=(str,),
-        str_sep=None,
-        ignore_none: bool = False,
-        set_factory: Union[Type, Callable[[Iterable], Set]] = set
+    _x,
+    atom_types=(str,),
+    str_sep=None,
+    ignore_none: bool = False,
+    set_factory: Union[Type, Callable[[Iterable], Set]] = set,
 ):
     """
     Converts an input object into a set based on the specified conditions.
@@ -573,11 +589,7 @@ def make_set(
         >>> from collections import Counter
         >>> assert make_set([1, 1, 2], set_factory=Counter) == Counter({1: 2, 2: 1})
     """
-    if (
-            (str_sep is not None) and
-            (str_sep is not False) and
-            isinstance(_x, str)
-    ):
+    if (str_sep is not None) and (str_sep is not False) and isinstance(_x, str):
         if str_sep is True:
             _x = _x.split()
         else:
@@ -596,9 +608,9 @@ def make_set(
 
 
 def make_list_(
-        _x: Any,
-        non_atom_types=(tuple, set),
-        list_factory: Union[Type, Callable[[Optional[Iterable]], List]] = list
+    _x: Any,
+    non_atom_types=(tuple, set),
+    list_factory: Union[Type, Callable[[Optional[Iterable]], List]] = list,
 ) -> List[Any]:
     """
     Converts the input object `_x` into a list using the specified conditions.
@@ -637,9 +649,9 @@ def make_list_(
 
 
 def make_list_if_not_none_(
-        _x: Any,
-        non_atom_types: Tuple[type, ...] = (tuple, set),
-        list_factory: Union[Type, Callable[[Optional[Iterable]], List]] = list
+    _x: Any,
+    non_atom_types: Tuple[type, ...] = (tuple, set),
+    list_factory: Union[Type, Callable[[Optional[Iterable]], List]] = list,
 ) -> Optional[List[Any]]:
     """
     Converts the input object `_x` into a list, unless `_x` is `None`.
@@ -674,9 +686,9 @@ def make_list_if_not_none_(
 
 
 def make_tuple_(
-        _x,
-        non_atom_types=(list, set),
-        tuple_factory: Union[Type, Callable[[Iterable], Tuple]] = tuple
+    _x,
+    non_atom_types=(list, set),
+    tuple_factory: Union[Type, Callable[[Iterable], Tuple]] = tuple,
 ) -> Tuple:
     """
     Converts the input object `_x` into a tuple based on the specified conditions.
@@ -715,9 +727,9 @@ def make_tuple_(
 
 
 def make_set_(
-        _x,
-        non_atom_types=(tuple, list),
-        set_factory: Union[Type, Callable[[Iterable], Set]] = set
+    _x,
+    non_atom_types=(tuple, list),
+    set_factory: Union[Type, Callable[[Iterable], Set]] = set,
 ) -> Set:
     """
     Converts the input object `_x` into a set based on the specified conditions.
@@ -756,8 +768,8 @@ def make_set_(
 
 
 def get_iter(
-        input_path_or_iterable: Union[str, Iterable],
-        default_iterator: Optional[Callable] = None
+    input_path_or_iterable: Union[str, Iterable],
+    default_iterator: Optional[Callable] = None,
 ) -> Iterable:
     """
     Obtain an iterator from the given input, which can be either a file path (string) or an iterable object.
@@ -828,6 +840,7 @@ def get_iter(
     if isinstance(input_path_or_iterable, str):
         if default_iterator is None:
             from rich_python_utils.io_utils.json_io import iter_json_objs
+
             return iter_json_objs(input_path_or_iterable)
         else:
             _iterable = default_iterator(input_path_or_iterable)
@@ -847,8 +860,8 @@ def enumerate_(_x):
         return enumerate((_x,))
 
 
-_STRS_TRUE = {'true', 'yes', 'y', 'ok', '1'}
-_STRS_FALSE = {'false', 'no', 'n', '0'}
+_STRS_TRUE = {"true", "yes", "y", "ok", "1"}
+_STRS_FALSE = {"false", "no", "n", "0"}
 
 
 def str2bool(s: str) -> Optional[bool]:
@@ -904,11 +917,11 @@ def bool_(x) -> Optional[bool]:
 
 # Type mapping for parsing type specification strings
 TYPE_STR_TO_TYPE: Dict[str, Optional[type]] = {
-    'str': str,
-    'int': int,
-    'float': float,
-    'bool': bool,
-    'any': None,  # None means no type coercion
+    "str": str,
+    "int": int,
+    "float": float,
+    "bool": bool,
+    "any": None,  # None means no type coercion
 }
 
 
@@ -943,7 +956,7 @@ def parse_type_string(type_str: str) -> Tuple[type, ...]:
         return ()
 
     types = []
-    for part in type_str.split('|'):
+    for part in type_str.split("|"):
         part = part.strip().lower()
         if part in TYPE_STR_TO_TYPE:
             py_type = TYPE_STR_TO_TYPE[part]
@@ -1016,11 +1029,7 @@ def coerce_to_type(value: Any, type_tuple: Tuple[type, ...]) -> Any:
     return value
 
 
-def map_iterable_elements(
-        _iterable,
-        _converter: Callable,
-        atom_types=(str,)
-):
+def map_iterable_elements(_iterable, _converter: Callable, atom_types=(str,)):
     """
     Maps every elements in the provided iterable by applying the converter.
     Elements of type `atom_types` will not be treated as iterables.
@@ -1049,7 +1058,9 @@ def map_iterable_elements(
     return _converter(_iterable)
 
 
-def str2val_(s: str, str_format: Union[str, Callable[[str], str]] = None, success_label=False):
+def str2val_(
+    s: str, str_format: Union[str, Callable[[str], str]] = None, success_label=False
+):
     """
     Parses a string as its likely equivalent value.
     Typically tries to convert to integers, floats, bools, lists, tuples, dictionaries.
@@ -1082,23 +1093,26 @@ def str2val_(s: str, str_format: Union[str, Callable[[str], str]] = None, succes
             if not is_str(ss):
                 raise ValueError(f"'str_format' must outputs a string; got {ss}")
         else:
-            raise ValueError("'str_format' must be a formatting string "
-                             "or a callable that takes a string and outputs a processed string; "
-                             f"got {str_format}")
+            raise ValueError(
+                "'str_format' must be a formatting string "
+                "or a callable that takes a string and outputs a processed string; "
+                f"got {str_format}"
+            )
 
     if success_label:
+
         def _literal_eval():
             try:
                 return literal_eval(ss), True
             except:  # noqa: E722
                 return s, False
 
-        if ss[0] == '{':
+        if ss[0] == "{":
             try:
                 return json.loads(ss), True
             except:  # noqa: E722
                 return _literal_eval()
-        elif ss[0] == '[' or ss[0] == '(':
+        elif ss[0] == "[" or ss[0] == "(":
             return _literal_eval()
         else:
             try:
@@ -1118,18 +1132,19 @@ def str2val_(s: str, str_format: Union[str, Callable[[str], str]] = None, succes
                         except:  # noqa: E722
                             return s, False
     else:
+
         def _literal_eval():
             try:
                 return literal_eval(ss)
             except:  # noqa: E722
                 return s
 
-        if ss[0] == '{':
+        if ss[0] == "{":
             try:
                 return json.loads(ss)
             except:  # noqa: E722
                 return _literal_eval()
-        elif ss[0] == '[' or ss[0] == '(':
+        elif ss[0] == "[" or ss[0] == "(":
             return _literal_eval()
         else:
             try:
@@ -1151,10 +1166,10 @@ def str2val_(s: str, str_format: Union[str, Callable[[str], str]] = None, succes
 
 
 def solve_obj(
-        _input: Union[str, Mapping, List, Tuple, Any],
-        obj_type: ClassVar = None,
-        str2obj: Callable = str2val_,
-        str_format: str = None,
+    _input: Union[str, Mapping, List, Tuple, Any],
+    obj_type: ClassVar = None,
+    str2obj: Callable = str2val_,
+    str_format: str = None,
 ):
     """
     Solves a string, Mapping, list or tuple as an object.
@@ -1226,7 +1241,9 @@ def solve_obj(
             raise ValueError(f"cannot parse '{_ori_input}' as {obj_type}")
 
 
-def extract_single_element_if_singleton(x: Sequence, atom_types=(str,)) -> Union[Tuple, List]:
+def extract_single_element_if_singleton(
+    x: Sequence, atom_types=(str,)
+) -> Union[Tuple, List]:
     if (not isinstance(x, atom_types)) and isinstance(x, Sequence) and len(x) == 1:
         return x[0]
     return x
@@ -1258,10 +1275,12 @@ def solve_nested_singleton_tuple_list(x, atom_types=(str,)) -> Union[Tuple, List
         return tuple(x)
 
     # otherwise, returns `x` as a singleton tuple
-    return x,
+    return (x,)
 
 
-def solve_atom(x, atom_types=(str,), raise_error_if_cannot_resolve_an_atom: bool = False):
+def solve_atom(
+    x, atom_types=(str,), raise_error_if_cannot_resolve_an_atom: bool = False
+):
     """
     Resolves an atomic object from the given input, potentially nested in singleton lists or tuples.
 
@@ -1345,11 +1364,11 @@ def solve_key_value_pairs(*kvs, parse_seq_as_alternating_key_value: bool = True)
         elif iterable__(kvs[0]):
             return solve_key_value_pairs(
                 *kvs[0],
-                parse_seq_as_alternating_key_value=parse_seq_as_alternating_key_value
+                parse_seq_as_alternating_key_value=parse_seq_as_alternating_key_value,
             )  # recursively resolve the single iterable object
         else:
             # resolve the single non-iterable object as a tuple
-            return (kvs[0], kvs[0]),
+            return ((kvs[0], kvs[0]),)
     elif isinstance(kvs, (list, tuple)) and kvs:
         if isinstance(kvs[0], (list, tuple)) and len(kvs[0]) == 2:
             return kvs  # assume it is a list of 2-tuples
@@ -1374,6 +1393,7 @@ def solve_key_value_pairs(*kvs, parse_seq_as_alternating_key_value: bool = True)
 
 
 # endregion
+
 
 def all_of_same_type(items: Sequence[Any]) -> bool:
     """
@@ -1416,7 +1436,7 @@ def create_child(
     child_class,
     always_inherit: Sequence[str] = None,
     attr_name_mapping: dict[str, str] = None,
-    **inherit_flags_and_kwargs
+    **inherit_flags_and_kwargs,
 ):
     """
     Create a child instance from a parent object with flexible attribute inheritance.
@@ -1520,7 +1540,7 @@ def create_child(
     kwargs = {}
 
     for key, value in inherit_flags_and_kwargs.items():
-        if key.startswith('inherit_'):
+        if key.startswith("inherit_"):
             # Extract attribute name and check if it's not already in kwargs
             attr_name = key[8:]  # Remove 'inherit_' prefix
             # Only inherit if the attribute is not explicitly provided in kwargs
@@ -1532,10 +1552,9 @@ def create_child(
     # Get inherited attributes from parent using get_multiple
     if attrs_to_inherit:
         from rich_python_utils.common_utils.map_helper import get_multiple
+
         inherited_attrs = get_multiple(
-            parent,
-            *attrs_to_inherit,
-            unpack_result_for_single_key=False
+            parent, *attrs_to_inherit, unpack_result_for_single_key=False
         )
     else:
         inherited_attrs = {}
@@ -1547,9 +1566,6 @@ def create_child(
                 inherited_attrs[new_name] = inherited_attrs.pop(old_name)
 
     # Merge inherited attributes with provided kwargs
-    child_kwargs: dict[str, Any] = {
-        **inherited_attrs,
-        **kwargs
-    }
+    child_kwargs: dict[str, Any] = {**inherited_attrs, **kwargs}
 
     return child_class(**child_kwargs)

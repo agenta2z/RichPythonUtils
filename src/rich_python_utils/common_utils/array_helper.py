@@ -1,17 +1,35 @@
-from typing import Callable, List, Sequence, Any, Tuple, Union, Iterator, Optional, Iterable, Type
+from typing import (
+    Any,
+    Callable,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    Union,
+)
 
-from rich_python_utils.common_objects.search_fallback_options import SearchFallbackOptions
-from rich_python_utils.common_utils.misc import distribute_by_weights, split_int, split_float
+from rich_python_utils.common_objects.search_fallback_options import (
+    SearchFallbackOptions,
+)
+from rich_python_utils.common_utils.misc import (
+    distribute_by_weights,
+    split_float,
+    split_int,
+)
 
 
 # region List Conversion
 
+
 def list_(
-        obj: Any,
-        list_type: Type = list,
-        non_atom_types: tuple = (tuple, set),
-        iter_none: bool = False,
-        always_consider_iterator_as_non_atom: bool = True
+    obj: Any,
+    list_type: Type = list,
+    non_atom_types: tuple = (tuple, set),
+    iter_none: bool = False,
+    always_consider_iterator_as_non_atom: bool = True,
 ) -> list:
     """
     Converts an object to a list, avoiding unnecessary copies if already a list.
@@ -90,21 +108,24 @@ def list_(
         - Space Complexity: O(1) if already list, O(n) for new list.
     """
     from rich_python_utils.common_utils.iter_helper import iter_
+
     if isinstance(obj, list_type):
         return obj
-    return list(iter_(
-        obj,
-        non_atom_types=non_atom_types,
-        iter_none=iter_none,
-        always_consider_iterator_as_non_atom=always_consider_iterator_as_non_atom
-    ))
+    return list(
+        iter_(
+            obj,
+            non_atom_types=non_atom_types,
+            iter_none=iter_none,
+            always_consider_iterator_as_non_atom=always_consider_iterator_as_non_atom,
+        )
+    )
 
 
 def list__(
-        obj: Any,
-        list_type: Type = list,
-        atom_types: tuple = (str,),
-        iter_none: bool = False
+    obj: Any,
+    list_type: Type = list,
+    atom_types: tuple = (str,),
+    iter_none: bool = False,
 ) -> list:
     """
     Converts an object to a list using atom_types approach, avoiding unnecessary copies.
@@ -178,6 +199,7 @@ def list__(
         - Space Complexity: O(1) if already list, O(n) for new list.
     """
     from rich_python_utils.common_utils.iter_helper import iter__
+
     if isinstance(obj, list_type):
         return obj
     return list(iter__(obj, atom_types=atom_types, iter_none=iter_none))
@@ -186,6 +208,7 @@ def list__(
 # endregion
 
 # region Searching and Indexing
+
 
 def index_of_last_non_null(seq: Sequence) -> int:
     """
@@ -214,11 +237,11 @@ def index_of_last_non_null(seq: Sequence) -> int:
 
 
 def index_(
-        seq: Sequence,
-        x: Union[Callable[[Any], bool], Any],
-        start: int = 0,
-        end: int = None,
-        raise_error: bool = False
+    seq: Sequence,
+    x: Union[Callable[[Any], bool], Any],
+    start: int = 0,
+    end: int = None,
+    raise_error: bool = False,
 ) -> int:
     """
     Return the index of the first occurrence of an element in a sequence, or match a predicate.
@@ -323,13 +346,15 @@ def index_(
 
 
 def index__(
-        seq: Sequence[Any],
-        search: Union[Any, Callable[[Any], bool], Iterable[Any]],
-        start: int = 0,
-        end: int = None,
-        return_at_first_match: bool = True,
-        search_fallback_option: Union[str, SearchFallbackOptions] = SearchFallbackOptions.RaiseError,
-        non_atom_types: tuple = (list,)
+    seq: Sequence[Any],
+    search: Union[Any, Callable[[Any], bool], Iterable[Any]],
+    start: int = 0,
+    end: int = None,
+    return_at_first_match: bool = True,
+    search_fallback_option: Union[
+        str, SearchFallbackOptions
+    ] = SearchFallbackOptions.RaiseError,
+    non_atom_types: tuple = (list,),
 ) -> Union[int, List[int]]:
     """
     Find the index or indices of an element, contiguous sub-sequence, or predicate match within a sequence.
@@ -499,6 +524,7 @@ def index__(
 
 # region Array Manipulation
 
+
 def reverse_in_place(arr: Sequence, start: int = 0, end: int = None):
     """
     Reverses a portion of a sequence in-place.
@@ -556,7 +582,9 @@ def reverse_in_place(arr: Sequence, start: int = 0, end: int = None):
     if end is None:
         end = len(arr) - 1  # Default to the last index (inclusive)
     if start < 0 or end >= len(arr) or start > end:
-        raise ValueError("Invalid indices: start and end must be within bounds and start <= end.")
+        raise ValueError(
+            "Invalid indices: start and end must be within bounds and start <= end."
+        )
 
     while start < end:
         arr[start], arr[end] = arr[end], arr[start]
@@ -565,10 +593,10 @@ def reverse_in_place(arr: Sequence, start: int = 0, end: int = None):
 
 
 def append_(
-        item: Any,
-        arr: Any = None,
-        non_atom_types: tuple = (list, tuple),
-        always_consider_iterator_as_non_atom: bool = True
+    item: Any,
+    arr: Any = None,
+    non_atom_types: tuple = (list, tuple),
+    always_consider_iterator_as_non_atom: bool = True,
 ) -> List:
     """
     Appends or extends an item to a collection, intelligently handling various input types.
@@ -685,21 +713,21 @@ def append_(
         - **Space Complexity**: O(1) when extending existing list, O(n) when creating new list.
     """
     from rich_python_utils.common_utils.iter_helper import iter_
+
     it = iter_(
         item,
         non_atom_types=non_atom_types,
         iter_none=False,
-        always_consider_iterator_as_non_atom=always_consider_iterator_as_non_atom
+        always_consider_iterator_as_non_atom=always_consider_iterator_as_non_atom,
     )
     if arr is None:
         return list(it)
 
-    if hasattr(arr, 'extend') and callable(arr.extend):
+    if hasattr(arr, "extend") and callable(arr.extend):
         arr.extend(it)
         return arr
     else:
         return [arr, *it]
-
 
 
 def dedup_sequence(arr: Sequence) -> list:
@@ -766,6 +794,7 @@ def extend_to_size_by_last_element(_list: List, size: int):
 # endregion
 
 # region Array Query and Comparison
+
 
 def unpack_single_value(arr: Sequence):
     """Unpacks a single-element array or returns the array unchanged.
@@ -849,6 +878,7 @@ def all_equal(arr: Union[List, Tuple], value=None):
 
 # region Array Splitting and Partitioning
 
+
 def split_half(arr: Union[List, Tuple]):
     """
     Splits a list or a tuple into two halves.
@@ -891,7 +921,7 @@ def first_half(arr: Union[List, Tuple]):
         >>> first_half((1, 2, 3, 4, 5, 6))
         (1, 2, 3)
     """
-    return arr[:len(arr) // 2]
+    return arr[: len(arr) // 2]
 
 
 def second_half(arr: Union[List, Tuple]):
@@ -913,7 +943,7 @@ def second_half(arr: Union[List, Tuple]):
         >>> second_half((1, 2, 3, 4, 5, 6))
         (4, 5, 6)
     """
-    return arr[(len(arr) // 2):]
+    return arr[(len(arr) // 2) :]
 
 
 def _iter_split_list(list_to_split: List, num_splits: int) -> Iterator[List]:
@@ -948,7 +978,9 @@ def _iter_split_list(list_to_split: List, num_splits: int) -> Iterator[List]:
         [[1], [2], [3], [4], [5]]
     """
     if not (isinstance(num_splits, int) and num_splits >= 1):
-        raise ValueError(f"'num_splits' can only be a positive integer; got {num_splits}")
+        raise ValueError(
+            f"'num_splits' can only be a positive integer; got {num_splits}"
+        )
 
     list_len = len(list_to_split)
     if list_len <= num_splits:
@@ -974,7 +1006,9 @@ def _iter_split_list(list_to_split: List, num_splits: int) -> Iterator[List]:
             yield list_to_split[begin:]
 
 
-def _iter_weighted_split_list(list_to_split: List, weights: List[float]) -> Iterator[List]:
+def _iter_weighted_split_list(
+    list_to_split: List, weights: List[float]
+) -> Iterator[List]:
     """
     Returns an iterator that iterates through splits of the provided `list_to_split` based on specified weights.
 
@@ -1011,8 +1045,7 @@ def _iter_weighted_split_list(list_to_split: List, weights: List[float]) -> Iter
 
 
 def iter_split_list(
-        list_to_split: List,
-        num_splits_or_weights: Union[int, List[Union[float, int]]]
+    list_to_split: List, num_splits_or_weights: Union[int, List[Union[float, int]]]
 ) -> Iterator[List]:
     """
     Returns an iterator that iterates through splits of the provided `list_to_split`.
@@ -1038,12 +1071,13 @@ def iter_split_list(
     elif isinstance(num_splits_or_weights, List):
         return _iter_weighted_split_list(list_to_split, num_splits_or_weights)
     else:
-        raise ValueError("num_splits_or_weights must be either an int or a list of ints/floats")
+        raise ValueError(
+            "num_splits_or_weights must be either an int or a list of ints/floats"
+        )
 
 
 def split_list(
-        list_to_split: List,
-        num_splits_or_weights: Union[int, List[Union[float, int]]]
+    list_to_split: List, num_splits_or_weights: Union[int, List[Union[float, int]]]
 ) -> List[List]:
     """
     See :func:`iter_split_list`.
@@ -1052,10 +1086,10 @@ def split_list(
 
 
 def resolve_partial(
-        num_parts: int,
-        partial: int,
-        *items: Union[Sequence, int, float],
-        master_item: Union[Sequence, int, float] = None
+    num_parts: int,
+    partial: int,
+    *items: Union[Sequence, int, float],
+    master_item: Union[Sequence, int, float] = None,
 ) -> Tuple[Union[Sequence, int, float], ...]:
     """
     Splits multiple sequences or numbers into parts with optional proportional control using a master item.
@@ -1107,16 +1141,26 @@ def resolve_partial(
         if master_item is not None:
             out_items = [None] * (len(items) + 1)
             if isinstance(master_item, int):
-                _split, _range = split_int(master_item, num_parts, partial, return_range=True)
+                _split, _range = split_int(
+                    master_item, num_parts, partial, return_range=True
+                )
             elif isinstance(master_item, float):
                 if int(master_item) == master_item:
-                    _split, _range = split_int(int(master_item), num_parts, partial, return_range=True)
+                    _split, _range = split_int(
+                        int(master_item), num_parts, partial, return_range=True
+                    )
                 else:
-                    _split, _range = split_float(master_item, num_parts, partial, return_range=True)
+                    _split, _range = split_float(
+                        master_item, num_parts, partial, return_range=True
+                    )
             else:
                 len_master_item = len(master_item)
-                _split, _range = split_int(len_master_item, num_parts, partial, return_range=True)
-                _split = master_item[int(_range[0] * len_master_item): int(_range[1] * len_master_item)]
+                _split, _range = split_int(
+                    len_master_item, num_parts, partial, return_range=True
+                )
+                _split = master_item[
+                    int(_range[0] * len_master_item) : int(_range[1] * len_master_item)
+                ]
             out_items[0] = _split
             for i in range(len(items)):
                 item = items[i]
@@ -1125,12 +1169,18 @@ def resolve_partial(
                 elif isinstance(item, float):
                     if int(item) == item:
                         item = int(item)
-                        out_items[i + 1] = float(int(item * _range[1]) - int(item * _range[0]))
+                        out_items[i + 1] = float(
+                            int(item * _range[1]) - int(item * _range[0])
+                        )
                     else:
-                        out_items[i + 1] = float((item * _range[1]) - (item * _range[0]))
+                        out_items[i + 1] = float(
+                            (item * _range[1]) - (item * _range[0])
+                        )
                 else:
                     len_item = len(item)
-                    out_items[i + 1] = item[int(_range[0] * len_item): int(_range[1] * len_item)]
+                    out_items[i + 1] = item[
+                        int(_range[0] * len_item) : int(_range[1] * len_item)
+                    ]
         else:
             out_items = [None] * len(items)
             for i in range(len(items)):
@@ -1155,14 +1205,15 @@ def resolve_partial(
 
 # region Windowing Operations
 
+
 def moving_window_convert(
-        arr: Sequence,
-        converter: Callable[[Sequence, Sequence], Any] = None,
-        hist_window_size: int = 20,
-        future_window_size: int = 10,
-        pre_hist_window_size: int = None,
-        step_size: int = 1,
-        allows_partial_future_window: bool = False
+    arr: Sequence,
+    converter: Callable[[Sequence, Sequence], Any] = None,
+    hist_window_size: int = 20,
+    future_window_size: int = 10,
+    pre_hist_window_size: int = None,
+    step_size: int = 1,
+    allows_partial_future_window: bool = False,
 ) -> List:
     """
     Convert an input list into a list of tuples, where each tuple contains the historical window,
@@ -1235,8 +1286,8 @@ def moving_window_convert(
 
     end_i = (
         (arr_len - hist_window_size)
-        if allows_partial_future_window else
-        (arr_len - total_window_size + 1)
+        if allows_partial_future_window
+        else (arr_len - total_window_size + 1)
     )
 
     if pre_hist_window_size:
@@ -1265,11 +1316,12 @@ def moving_window_convert(
 
 # region Cartesian Product
 
+
 def iter_cartesian_product(
-        arr: Sequence[Any],
-        arr_sort_func: Callable = None,
-        bidirection_product: bool = False,
-        include_self_product: bool = False
+    arr: Sequence[Any],
+    arr_sort_func: Callable = None,
+    bidirection_product: bool = False,
+    include_self_product: bool = False,
 ) -> Iterator[Tuple[Any, Any]]:
     """
     Computes the Cartesian product of elements in a sequence and returns an iterator.
@@ -1312,41 +1364,55 @@ def iter_cartesian_product(
         if bidirection_product:
             return ((arr[i], arr[j]) for i in range(len(arr)) for j in range(len(arr)))
         else:
-            return ((arr[i], arr[j]) for i in range(len(arr)) for j in range(i, len(arr)))
+            return (
+                (arr[i], arr[j]) for i in range(len(arr)) for j in range(i, len(arr))
+            )
     else:
         if bidirection_product:
-            return ((arr[i], arr[j]) for i in range(len(arr)) for j in range(len(arr)) if i != j)
+            return (
+                (arr[i], arr[j])
+                for i in range(len(arr))
+                for j in range(len(arr))
+                if i != j
+            )
         else:
-            return ((arr[i], arr[j]) for i in range(len(arr)) for j in range(i + 1, len(arr)))
+            return (
+                (arr[i], arr[j])
+                for i in range(len(arr))
+                for j in range(i + 1, len(arr))
+            )
 
 
 def get_cartesian_product(
-        arr: Sequence[Any],
-        arr_sort_func: Callable = None,
-        bidirection_product: bool = False,
-        include_self_product: bool = False
+    arr: Sequence[Any],
+    arr_sort_func: Callable = None,
+    bidirection_product: bool = False,
+    include_self_product: bool = False,
 ) -> List[Tuple[Any, Any]]:
     """
     See `iter_cartesian_product`.
     """
-    return list(iter_cartesian_product(
-        arr,
-        arr_sort_func=arr_sort_func,
-        bidirection_product=bidirection_product,
-        include_self_product=include_self_product
-    ))
+    return list(
+        iter_cartesian_product(
+            arr,
+            arr_sort_func=arr_sort_func,
+            bidirection_product=bidirection_product,
+            include_self_product=include_self_product,
+        )
+    )
 
 
 # endregion
 
 # region CSV I/O
 
+
 def save_to_csv(
-        data: Sequence[Sequence],
-        filename: str,
-        delimiter: str = ',',
-        header: Optional[List[str]] = None,
-        **kwargs
+    data: Sequence[Sequence],
+    filename: str,
+    delimiter: str = ",",
+    header: Optional[List[str]] = None,
+    **kwargs,
 ) -> None:
     """Save data to a CSV file.
 
@@ -1401,12 +1467,15 @@ def save_to_csv(
     """
     import csv
     from os import path
+
     from rich_python_utils.path_utils.common import ensure_dir_existence
+
     ensure_dir_existence(path.dirname(filename))
-    with open(filename, 'w', newline='') as csvfile:
+    with open(filename, "w", newline="") as csvfile:
         writer = csv.writer(csvfile, delimiter=delimiter, **kwargs)
         if header:
             writer.writerow(header)
         writer.writerows(data)
+
 
 # endregion

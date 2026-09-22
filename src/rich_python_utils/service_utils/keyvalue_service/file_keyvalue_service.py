@@ -45,9 +45,9 @@ Usage:
 import json
 import logging
 import os
-from typing import Any, Optional, List, Dict
+from typing import Any, Dict, List, Optional
 
-from attr import attrs, attrib
+from attr import attrib, attrs
 
 from .keyvalue_service_base import KeyValueServiceBase
 
@@ -72,8 +72,7 @@ def _encode_key(key: str) -> str:
         A filesystem-safe encoded key string.
     """
     return (
-        key
-        .replace("%", "%25")
+        key.replace("%", "%25")
         .replace(":", "%3A")
         .replace("/", "%2F")
         .replace("\\", "%5C")
@@ -96,8 +95,7 @@ def _decode_key(encoded_key: str) -> str:
         The original key string.
     """
     return (
-        encoded_key
-        .replace("%5C", "\\")
+        encoded_key.replace("%5C", "\\")
         .replace("%2F", "/")
         .replace("%3A", ":")
         .replace("%25", "%")
@@ -356,9 +354,7 @@ class FileKeyValueService(KeyValueServiceBase):
                 "base_dir": self.base_dir,
                 "namespace_count": len(all_ns),
                 "total_keys": total_keys,
-                "namespaces": {
-                    ns: self.size(namespace=ns) for ns in all_ns
-                },
+                "namespaces": {ns: self.size(namespace=ns) for ns in all_ns},
             }
 
     def ping(self) -> bool:

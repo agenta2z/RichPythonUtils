@@ -4,7 +4,7 @@ import unittest
 from dataclasses import dataclass, field
 from typing import Any
 
-from rich_python_utils.common_objects.feed_base import FeedBase, build_feed
+from rich_python_utils.common_objects.feed_base import build_feed, FeedBase
 from rich_python_utils.common_objects.workflow.common.phase_status import PhaseStatus
 
 

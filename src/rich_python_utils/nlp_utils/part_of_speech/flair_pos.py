@@ -1,24 +1,26 @@
-from typing import Union, Iterable, Callable
+from typing import Callable, Iterable, Union
 
-from flair.models import SequenceTagger
-from flair.data import Sentence
 import nltk
-
+from flair.data import Sentence
+from flair.models import SequenceTagger
 from rich_python_utils.nlp_utils.common import (
-    Languages, get_language_for_nltk_tokenizer, PreDefinedNlpToolNames
+    get_language_for_nltk_tokenizer,
+    Languages,
+    PreDefinedNlpToolNames,
 )
 from rich_python_utils.nlp_utils.part_of_speech.common import (
-    get_flair_pos_tagger_name_by_language, get_pos_tagger
+    get_flair_pos_tagger_name_by_language,
+    get_pos_tagger,
 )
 
 
 def pos_tag_(
-        text: Union[str, Iterable[str]],
-        break_into_sentences: bool = False,
-        language: Union[str, Languages] = Languages.English,
-        fast: bool = False,
-        mini_batch_size=640,
-        tagger: Callable = None
+    text: Union[str, Iterable[str]],
+    break_into_sentences: bool = False,
+    language: Union[str, Languages] = Languages.English,
+    fast: bool = False,
+    mini_batch_size=640,
+    tagger: Callable = None,
 ):
     """
 
@@ -53,13 +55,13 @@ def pos_tag_(
     """
     if tagger is None:
         tagger: SequenceTagger = get_pos_tagger(
-            tool=PreDefinedNlpToolNames.FLAIR,
-            language=language,
-            fast=fast
+            tool=PreDefinedNlpToolNames.FLAIR, language=language, fast=fast
         )
 
     if isinstance(text, str) and break_into_sentences:
-        text = nltk.sent_tokenize(text, language=get_language_for_nltk_tokenizer(language))
+        text = nltk.sent_tokenize(
+            text, language=get_language_for_nltk_tokenizer(language)
+        )
 
     def _get_pos_tag(_sentence):
         return [(token.text, token.tag) for token in _sentence.tokens]

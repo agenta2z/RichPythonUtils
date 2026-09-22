@@ -2,36 +2,43 @@
 
 Validates: Requirements 25.2, 25.3, 25.4, 25.5
 """
+
 import os
 import shutil
 import tempfile
 
 import pytest
-from attr import attrs, attrib
-
-from rich_python_utils.common_objects.workflow.workflow import Workflow
-from rich_python_utils.common_objects.workflow.common.expansion import ExpansionResult
+from attr import attrib, attrs
 from rich_python_utils.common_objects.workflow.common.exceptions import (
     ExpansionConfigError,
     ExpansionReplayError,
 )
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
+from rich_python_utils.common_objects.workflow.common.expansion import ExpansionResult
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
+)
 from rich_python_utils.common_objects.workflow.common.step_wrapper import StepWrapper
+from rich_python_utils.common_objects.workflow.workflow import Workflow
 
 
 # ---------------------------------------------------------------------------
 # Module-level factory for seed-based reconstruction (must be importable)
 # ---------------------------------------------------------------------------
 
+
 def _seed_factory(seed):
     """Module-level factory that reconstructs steps from a seed dict."""
     count = seed["count"]
-    return [StepWrapper(lambda x, c=i: x + c + 1, name=f"seed_step_{i}") for i in range(count)]
+    return [
+        StepWrapper(lambda x, c=i: x + c + 1, name=f"seed_step_{i}")
+        for i in range(count)
+    ]
 
 
 # ---------------------------------------------------------------------------
 # Concrete Workflow subclass for testing
 # ---------------------------------------------------------------------------
+
 
 @attrs(slots=False)
 class _TestWorkflow(Workflow):
@@ -145,6 +152,7 @@ class TestSeedFactoryValidation:
 
     def test_lambda_reconstruct_from_seed_raises_config_error(self, save_dir):
         """Lambda as reconstruct_from_seed raises ExpansionConfigError."""
+
         def emitter(x):
             return ExpansionResult(
                 result=x,
@@ -165,10 +173,13 @@ class TestSeedFactoryValidation:
 
     def test_closure_reconstruct_from_seed_raises_config_error(self, save_dir):
         """Closure as reconstruct_from_seed raises ExpansionConfigError."""
+
         def make_factory():
             captured = 42
+
             def inner(seed):
                 return [StepWrapper(lambda v: v + captured, name="s1")]
+
             return inner
 
         closure_fn = make_factory()
@@ -205,14 +216,16 @@ class TestSeedReconstructionFailure:
             "next_step_index": 1,
             "loop_counts": {},
             "state": None,
-            "expansions": [{
-                "after_step_name": "emitter_step",
-                "expansion_id": None,
-                "num_steps": 1,
-                "seed": {"count": 1},
-                "factory_module": "nonexistent_module_xyz",
-                "factory_qualname": "nonexistent_factory",
-            }],
+            "expansions": [
+                {
+                    "after_step_name": "emitter_step",
+                    "expansion_id": None,
+                    "num_steps": 1,
+                    "seed": {"count": 1},
+                    "factory_module": "nonexistent_module_xyz",
+                    "factory_qualname": "nonexistent_factory",
+                }
+            ],
         }
 
         wf = _TestWorkflow(

@@ -9,7 +9,6 @@ import logging
 
 import pytest
 from omegaconf import OmegaConf
-
 from rich_python_utils.config_utils import (
     AliasResolutionError,
     instantiate,
@@ -20,6 +19,7 @@ from rich_python_utils.config_utils import (
 # ---------------------------------------------------------------------------
 # Synthetic candidate classes with disjoint unique fields
 # ---------------------------------------------------------------------------
+
 
 class CandidateA:
     """Has unique field ``alpha`` (not on B) plus shared ``name``."""
@@ -51,14 +51,17 @@ def _register_multi_alias():
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestDispatchSelectsCandidateA:
     def test_alpha_field_dispatches_to_a(self):
         _register_multi_alias()
-        cfg = OmegaConf.create({
-            "_target_": "Multi",
-            "name": "test",
-            "alpha": "unique-to-a",
-        })
+        cfg = OmegaConf.create(
+            {
+                "_target_": "Multi",
+                "name": "test",
+                "alpha": "unique-to-a",
+            }
+        )
         obj = instantiate(cfg)
         assert isinstance(obj, CandidateA)
         assert obj.name == "test"
@@ -68,11 +71,13 @@ class TestDispatchSelectsCandidateA:
 class TestDispatchSelectsCandidateB:
     def test_beta_field_dispatches_to_b(self):
         _register_multi_alias()
-        cfg = OmegaConf.create({
-            "_target_": "Multi",
-            "name": "test",
-            "beta": "unique-to-b",
-        })
+        cfg = OmegaConf.create(
+            {
+                "_target_": "Multi",
+                "name": "test",
+                "beta": "unique-to-b",
+            }
+        )
         obj = instantiate(cfg)
         assert isinstance(obj, CandidateB)
         assert obj.name == "test"
@@ -82,10 +87,12 @@ class TestDispatchSelectsCandidateB:
 class TestDispatchDefaultsOnNoMatch:
     def test_shared_fields_only_defaults_to_primary(self, caplog):
         _register_multi_alias()
-        cfg = OmegaConf.create({
-            "_target_": "Multi",
-            "name": "shared-only",
-        })
+        cfg = OmegaConf.create(
+            {
+                "_target_": "Multi",
+                "name": "shared-only",
+            }
+        )
         with caplog.at_level(logging.INFO):
             obj = instantiate(cfg)
         assert isinstance(obj, CandidateA)  # primary = default
@@ -96,12 +103,14 @@ class TestDispatchDefaultsOnNoMatch:
 class TestDispatchAmbiguousRaises:
     def test_both_unique_fields_raises(self):
         _register_multi_alias()
-        cfg = OmegaConf.create({
-            "_target_": "Multi",
-            "name": "ambiguous",
-            "alpha": "a-val",
-            "beta": "b-val",
-        })
+        cfg = OmegaConf.create(
+            {
+                "_target_": "Multi",
+                "name": "ambiguous",
+                "alpha": "a-val",
+                "beta": "b-val",
+            }
+        )
         with pytest.raises(AliasResolutionError, match="ambiguous"):
             instantiate(cfg)
 
@@ -111,10 +120,12 @@ class TestNoAlternativesPassthrough:
 
     def test_plain_alias_no_dispatch(self):
         register_alias("PlainA", _FQN_A)
-        cfg = OmegaConf.create({
-            "_target_": "PlainA",
-            "name": "plain",
-        })
+        cfg = OmegaConf.create(
+            {
+                "_target_": "PlainA",
+                "name": "plain",
+            }
+        )
         obj = instantiate(cfg)
         assert isinstance(obj, CandidateA)
         assert obj.name == "plain"

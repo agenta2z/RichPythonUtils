@@ -28,25 +28,31 @@ Usage:
 """
 
 from resolve_path import resolve_path
+
 resolve_path()
 
-import os
-import time
 import multiprocessing as mp
+import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, List
 
-from rich_python_utils.mp_utils.task import Task, TaskState, TaskStatus
 from rich_python_utils.mp_utils.queued_executor import SimulatedMultiThreadExecutor
-from rich_python_utils.service_utils.queue_service.thread_queue_service import ThreadQueueService
+from rich_python_utils.mp_utils.task import Task, TaskState, TaskStatus
+from rich_python_utils.service_utils.queue_service.thread_queue_service import (
+    ThreadQueueService,
+)
 
 
 # =============================================================================
 # Counter Process (Simulates a long-running process)
 # =============================================================================
 
-def counter_process_target(counter_file_path: str, interval: float, max_count: int, stop_event):
+
+def counter_process_target(
+    counter_file_path: str, interval: float, max_count: int, stop_event
+):
     """
     Process target that increments a counter in a file.
 
@@ -75,7 +81,9 @@ _TARGET_DIVISOR = 20
 _POLL_INTERVAL = 0.5
 
 
-def set_monitor_config(counter_file_path: str, target_divisor: int = 20, poll_interval: float = 0.5):
+def set_monitor_config(
+    counter_file_path: str, target_divisor: int = 20, poll_interval: float = 0.5
+):
     """Set global config for monitor (called before spawning processes)."""
     global _COUNTER_FILE_PATH, _TARGET_DIVISOR, _POLL_INTERVAL
     _COUNTER_FILE_PATH = counter_file_path
@@ -106,10 +114,10 @@ def monitor_iteration():
 
     # Return result - router will decide next steps
     return {
-        'type': 'monitor_check',
-        'count': current_count,
-        'divisor': _TARGET_DIVISOR,
-        'condition_met': current_count > 0 and current_count % _TARGET_DIVISOR == 0
+        "type": "monitor_check",
+        "count": current_count,
+        "divisor": _TARGET_DIVISOR,
+        "condition_met": current_count > 0 and current_count % _TARGET_DIVISOR == 0,
     }
 
 
@@ -123,11 +131,7 @@ def action_handler(count: int):
     print(f"   [Action] Simulating work (e.g., send notification, update dashboard)...")
     time.sleep(0.5)  # Simulate some work
 
-    result = {
-        'type': 'action_completed',
-        'count': count,
-        'timestamp': time.time()
-    }
+    result = {"type": "action_completed", "count": count, "timestamp": time.time()}
     print(f"   [Action] Completed!")
     return result
 
@@ -135,6 +139,7 @@ def action_handler(count: int):
 # =============================================================================
 # Router (Runs in Main Process - Can Use Closures!)
 # =============================================================================
+
 
 def create_router(target_divisor: int):
     """
@@ -148,7 +153,9 @@ def create_router(target_divisor: int):
     - Workers only execute simple, stateless functions
     """
 
-    iteration_count = [0]  # Closure state - this works because router is in main process!
+    iteration_count = [
+        0
+    ]  # Closure state - this works because router is in main process!
 
     def router(task_id: str, result: Any, task_state: TaskState) -> List[Task]:
         """
@@ -165,18 +172,20 @@ def create_router(target_divisor: int):
         iteration_count[0] += 1
 
         # Handle monitor check result
-        if result.get('type') == 'monitor_check':
-            if result.get('condition_met'):
+        if result.get("type") == "monitor_check":
+            if result.get("condition_met"):
                 # Milestone reached! Trigger action
-                count = result['count']
-                print(f"   [Router] Milestone detected at count={count}, triggering action")
+                count = result["count"]
+                print(
+                    f"   [Router] Milestone detected at count={count}, triggering action"
+                )
 
                 # Create action task
                 # Note: We pass count as argument, not closure
                 action_task = Task(
                     callable=action_handler,
                     task_id=f"action_{count}",
-                    args=(count,)  # Pass count as argument
+                    args=(count,),  # Pass count as argument
                 )
                 return [action_task]
 
@@ -187,12 +196,12 @@ def create_router(target_divisor: int):
                 # Create next monitor iteration
                 monitor_task = Task(
                     callable=monitor_iteration,  # Same function, new task
-                    task_id=f"monitor_iter_{iteration_count[0]}"
+                    task_id=f"monitor_iter_{iteration_count[0]}",
                 )
                 return [monitor_task]
 
         # Action completed - no more tasks (leaf node)
-        elif result.get('type') == 'action_completed':
+        elif result.get("type") == "action_completed":
             print(f"   [Router] Action completed, no more tasks")
             return []
 
@@ -207,6 +216,7 @@ def create_router(target_divisor: int):
 # =============================================================================
 # Main Example
 # =============================================================================
+
 
 def main():
     print("""
@@ -239,9 +249,7 @@ Using router mode (router=Callable):
 
     # Configure monitor (before any processes are spawned)
     set_monitor_config(
-        counter_file_path=str(counter_file),
-        target_divisor=20,
-        poll_interval=0.5
+        counter_file_path=str(counter_file), target_divisor=20, poll_interval=0.5
     )
 
     # Create queue service and executor
@@ -251,9 +259,9 @@ Using router mode (router=Callable):
     executor = SimulatedMultiThreadExecutor(
         input_queue_service=queue_service,
         output_queue_service=queue_service,
-        input_queue_id='monitor_in',
-        output_queue_id='monitor_out',
-        verbose=False
+        input_queue_id="monitor_in",
+        output_queue_id="monitor_out",
+        verbose=False,
     )
 
     print("   [OK] Executor created")
@@ -265,8 +273,7 @@ Using router mode (router=Callable):
 
     stop_event = mp.Event()
     counter_proc = mp.Process(
-        target=counter_process_target,
-        args=(str(counter_file), 2.0, 25, stop_event)
+        target=counter_process_target, args=(str(counter_file), 2.0, 25, stop_event)
     )
     counter_proc.start()
     print("   [OK] Counter process started (incrementing every 2 seconds)")
@@ -281,7 +288,7 @@ Using router mode (router=Callable):
     # Create initial monitor task
     initial_task = Task(
         callable=monitor_iteration,  # Top-level function - picklable
-        task_id="monitor_start"
+        task_id="monitor_start",
     )
 
     # Create router (closure is fine - runs in main process)
@@ -293,7 +300,7 @@ Using router mode (router=Callable):
     result = executor.run_async(
         [initial_task],
         router=router,  # Router mode!
-        depth_first=True
+        depth_first=True,
     )
 
     elapsed = time.time() - start_time
@@ -342,12 +349,14 @@ When to use Router Mode:
 """)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         main()
     except Exception as e:
         print(f"\n[X] Error: {e}")
         import traceback
+
         traceback.print_exc()
         import sys
+
         sys.exit(1)

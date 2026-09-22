@@ -48,15 +48,15 @@ Example (manual - with explicit VariableLoader):
     >>> result = manager("action_agent/main/MyTemplate", **variables, user_input="data")
 """
 
-from rich_python_utils.string_utils.formatting.template_manager.template_manager import (
-    TemplateManager,
-    TemplateRootPriority,
-)
 from rich_python_utils.string_utils.formatting.template_manager.sop_manager import (
     SOP,
     SOPManager,
     SOPPhase,
     SOPSubsection,
+)
+from rich_python_utils.string_utils.formatting.template_manager.template_manager import (
+    TemplateManager,
+    TemplateRootPriority,
 )
 from rich_python_utils.string_utils.formatting.template_manager.variable_manager import (
     AmbiguousVariableError,

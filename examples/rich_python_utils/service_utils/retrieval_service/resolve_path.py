@@ -1,8 +1,9 @@
 import sys
 from pathlib import Path
 
-PIVOT_FOLDER_NAME = 'examples'
-SRC_FOLDER_NAME = 'src'
+PIVOT_FOLDER_NAME = "examples"
+SRC_FOLDER_NAME = "src"
+
 
 def resolve_path():
     current = Path(__file__).resolve()

@@ -1,27 +1,29 @@
 import enum
 import re
 from pydoc import locate
-from typing import Iterator, Iterable, Union, Callable, Tuple, List, Mapping
+from typing import Callable, Iterable, Iterator, List, Mapping, Tuple, Union
 
 from rich_python_utils.common_utils.map_helper import get__, get_keys
-from rich_python_utils.common_utils.typing_helper import make_set_, is_str
+from rich_python_utils.common_utils.typing_helper import is_str, make_set_
+from rich_python_utils.nlp_utils.punctuations import (
+    remove_punctuation_except_for_hyphen,
+)
 from rich_python_utils.string_utils.misc import get_human_int_str
 from rich_python_utils.string_utils.prefix_suffix import solve_name_conflict
-from rich_python_utils.nlp_utils.punctuations import remove_punctuation_except_for_hyphen
 from rich_python_utils.string_utils.split import birsplit
 
 
 def solve_arg_full_and_short_name(
-        arg_name_str: str,
-        arg_short_name_deduplication: set,
-        short_full_name_sep: str = '/',
-        default_arg_full_name_short_name_map: Mapping[str, str] = None
+    arg_name_str: str,
+    arg_short_name_deduplication: set,
+    short_full_name_sep: str = "/",
+    default_arg_full_name_short_name_map: Mapping[str, str] = None,
 ):
     arg_full_name, arg_short_name = birsplit(arg_name_str, short_full_name_sep)
     if (
-            (not arg_short_name) and
-            default_arg_full_name_short_name_map and
-            (arg_full_name in default_arg_full_name_short_name_map)
+        (not arg_short_name)
+        and default_arg_full_name_short_name_map
+        and (arg_full_name in default_arg_full_name_short_name_map)
     ):
         arg_short_name = default_arg_full_name_short_name_map[arg_full_name]
 
@@ -29,25 +31,23 @@ def solve_arg_full_and_short_name(
         # `arg_short_name` is specified;
         # the we only need to solve the name conflict if any
         arg_short_name = solve_name_conflict(
-            name=arg_short_name,
-            existing_names=arg_short_name_deduplication
+            name=arg_short_name, existing_names=arg_short_name_deduplication
         )
     else:
         # automatically generates the short argument name;
         # `get_short_name` includes the name conflict solution
         arg_short_name = get_short_name(
-            full_name=arg_full_name,
-            current_short_names=arg_short_name_deduplication
+            full_name=arg_full_name, current_short_names=arg_short_name_deduplication
         )
     return arg_full_name, arg_short_name
 
 
 def get_short_name(
-        full_name: str,
-        name_parts_sep: str = r'_|\-',
-        current_short_names: Iterable[str] = None,
-        conflict_solving_suffix_sep='',
-        conflict_solving_name_suffix_gen: Union[Iterator, str, Callable[[int], str]] = None
+    full_name: str,
+    name_parts_sep: str = r"_|\-",
+    current_short_names: Iterable[str] = None,
+    conflict_solving_suffix_sep="",
+    conflict_solving_name_suffix_gen: Union[Iterator, str, Callable[[int], str]] = None,
 ):
     """
     Gets short argument name for a full argument name, using the first letters of the name parts.
@@ -85,27 +85,29 @@ def get_short_name(
     current_short_names = make_set_(current_short_names)
     if full_name:
         try:
-            short_name = ''.join(part[0] for part in re.split(name_parts_sep, full_name))
+            short_name = "".join(
+                part[0] for part in re.split(name_parts_sep, full_name)
+            )
         except:
-            return ''
+            return ""
         return solve_name_conflict(
             name=short_name,
             existing_names=current_short_names,
             suffix_sep=conflict_solving_suffix_sep,
-            suffix_gen=conflict_solving_name_suffix_gen
+            suffix_gen=conflict_solving_name_suffix_gen,
         )
     else:
-        return ''
+        return ""
 
 
 def solve_parameter_info(
-        parameter_info,
-        arg_short_name_deduplication: set,
-        short_full_name_sep: str = '/',
-        default_converter=None,
-        default_arg_full_name_short_name_map=None,
-        no_default_value_or_description: bool = False,
-        allows_sub_parameters: bool = False
+    parameter_info,
+    arg_short_name_deduplication: set,
+    short_full_name_sep: str = "/",
+    default_converter=None,
+    default_arg_full_name_short_name_map=None,
+    no_default_value_or_description: bool = False,
+    allows_sub_parameters: bool = False,
 ):
     """
     Solving the `parameter_info` for parameter 1) full name, 2) short name, 3) default value,
@@ -116,18 +118,20 @@ def solve_parameter_info(
     if is_str(parameter_info):
         arg_full_name = parameter_info
         if not no_default_value_or_description:
-            default_value = description = ''
-    elif hasattr(parameter_info, '__len__') and hasattr(parameter_info, '__getitem__'):
+            default_value = description = ""
+    elif hasattr(parameter_info, "__len__") and hasattr(parameter_info, "__getitem__"):
         if allows_sub_parameters and (not no_default_value_or_description):
-            raise ValueError("Sub-parameters are only allowed "
-                             "when 'no_default_value_or_description' is True.")
+            raise ValueError(
+                "Sub-parameters are only allowed "
+                "when 'no_default_value_or_description' is True."
+            )
         if (
-                allows_sub_parameters and
-                len(parameter_info) >= 2 and
-                any(
-                    isinstance(sub_parameter_info, (list, tuple))
-                    for sub_parameter_info in parameter_info
-                )
+            allows_sub_parameters
+            and len(parameter_info) >= 2
+            and any(
+                isinstance(sub_parameter_info, (list, tuple))
+                for sub_parameter_info in parameter_info
+            )
         ):
             return [
                 solve_parameter_info(
@@ -137,60 +141,66 @@ def solve_parameter_info(
                     default_converter=default_converter,
                     default_arg_full_name_short_name_map=default_arg_full_name_short_name_map,
                     no_default_value_or_description=True,
-                    allows_sub_parameters=True
+                    allows_sub_parameters=True,
                 )
                 for sub_parameter_info in parameter_info
             ]
         elif no_default_value_or_description and len(parameter_info) >= 3:
             arg_full_name, arg_short_name, converter = parameter_info[:3]
         elif (not no_default_value_or_description) and len(parameter_info) >= 5:
-            arg_full_name, arg_short_name, default_value, description, converter = parameter_info[:5]
+            arg_full_name, arg_short_name, default_value, description, converter = (
+                parameter_info[:5]
+            )
         elif len(parameter_info) == 1:
             arg_full_name = parameter_info[0]
             if not no_default_value_or_description:
-                default_value = description = ''
+                default_value = description = ""
         elif len(parameter_info) == 2:
             if no_default_value_or_description:
                 if is_str(parameter_info[1]):
                     arg_full_name, arg_short_name = parameter_info
-                    converter = locate(arg_short_name)  # in case the 'arg_short_name' is actually a converter
+                    converter = locate(
+                        arg_short_name
+                    )  # in case the 'arg_short_name' is actually a converter
                     if converter is not None:
                         arg_short_name = None
                 else:
                     arg_full_name, converter = parameter_info
             else:
                 arg_full_name, default_value = parameter_info
-                description = ''
+                description = ""
         elif len(parameter_info) == 3:
             if is_str(parameter_info[2]):
                 arg_full_name, default_value, description = parameter_info
-                converter = locate(description)  # in case the 'description' is actually a converter
+                converter = locate(
+                    description
+                )  # in case the 'description' is actually a converter
                 if converter is not None:
-                    description = ''
+                    description = ""
             else:
                 arg_full_name, default_value, converter = parameter_info
-                description = ''
+                description = ""
         elif len(parameter_info) == 4:
             arg_full_name, default_value, description, converter = parameter_info
             if is_str(converter):
                 converter = locate(converter)
 
     if not arg_full_name:
-        raise ValueError(f"The specify object '{parameter_info}' "
-                         f"cannot be solved as a parameter.")
+        raise ValueError(
+            f"The specify object '{parameter_info}' cannot be solved as a parameter."
+        )
 
     if arg_short_name:
         arg_short_name = solve_name_conflict(
-            name=arg_short_name,
-            existing_names=arg_short_name_deduplication
+            name=arg_short_name, existing_names=arg_short_name_deduplication
         )
     else:
-        if not (arg_full_name.startswith('lit:') or arg_full_name.startswith('val:')):
+        if not (arg_full_name.startswith("lit:") or arg_full_name.startswith("val:")):
             arg_full_name, arg_short_name = solve_arg_full_and_short_name(
                 arg_full_name,
                 arg_short_name_deduplication=arg_short_name_deduplication,
                 short_full_name_sep=short_full_name_sep,
-                default_arg_full_name_short_name_map=default_arg_full_name_short_name_map
+                default_arg_full_name_short_name_map=default_arg_full_name_short_name_map,
             )
     if not converter:
         converter = default_converter
@@ -202,17 +212,17 @@ def solve_parameter_info(
 
 
 def args2str(
-        args,
-        active_parameter_infos: Union[Tuple, List] = None,
-        default_arg_full_name_short_name_map: dict = None,
-        default_value_formatter: Callable = None,
-        name_val_delimiter='_',
-        name_parts_delimiter='-',
-        prefix: str = None,
-        suffix: str = None,
-        extension_name=None,
-        use_full_name: bool = False,
-        strings_for_null: Iterable[str] = None
+    args,
+    active_parameter_infos: Union[Tuple, List] = None,
+    default_arg_full_name_short_name_map: dict = None,
+    default_value_formatter: Callable = None,
+    name_val_delimiter="_",
+    name_parts_delimiter="-",
+    prefix: str = None,
+    suffix: str = None,
+    extension_name=None,
+    use_full_name: bool = False,
+    strings_for_null: Iterable[str] = None,
 ) -> str:
     """
     Generates a string description for the given arguments.
@@ -341,8 +351,8 @@ def args2str(
         'personalized-utt_stats_221020_30days_signal_level_utterance-with_uid'
 
     """
-    _DIRECTIVE_VAL_ONLY = 'val:'
-    _DIRECTIVE_LITERAL = 'lit:'
+    _DIRECTIVE_VAL_ONLY = "val:"
+    _DIRECTIVE_LITERAL = "lit:"
 
     if not active_parameter_infos:
         active_parameter_infos = get_keys(args)
@@ -351,10 +361,10 @@ def args2str(
 
     def _default_value_format(val):
         if val is None:
-            return ''
+            return ""
         if isinstance(val, str):
             if isinstance(val, enum.Enum):
-                return f'{val}'
+                return f"{val}"
             else:
                 return remove_punctuation_except_for_hyphen(val)
         val_type = type(val)
@@ -365,21 +375,21 @@ def args2str(
         elif val_type is bool:
             return int(val)
         elif val_type in (list, tuple):
-            return '_'.join((str(_default_value_format(x)) for x in val))
+            return "_".join((str(_default_value_format(x)) for x in val))
         else:
             return get_short_name(full_name=str(val))
 
     def _is_null_name_part(name_part):
         return (
-                (not bool(name_part)) or
-                name_part == 'None' or
-                name_part == 'n/a' or
-                (strings_for_null is not None and name_part in strings_for_null)
+            (not bool(name_part))
+            or name_part == "None"
+            or name_part == "n/a"
+            or (strings_for_null is not None and name_part in strings_for_null)
         )
 
     def _get_name_part(arg_full_name, arg_short_name):
         if arg_full_name.startswith(_DIRECTIVE_VAL_ONLY):
-            arg_full_name = arg_short_name[len(_DIRECTIVE_VAL_ONLY):]
+            arg_full_name = arg_short_name[len(_DIRECTIVE_VAL_ONLY) :]
             val_only = True
         else:
             val_only = False
@@ -391,7 +401,7 @@ def args2str(
 
             arg_name = arg_full_name if use_full_name else arg_short_name
             if arg_name:
-                return f'{arg_name}{name_val_delimiter}{val}' if val else arg_name
+                return f"{arg_name}{name_val_delimiter}{val}" if val else arg_name
             elif val:
                 return val
             else:
@@ -404,7 +414,7 @@ def args2str(
         if not para_info:
             continue
         if is_str(para_info) and para_info.startswith(_DIRECTIVE_LITERAL):
-            name_part = para_info[len(_DIRECTIVE_LITERAL):]
+            name_part = para_info[len(_DIRECTIVE_LITERAL) :]
         else:
             solved_parameter_info = solve_parameter_info(
                 para_info,
@@ -416,15 +426,19 @@ def args2str(
                 ),
                 default_arg_full_name_short_name_map=default_arg_full_name_short_name_map,
                 no_default_value_or_description=True,
-                allows_sub_parameters=True
+                allows_sub_parameters=True,
             )
 
             name_part = None
             if isinstance(solved_parameter_info[0], tuple):
                 sub_name_parts = []
-                for arg_full_name, arg_short_name, val_formatter in solved_parameter_info:
+                for (
+                    arg_full_name,
+                    arg_short_name,
+                    val_formatter,
+                ) in solved_parameter_info:
                     if arg_full_name.startswith(_DIRECTIVE_LITERAL):
-                        name_part = arg_full_name[len(_DIRECTIVE_LITERAL):]
+                        name_part = arg_full_name[len(_DIRECTIVE_LITERAL) :]
                     else:
                         name_part = _get_name_part(arg_full_name, arg_short_name)
                     if not _is_null_name_part(name_part):
@@ -443,22 +457,22 @@ def args2str(
 
     main_name = name_parts_delimiter.join(name_parts)
     if extension_name:
-        if extension_name[0] != '.':
-            extension_name = '.' + extension_name
+        if extension_name[0] != ".":
+            extension_name = "." + extension_name
         return main_name + extension_name
     else:
         return main_name
 
 
 def get_arg_name(
-        args=None,
-        active_argname_info=None,
-        name=None,
-        name_prefix=None,
-        name_suffix=None,
-        name_val_delimiter='',
-        name_parts_delimiter='-',
-        **kwargs
+    args=None,
+    active_argname_info=None,
+    name=None,
+    name_prefix=None,
+    name_suffix=None,
+    name_val_delimiter="",
+    name_parts_delimiter="-",
+    **kwargs,
 ):
     """
     A convenient function to construct a name either
@@ -485,10 +499,19 @@ def get_arg_name(
             if `name` is specified,
         or constructed from the provided `args`.
     """
-    return name_parts_delimiter.join((x for x in (name_prefix, name, name_suffix) if x)) if name \
-        else (args2str(args=args,
-                       active_parameter_infos=active_argname_info,
-                       name_val_delimiter=name_val_delimiter,
-                       prefix=name_prefix,
-                       suffix=name_suffix,
-                       **kwargs) if args is not None else name_parts_delimiter.join((name_prefix, name_suffix)))
+    return (
+        name_parts_delimiter.join((x for x in (name_prefix, name, name_suffix) if x))
+        if name
+        else (
+            args2str(
+                args=args,
+                active_parameter_infos=active_argname_info,
+                name_val_delimiter=name_val_delimiter,
+                prefix=name_prefix,
+                suffix=name_suffix,
+                **kwargs,
+            )
+            if args is not None
+            else name_parts_delimiter.join((name_prefix, name_suffix))
+        )
+    )

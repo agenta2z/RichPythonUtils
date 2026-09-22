@@ -10,6 +10,7 @@ Tests correctness properties from the design document:
 
 **Validates: Requirements 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 5.1**
 """
+
 import sys
 import time
 from pathlib import Path
@@ -26,7 +27,6 @@ if _src_dir.exists() and str(_src_dir) not in sys.path:
 
 import pytest
 from hypothesis import given, settings, strategies as st
-
 from rich_python_utils.common_utils.function_helper import execute_with_retry
 
 
@@ -36,20 +36,25 @@ from rich_python_utils.common_utils.function_helper import execute_with_retry
 
 # Positive floats for attempt_timeout — any positive value should trigger rejection
 positive_float_strategy = st.floats(
-    min_value=1e-6, max_value=1e6,
-    allow_nan=False, allow_infinity=False,
+    min_value=1e-6,
+    max_value=1e6,
+    allow_nan=False,
+    allow_infinity=False,
 )
 
 # Very small total_timeout values that will expire before the function completes
 small_timeout_strategy = st.floats(
-    min_value=0.001, max_value=0.05,
-    allow_nan=False, allow_infinity=False,
+    min_value=0.001,
+    max_value=0.05,
+    allow_nan=False,
+    allow_infinity=False,
 )
 
 
 # ---------------------------------------------------------------------------
 # Property 4: Sync Per-Attempt Timeout Rejection
 # ---------------------------------------------------------------------------
+
 
 class TestSyncPerAttemptTimeoutRejection:
     """Property 4: Sync Per-Attempt Timeout Rejection.
@@ -94,14 +99,16 @@ class TestSyncPerAttemptTimeoutRejection:
         )
 
         # The error message should mention sync and async alternatives
-        assert "sync" in str(exc_info.value).lower() or "async" in str(exc_info.value).lower(), (
-            f"NotImplementedError message should reference sync/async: {exc_info.value}"
-        )
+        assert (
+            "sync" in str(exc_info.value).lower()
+            or "async" in str(exc_info.value).lower()
+        ), f"NotImplementedError message should reference sync/async: {exc_info.value}"
 
 
 # ---------------------------------------------------------------------------
 # Property 5: Error Normalization Invariant (sync total timeout)
 # ---------------------------------------------------------------------------
+
 
 class TestSyncErrorNormalizationInvariant:
     """Property 5: Error Normalization Invariant (sync total timeout).
@@ -119,9 +126,7 @@ class TestSyncErrorNormalizationInvariant:
     @given(
         total_timeout=small_timeout_strategy,
     )
-    def test_total_timeout_raises_builtin_timeout_error(
-        self, total_timeout: float
-    ):
+    def test_total_timeout_raises_builtin_timeout_error(self, total_timeout: float):
         """When total_timeout expires, the raised exception SHALL be the
         built-in TimeoutError (not asyncio.TimeoutError or any other type).
 
@@ -158,6 +163,7 @@ class TestSyncErrorNormalizationInvariant:
         # Verify it is NOT asyncio.TimeoutError (which is a subclass of TimeoutError
         # in Python 3.11+, but we want the plain built-in one)
         import asyncio
+
         assert type(raised) is TimeoutError, (
             f"Expected exactly TimeoutError, got {type(raised).__name__}; "
             "asyncio.TimeoutError should not escape the retry helper boundary"
@@ -167,6 +173,7 @@ class TestSyncErrorNormalizationInvariant:
 # ---------------------------------------------------------------------------
 # Property 2: Total Timeout Monotonic Bound (sync) — Timed Integration Tests
 # ---------------------------------------------------------------------------
+
 
 class TestSyncTotalTimeoutMonotonicBound:
     """Property 2: Total Timeout Monotonic Bound (sync).

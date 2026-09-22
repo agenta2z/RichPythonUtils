@@ -1,19 +1,20 @@
 """Unit tests for expansion data types: ExpansionResult, SubgraphSpec,
 GraphExpansionResult, and ExpansionRecord.
 """
-import pytest
 
+import pytest
 from rich_python_utils.common_objects.workflow.common.expansion import (
+    ExpansionRecord,
     ExpansionResult,
     GraphExpansionResult,
     SubgraphSpec,
-    ExpansionRecord,
 )
 
 
 # ---------------------------------------------------------------------------
 # Helpers — lightweight mock node for SubgraphSpec tests
 # ---------------------------------------------------------------------------
+
 
 class _MockNode:
     """Minimal stand-in for WorkGraphNode with name and to_serializable_obj."""
@@ -29,8 +30,8 @@ class _MockNode:
 # ExpansionResult
 # ---------------------------------------------------------------------------
 
-class TestExpansionResult:
 
+class TestExpansionResult:
     def test_construction_required_fields(self):
         er = ExpansionResult(result=42, new_steps=[lambda x: x])
         assert er.result == 42
@@ -63,8 +64,8 @@ class TestExpansionResult:
 # SubgraphSpec
 # ---------------------------------------------------------------------------
 
-class TestSubgraphSpec:
 
+class TestSubgraphSpec:
     def test_valid_construction(self):
         n1 = _MockNode("a")
         n2 = _MockNode("b")
@@ -112,8 +113,8 @@ class TestSubgraphSpec:
 # GraphExpansionResult
 # ---------------------------------------------------------------------------
 
-class TestGraphExpansionResult:
 
+class TestGraphExpansionResult:
     def test_construction(self):
         n1 = _MockNode("n1")
         spec = SubgraphSpec(nodes=[n1], entry_nodes=[n1])
@@ -153,8 +154,8 @@ class TestGraphExpansionResult:
 # ExpansionRecord
 # ---------------------------------------------------------------------------
 
-class TestExpansionRecord:
 
+class TestExpansionRecord:
     def test_construction_required_fields(self):
         rec = ExpansionRecord(
             after_step_name="step_a",

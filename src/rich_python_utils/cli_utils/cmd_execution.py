@@ -2,7 +2,6 @@ import subprocess
 from typing import List
 
 from jinja2 import Template
-
 from rich_python_utils.io_utils.text_io import read_all_text_
 from rich_python_utils.path_utils.path_string_operations import add_ending_path_sep
 
@@ -17,13 +16,11 @@ def execute_cmd(target: str, command_line: str, template: str):
 def dir_size(target: str, dir_path: str, template: str):
     execution_result = execute_cmd(
         target=target,
-        command_line=f'ls {add_ending_path_sep(dir_path)} | wc -l',
-        template=template
+        command_line=f"ls {add_ending_path_sep(dir_path)} | wc -l",
+        template=template,
     )
     if execution_result:
-        return int(
-            execution_result.stdout.strip()
-        )
+        return int(execution_result.stdout.strip())
 
 
 def listdir(target: str, dir_path: str, template: str) -> List[str]:
@@ -40,15 +37,17 @@ def listdir(target: str, dir_path: str, template: str) -> List[str]:
     """
     execution_result = execute_cmd(
         target=target,
-        command_line=f'ls -1 {add_ending_path_sep(dir_path)}',
-        template=template
+        command_line=f"ls -1 {add_ending_path_sep(dir_path)}",
+        template=template,
     )
     if execution_result and execution_result.stdout:
-        return execution_result.stdout.strip().split('\n')
+        return execution_result.stdout.strip().split("\n")
     return []
 
 
-def list_files(target: str, dir_path: str, template: str, full_path: bool = False) -> List[str]:
+def list_files(
+    target: str, dir_path: str, template: str, full_path: bool = False
+) -> List[str]:
     """
     Executes a shell command to list only the files in a directory, ensuring that each item is listed on a new line.
     Optionally returns full paths instead of just file names.
@@ -68,18 +67,18 @@ def list_files(target: str, dir_path: str, template: str, full_path: bool = Fals
         command = f"find {add_ending_path_sep(dir_path)} -maxdepth 1 -type f -exec basename {{}} \\;"
 
     execution_result = execute_cmd(
-        target=target,
-        command_line=command,
-        template=template
+        target=target, command_line=command, template=template
     )
     if execution_result and execution_result.stdout:
         # Split the output by new lines
-        files = execution_result.stdout.strip().split('\n')
+        files = execution_result.stdout.strip().split("\n")
         return files
     return []
 
 
-def list_subdirs(target: str, dir_path: str, template: str, full_path: bool = False) -> List[str]:
+def list_subdirs(
+    target: str, dir_path: str, template: str, full_path: bool = False
+) -> List[str]:
     """
     Executes a shell command to list only the directories in a directory, ensuring that each item is listed on a new line.
     Optionally returns full paths instead of just directory names.
@@ -99,22 +98,17 @@ def list_subdirs(target: str, dir_path: str, template: str, full_path: bool = Fa
         ['data/source_data_chunked', 'data/source_data']
     """
     if full_path:
-        command = f"find {add_ending_path_sep(dir_path)} -mindepth 1 -maxdepth 1 -type d"
+        command = (
+            f"find {add_ending_path_sep(dir_path)} -mindepth 1 -maxdepth 1 -type d"
+        )
     else:
         command = f"find {add_ending_path_sep(dir_path)} -mindepth 1 -maxdepth 1 -type d -exec basename {{}} \\;"
 
     execution_result = execute_cmd(
-        target=target,
-        command_line=command,
-        template=template
+        target=target, command_line=command, template=template
     )
     if execution_result and execution_result.stdout:
         # Split the output by new lines
-        dirs = execution_result.stdout.strip().split('\n')
+        dirs = execution_result.stdout.strip().split("\n")
         return dirs
     return []
-
-
-
-
-

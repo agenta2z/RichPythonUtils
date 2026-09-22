@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import pytest
 from omegaconf import OmegaConf
-
 from rich_python_utils.config_utils._resolvers import ensure_resolvers
 
 

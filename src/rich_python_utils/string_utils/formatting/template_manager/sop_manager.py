@@ -1,5 +1,3 @@
-
-
 """SOPManager — parse, validate, and render Standard Operating Procedures.
 
 An SOP extends StateGraph with domain-specific semantics:
@@ -20,11 +18,14 @@ from typing import Any
 
 import yaml
 from attr import attrib, attrs
-
 from rich_python_utils.common_objects.workflow.stategraph import (
     StateGraph,
     StateGraphTracker,
     StateNode,
+)
+from rich_python_utils.string_utils.formatting.template_manager.sop_directive_registry import (
+    render_directive,
+    render_directives,
 )
 
 logger = logging.getLogger(__name__)
@@ -36,14 +37,14 @@ logger = logging.getLogger(__name__)
 _PHASE_HEADING_RE = re.compile(
     r"^(#{2,3})\s+Phase\s+(\w+)"
     r"(?:\s+--\s+([^[\]:]+?))?"  # optional: -- PhaseName
-    r"\s*(?:\[([^\]]*)\])?"      # optional: [directives]
-    r"(?:\s*:\s*(.+))?$",         # optional: heading_rest (outputs)
+    r"\s*(?:\[([^\]]*)\])?"  # optional: [directives]
+    r"(?:\s*:\s*(.+))?$",  # optional: heading_rest (outputs)
     re.MULTILINE,
 )
 
 _OUTPUT_RE = re.compile(r"`(\w+)`")
 
-DIRECTIVE_MUST = "must"
+DIRECTIVE_REQUIRED = "required"
 
 _SUBSECTION_RE = re.compile(
     r"^\*\*(\w+)\*\*"
@@ -52,9 +53,7 @@ _SUBSECTION_RE = re.compile(
     re.MULTILINE,
 )
 
-_DEPENDS_ON_RE = re.compile(
-    r"__depends\s+on__\s+Phase\s+([\w\s,]+)", re.IGNORECASE
-)
+_DEPENDS_ON_RE = re.compile(r"__depends\s+on__\s+Phase\s+([\w\s,]+)", re.IGNORECASE)
 
 _FOR_EACH_RE = re.compile(
     r"__for\s+each__\s+`(\w+)`\s+__in__\s+`(\w+)`"
@@ -92,6 +91,7 @@ _GOTO_AFTERWARDS_RE = re.compile(
 # Use these instead of hardcoding strings when checking directives.
 DIRECTIVE_REQUIRES_USER_INPUT = "requires user input"
 
+
 def normalize_tool_name(raw: str) -> str:
     """Normalize a tool name from SOP text to canonical form.
 
@@ -104,9 +104,7 @@ def normalize_tool_name(raw: str) -> str:
 
 _BRANCH_RE = re.compile(r"__branch__(?:\s+`(\w+)`)?", re.IGNORECASE)
 _INITIAL_RE = re.compile(r"__initial__", re.IGNORECASE)
-_REQUIRES_USER_INPUT_RE = re.compile(
-    r"__requires\s+user\s+input__", re.IGNORECASE
-)
+_REQUIRES_USER_INPUT_RE = re.compile(r"__requires\s+user\s+input__", re.IGNORECASE)
 
 # ---------------------------------------------------------------------------
 # Guidance text templates — used by SOPManager.render_guidance()
@@ -135,7 +133,7 @@ _GUIDANCE_MISSING_OUTPUTS = (
 
 _GUIDANCE_AVAILABLE_HEADER = "The following phases are available:"
 
-_GUIDANCE_AVAILABLE_PHASE = "- **{phase_name}:** {description}"
+_GUIDANCE_AVAILABLE_PHASE = "#### {phase_name}\n\n{description}"
 
 _GUIDANCE_ALL_COMPLETE = (
     "- **All phases complete.** Suggest iterating or starting a new task."
@@ -157,6 +155,7 @@ _GUIDANCE_FOOTER = (
 @dataclass
 class SOPSubsection:
     """A subsection within a phase body (e.g., **Tools**, **Rules**)."""
+
     name: str
     directive: str | None = None
     content: str = ""
@@ -165,6 +164,7 @@ class SOPSubsection:
 @attrs(slots=False, eq=False, hash=False)
 class SOPPhase(StateNode):
     """A phase in an SOP — extends StateNode with description and subsections."""
+
     name: str = attrib(default="")
     description: str = attrib(default="")
     subsections: list = attrib(factory=list)
@@ -197,9 +197,7 @@ class SOP(StateGraph):
     def get_phase(self, phase_id: str) -> SOPPhase | None:
         return self.get_node(phase_id)
 
-    def get_next_pending_phase(
-        self, completed_ids: set[str]
-    ) -> SOPPhase | None:
+    def get_next_pending_phase(self, completed_ids: set[str]) -> SOPPhase | None:
         """Return the first phase whose dependencies are all satisfied and
         that itself is not yet completed. Returns None when no such phase
         exists (workflow complete or blocked by an unsatisfied dependency).
@@ -214,16 +212,19 @@ class SOP(StateGraph):
 
     @property
     def phase_required_tools(self) -> dict[str, set[str]]:
-        """Phase ID → set of required tool names (from ``Tools[__must__]`` only).
+        """Phase ID → set of required tool names (from ``Tools[__required__]`` only).
 
-        Used by ``_check_phase_completion`` to require ALL must-tools to have
-        executed before marking a phase complete — not just any single one.
+        Used by ``_check_phase_completion`` to require ALL required tools to
+        have executed before marking a phase complete — not just any single one.
         """
         result: dict[str, set[str]] = {}
         for phase in self.phases:
             tools: set[str] = set()
             for sub in phase.subsections:
-                if sub.name.lower() in ("tools", "command") and sub.directive == DIRECTIVE_MUST:
+                if (
+                    sub.name.lower() in ("tools", "command")
+                    and sub.directive == DIRECTIVE_REQUIRED
+                ):
                     for line in sub.content.split("\n"):
                         name = normalize_tool_name(line)
                         if name:
@@ -245,7 +246,7 @@ class SOP(StateGraph):
         """
         mapping: dict[str, str] = {}
         for phase in self.phases:
-            # Extract from subsections (e.g., Tools[__must__]: - /tool-name)
+            # Extract from subsections (e.g., Tools[__required__]: - /tool-name)
             for sub in phase.subsections:
                 if sub.name.lower() in ("tools", "command"):
                     for line in sub.content.split("\n"):
@@ -253,7 +254,9 @@ class SOP(StateGraph):
                         if name:
                             mapping[name] = phase.id
             # Also extract from phase body (e.g., "Command: `/research-propose <goal>`")
-            for match in re.finditer(r"Command:\s*`/([a-zA-Z0-9_-]+)", phase.description):
+            for match in re.finditer(
+                r"Command:\s*`/([a-zA-Z0-9_-]+)", phase.description
+            ):
                 tool_name = normalize_tool_name(match.group(1))
                 mapping[tool_name] = phase.id
         return mapping
@@ -311,7 +314,11 @@ class SOPManager:
             # "## Phase 1:\n[__depends on__ Phase 0]" → heading_rest="[__depends on__ Phase 0]").
             # Detect and move bracket-tag content into directives_raw.
             heading_rest_clean = heading_rest
-            if heading_rest and heading_rest.startswith("[") and heading_rest.endswith("]"):
+            if (
+                heading_rest
+                and heading_rest.startswith("[")
+                and heading_rest.endswith("]")
+            ):
                 if not directives_raw:
                     directives_raw = heading_rest[1:-1]
                 else:
@@ -353,7 +360,9 @@ class SOPManager:
             for part in raw_parts:
                 dep_match = _DEPENDS_ON_RE.search(part)
                 if dep_match:
-                    dep_ids = [d.strip() for d in dep_match.group(1).split(",") if d.strip()]
+                    dep_ids = [
+                        d.strip() for d in dep_match.group(1).split(",") if d.strip()
+                    ]
                     depends_on.extend(dep_ids)
                     continue
 
@@ -366,7 +375,9 @@ class SOPManager:
 
                 # v2: __goto__ with __afterwards__/__wait__/__if__
                 goto_aft_match = _GOTO_AFTERWARDS_RE.search(part)
-                if goto_aft_match and ("__afterwards__" in part.lower() or "__wait__" in part.lower()):
+                if goto_aft_match and (
+                    "__afterwards__" in part.lower() or "__wait__" in part.lower()
+                ):
                     goto_target = goto_aft_match.group(1)
                     if goto_aft_match.group(2):
                         goto_wait_duration = goto_aft_match.group(2)
@@ -378,7 +389,9 @@ class SOPManager:
                         _parse_condition_into(cond, cond_result, "goto_condition")
                         goto_condition_var = cond_result.get("goto_condition_var")
                         goto_condition_value = cond_result.get("goto_condition_value")
-                        goto_condition_negate = cond_result.get("goto_condition_negate", False)
+                        goto_condition_negate = cond_result.get(
+                            "goto_condition_negate", False
+                        )
                     continue
 
                 goto_match = _GOTO_RE.search(part)
@@ -490,7 +503,9 @@ class SOPManager:
                 )
             )
 
-        return SOP(phases, keywords=keywords, example_requests=example_requests, name=sop_name)
+        return SOP(
+            phases, keywords=keywords, example_requests=example_requests, name=sop_name
+        )
 
     # -- YAML parser -------------------------------------------------------
 
@@ -528,7 +543,6 @@ class SOPManager:
             )
         return SOP(phases, name=data.get("name", ""))
 
-
     # -- Guidance rendering ------------------------------------------------
 
     @staticmethod
@@ -548,7 +562,8 @@ class SOPManager:
             phase_name = phase.name if phase else tracker.current_state
             parts.append(
                 _GUIDANCE_RUNNING.format(
-                    phase_id=tracker.current_state, phase_name=phase_name,
+                    phase_id=tracker.current_state,
+                    phase_name=phase_name,
                 )
             )
         elif tracker.status == "error" and tracker.current_state:
@@ -556,7 +571,8 @@ class SOPManager:
             phase_name = phase.name if phase else tracker.current_state
             parts.append(
                 _GUIDANCE_ERROR.format(
-                    phase_id=tracker.current_state, phase_name=phase_name,
+                    phase_id=tracker.current_state,
+                    phase_name=phase_name,
                 )
             )
         else:
@@ -579,20 +595,41 @@ class SOPManager:
                     for node in available:
                         phase = sop.get_phase(node.id) if sop else None
                         if phase:
-                            desc = phase.description
+                            # Surface parser-extracted phase directives (e.g.
+                            # "requires user input") as head labels; render any
+                            # inline directive tokens in the body text.
+                            prefix = "".join(
+                                render_directive(d, "head")
+                                for d in getattr(phase, "directives", [])
+                            )
+                            desc = render_directives(phase.description.strip())
                             parts.append(
                                 _GUIDANCE_AVAILABLE_PHASE.format(
                                     phase_name=phase.name,
-                                    description=desc.strip(),
+                                    description=(prefix + desc).strip(),
                                 )
                             )
                             for sub in phase.subsections:
+                                # Blank-line separator so the subsection stands
+                                # apart from the phase description above (and
+                                # from the previous subsection); no leading
+                                # indent so the required-tools block is
+                                # visually unmissable to the LLM.
+                                parts.append("")
+                                # sop_config override wins; else render the
+                                # subsection's directive as a mid label.
                                 instruction = _get_directive_instruction(
-                                    sub.name, sub.directive, sop_config,
+                                    sub.name,
+                                    sub.directive,
+                                    sop_config,
                                 )
                                 if instruction:
-                                    parts.append(f"  {instruction}")
-                                parts.append(f"  {sub.content.strip()}")
+                                    parts.append(instruction)
+                                elif sub.directive:
+                                    mid = render_directive(sub.directive, "mid")
+                                    if mid:
+                                        parts.append(f"**{sub.name}** {mid}:")
+                                parts.append(render_directives(sub.content.strip()))
                         else:
                             parts.append(f"- **{node.id}**")
                 elif tracker.status == "completed":
@@ -657,9 +694,7 @@ def _extract_preamble_meta(preamble: str) -> tuple[list[str], list[str]]:
             if tag_name == "keywords":
                 current_meta = "keywords"
                 if value:
-                    keywords.extend(
-                        k.strip() for k in value.split(",") if k.strip()
-                    )
+                    keywords.extend(k.strip() for k in value.split(",") if k.strip())
             elif tag_name == "example_requests":
                 current_meta = "example_requests"
                 if value:
@@ -817,9 +852,7 @@ def _parse_single_tag(tag_text: str, result: dict[str, Any]) -> None:
     result["unknown_tags"].append(tag_text.strip())
 
 
-def _parse_condition_into(
-    cond_text: str, result: dict[str, Any], prefix: str
-) -> None:
+def _parse_condition_into(cond_text: str, result: dict[str, Any], prefix: str) -> None:
     """Parse a condition expression (var, var == value, var != value)."""
     if "!=" in cond_text:
         parts = cond_text.split("!=", 1)
@@ -852,13 +885,17 @@ def _parse_subsections(body: str) -> tuple[str, list[SOPSubsection]]:
         content_end = matches[i + 1].start() if i + 1 < len(matches) else len(body)
         content = body[content_start:content_end].strip()
 
-        subsections.append(SOPSubsection(name=name, directive=directive, content=content))
+        subsections.append(
+            SOPSubsection(name=name, directive=directive, content=content)
+        )
 
     return description, subsections
 
 
 def _get_directive_instruction(
-    section_name: str, directive: str | None, sop_config: dict[str, Any] | None,
+    section_name: str,
+    directive: str | None,
+    sop_config: dict[str, Any] | None,
 ) -> str:
     if not directive or not sop_config:
         return ""

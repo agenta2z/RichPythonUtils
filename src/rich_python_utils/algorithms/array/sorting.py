@@ -1,10 +1,10 @@
 from collections.abc import Iterable
 from functools import cmp_to_key
-from typing import Callable, Any, TypeVar
+from typing import Any, Callable, TypeVar
 
 from rich_python_utils.string_utils import join_
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 def largest_concat(items: Iterable, concat: Callable[[Any, Any], Any] = None) -> str:
@@ -85,7 +85,7 @@ def largest_concat(items: Iterable, concat: Callable[[Any, Any], Any] = None) ->
 
     # Join the numbers to form the result
     if concat is None:
-        return join_(*sorted(items, key=cmp_to_key(compare)), sep='')
+        return join_(*sorted(items, key=cmp_to_key(compare)), sep="")
     else:
         output = None
         for x in sorted(items, key=cmp_to_key(compare)):
@@ -94,5 +94,3 @@ def largest_concat(items: Iterable, concat: Callable[[Any, Any], Any] = None) ->
             else:
                 output = concat(output, x)
         return output
-
-

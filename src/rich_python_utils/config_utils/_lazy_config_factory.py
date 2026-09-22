@@ -58,8 +58,8 @@ class LazyConfigFactory:
         TypeError — factories are fully bound, and accepting kwargs would
         silently mask caller bugs.
         """
-        from rich_python_utils.config_utils._instantiate import instantiate
         from omegaconf import OmegaConf
+        from rich_python_utils.config_utils._instantiate import instantiate
 
         config = copy.deepcopy(self._config_dict)
         for k, v in self._injectables.items():

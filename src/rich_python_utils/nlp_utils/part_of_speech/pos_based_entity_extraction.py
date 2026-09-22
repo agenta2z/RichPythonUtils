@@ -1,23 +1,22 @@
 import os
 import re
-from collections import Mapping
+from collections.abc import Mapping
 from functools import partial
-from typing import Union, Iterator
+from typing import Iterator, Union
 
 import nltk
 from pyspark.sql import SparkSession
-
-from rich_python_utils.nlp_utils.common import PreDefinedNlpToolNames, Languages
 from rich_python_utils.nlp_utils._dev._archived.ner.spark_batch import ner_spark_batch
+from rich_python_utils.nlp_utils.common import Languages, PreDefinedNlpToolNames
 from rich_python_utils.nlp_utils.part_of_speech.common import get_pos_tagging_method
 
-NLTK_DATA_PATH_ENV_NAME = 'NLTK_DATA_PATH'
+NLTK_DATA_PATH_ENV_NAME = "NLTK_DATA_PATH"
 
 if NLTK_DATA_PATH_ENV_NAME in os.environ:
     nltk.data.path = [os.environ[NLTK_DATA_PATH_ENV_NAME]]
 
 DEFAULT_POS_MAP_FOR_ENTITY_EXTRACTION = {
-    'JJ': 'j',
+    "JJ": "j",
     "JJR": "j",
     "JJS": "j",
     "NN": "n",
@@ -27,20 +26,20 @@ DEFAULT_POS_MAP_FOR_ENTITY_EXTRACTION = {
     "CD": "c",
     "IN": "i",
     "VBG": "v",
-    "VBN": "v"
+    "VBN": "v",
 }
 
-DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION = re.compile(r'((j|(nv?)|c)*ni)?(j|(nv?)|c)*n')
+DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION = re.compile(r"((j|(nv?)|c)*ni)?(j|(nv?)|c)*n")
 
 
 def iter_entities_by_pos_pattern(
-        text: Union[str, Iterator[str]],
-        pos_map: Mapping = DEFAULT_POS_MAP_FOR_ENTITY_EXTRACTION,
-        pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION,
-        join_tokens=False,
-        language: Languages = Languages.English,
-        tool: PreDefinedNlpToolNames = PreDefinedNlpToolNames.NLTK,
-        **pos_tagging_args
+    text: Union[str, Iterator[str]],
+    pos_map: Mapping = DEFAULT_POS_MAP_FOR_ENTITY_EXTRACTION,
+    pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION,
+    join_tokens=False,
+    language: Languages = Languages.English,
+    tool: PreDefinedNlpToolNames = PreDefinedNlpToolNames.NLTK,
+    **pos_tagging_args,
 ):
     """
     Iterates through possible entities in the given text that match the specified part-of-speech pattern.
@@ -90,11 +89,11 @@ def iter_entities_by_pos_pattern(
 
     def _get_ner_result(_pos_tag_result):
         tokens, tags = tuple(zip(*_pos_tag_result))
-        tag_str = ''.join(pos_map.get(x, '_') for x in tags)
+        tag_str = "".join(pos_map.get(x, "_") for x in tags)
         if join_tokens:
             for match in re.finditer(pos_pattern, tag_str):
                 start, end = match.span()
-                yield ' '.join(tokens[start:end])
+                yield " ".join(tokens[start:end])
         else:
             for match in re.finditer(pos_pattern, tag_str):
                 start, end = match.span()
@@ -108,13 +107,13 @@ def iter_entities_by_pos_pattern(
 
 
 def iter_entities_by_pos_pattern_(
-        text: Union[str, Iterator[str]],
-        pos_map: Mapping = DEFAULT_POS_MAP_FOR_ENTITY_EXTRACTION,
-        pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION,
-        join_tokens=True,
-        language: Languages = Languages.English,
-        tool: PreDefinedNlpToolNames = PreDefinedNlpToolNames.NLTK,
-        **pos_tagging_args
+    text: Union[str, Iterator[str]],
+    pos_map: Mapping = DEFAULT_POS_MAP_FOR_ENTITY_EXTRACTION,
+    pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION,
+    join_tokens=True,
+    language: Languages = Languages.English,
+    tool: PreDefinedNlpToolNames = PreDefinedNlpToolNames.NLTK,
+    **pos_tagging_args,
 ):
     """
     The same as `iter_entities_by_pos_pattern`,
@@ -126,11 +125,11 @@ def iter_entities_by_pos_pattern_(
 
     def _get_ner_result(_pos_tag_result):
         tokens, tags = tuple(zip(*pos_tag_result))
-        tag_str = ''.join(pos_map.get(x, '_') for x in tags)
+        tag_str = "".join(pos_map.get(x, "_") for x in tags)
         if join_tokens:
             for match in pos_pattern.finditer(tag_str):
                 start, end = match.span()
-                yield ' '.join(tokens[start:end]), tags[start:end], start
+                yield " ".join(tokens[start:end]), tags[start:end], start
         else:
             for match in pos_pattern.finditer(tag_str):
                 start, end = match.span()
@@ -144,35 +143,38 @@ def iter_entities_by_pos_pattern_(
 
 
 def get_entities_by_pos_pattern(
-        text: Union[str, Iterator[str]],
-        pos_map: Mapping = DEFAULT_POS_MAP_FOR_ENTITY_EXTRACTION,
-        pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION,
-        join_tokens=False,
-        language: Languages = Languages.English,
-        tool: PreDefinedNlpToolNames = PreDefinedNlpToolNames.NLTK,
-        **pos_tagging_args
+    text: Union[str, Iterator[str]],
+    pos_map: Mapping = DEFAULT_POS_MAP_FOR_ENTITY_EXTRACTION,
+    pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION,
+    join_tokens=False,
+    language: Languages = Languages.English,
+    tool: PreDefinedNlpToolNames = PreDefinedNlpToolNames.NLTK,
+    **pos_tagging_args,
 ):
-    return list(iter_entities_by_pos_pattern(
-        text=text,
-        pos_map=pos_map,
-        pos_pattern=pos_pattern,
-        join_tokens=join_tokens,
-        language=language,
-        tool=tool,
-        **pos_tagging_args
-    ))
+    return list(
+        iter_entities_by_pos_pattern(
+            text=text,
+            pos_map=pos_map,
+            pos_pattern=pos_pattern,
+            join_tokens=join_tokens,
+            language=language,
+            tool=tool,
+            **pos_tagging_args,
+        )
+    )
 
 
 def get_entities_by_pos_pattern_udf(
-        text,
-        pos_map: Mapping = DEFAULT_POS_MAP_FOR_ENTITY_EXTRACTION,
-        pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION,
-        language: Languages = Languages.English,
-        tool: PreDefinedNlpToolNames = PreDefinedNlpToolNames.NLTK,
-        **pos_tagging_args
+    text,
+    pos_map: Mapping = DEFAULT_POS_MAP_FOR_ENTITY_EXTRACTION,
+    pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION,
+    language: Languages = Languages.English,
+    tool: PreDefinedNlpToolNames = PreDefinedNlpToolNames.NLTK,
+    **pos_tagging_args,
 ):
     from pyspark.sql.functions import udf
     from pyspark.sql.types import ArrayType, StringType
+
     return udf(
         partial(
             get_entities_by_pos_pattern,
@@ -181,23 +183,23 @@ def get_entities_by_pos_pattern_udf(
             join_tokens=True,
             language=language,
             tool=tool,
-            **pos_tagging_args
+            **pos_tagging_args,
         ),
-        returnType=ArrayType(elementType=StringType())
+        returnType=ArrayType(elementType=StringType()),
     )(text)
 
 
 def ner_by_pos_pattern_spark_batch(
-        df_text,
-        text_field_name: str,
-        ner_result_field_name: str,
-        output_path: str,
-        repartition: Union[int, bool],
-        pos_map: Mapping = DEFAULT_POS_MAP_FOR_ENTITY_EXTRACTION,
-        pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION,
-        language: Languages = Languages.English,
-        tool: PreDefinedNlpToolNames = PreDefinedNlpToolNames.NLTK,
-        **pos_tagging_args
+    df_text,
+    text_field_name: str,
+    ner_result_field_name: str,
+    output_path: str,
+    repartition: Union[int, bool],
+    pos_map: Mapping = DEFAULT_POS_MAP_FOR_ENTITY_EXTRACTION,
+    pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION,
+    language: Languages = Languages.English,
+    tool: PreDefinedNlpToolNames = PreDefinedNlpToolNames.NLTK,
+    **pos_tagging_args,
 ):
     return ner_spark_batch(
         df_text=df_text,
@@ -212,38 +214,198 @@ def ner_by_pos_pattern_spark_batch(
             join_tokens=True,
             language=language,
             tool=tool,
-            **pos_tagging_args
-        )
+            **pos_tagging_args,
+        ),
     )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     text = "how long can a hamster live"
-    print(list(iter_entities_by_pos_pattern(text, pos_pattern=r'((j|n|c)*n)?(j|n|c)*n', join_tokens=True)))
-    print(list(iter_entities_by_pos_pattern(text, pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION, join_tokens=True)))
-    print(list(iter_entities_by_pos_pattern(text, pos_pattern=r'((j|n|c)*n)?(j|n|c)*n', join_tokens=True, tool=PreDefinedNlpToolNames.FLAIR)))
-    print(list(iter_entities_by_pos_pattern(text, pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION, join_tokens=True, tool=PreDefinedNlpToolNames.FLAIR)))
+    print(
+        list(
+            iter_entities_by_pos_pattern(
+                text, pos_pattern=r"((j|n|c)*n)?(j|n|c)*n", join_tokens=True
+            )
+        )
+    )
+    print(
+        list(
+            iter_entities_by_pos_pattern(
+                text,
+                pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION,
+                join_tokens=True,
+            )
+        )
+    )
+    print(
+        list(
+            iter_entities_by_pos_pattern(
+                text,
+                pos_pattern=r"((j|n|c)*n)?(j|n|c)*n",
+                join_tokens=True,
+                tool=PreDefinedNlpToolNames.FLAIR,
+            )
+        )
+    )
+    print(
+        list(
+            iter_entities_by_pos_pattern(
+                text,
+                pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION,
+                join_tokens=True,
+                tool=PreDefinedNlpToolNames.FLAIR,
+            )
+        )
+    )
 
     text = "WBEN two everywhere"
-    print(list(iter_entities_by_pos_pattern(text, pos_pattern=r'((j|n|c)*n)?(j|n|c)*n', join_tokens=True)))
-    print(list(iter_entities_by_pos_pattern(text, pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION, join_tokens=True)))
-    print(list(iter_entities_by_pos_pattern(text, pos_pattern=r'((j|n|c)*n)?(j|n|c)*n', join_tokens=True, tool=PreDefinedNlpToolNames.FLAIR)))
-    print(list(iter_entities_by_pos_pattern(text, pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION, join_tokens=True, tool=PreDefinedNlpToolNames.FLAIR)))
+    print(
+        list(
+            iter_entities_by_pos_pattern(
+                text, pos_pattern=r"((j|n|c)*n)?(j|n|c)*n", join_tokens=True
+            )
+        )
+    )
+    print(
+        list(
+            iter_entities_by_pos_pattern(
+                text,
+                pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION,
+                join_tokens=True,
+            )
+        )
+    )
+    print(
+        list(
+            iter_entities_by_pos_pattern(
+                text,
+                pos_pattern=r"((j|n|c)*n)?(j|n|c)*n",
+                join_tokens=True,
+                tool=PreDefinedNlpToolNames.FLAIR,
+            )
+        )
+    )
+    print(
+        list(
+            iter_entities_by_pos_pattern(
+                text,
+                pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION,
+                join_tokens=True,
+                tool=PreDefinedNlpToolNames.FLAIR,
+            )
+        )
+    )
 
     text = "turn living room lights"
-    print(list(iter_entities_by_pos_pattern(text, pos_pattern=r'((j|n|c)*n)?(j|n|c)*n', join_tokens=True)))
-    print(list(iter_entities_by_pos_pattern(text, pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION, join_tokens=True)))
-    print(list(iter_entities_by_pos_pattern(text, pos_pattern=r'((j|n|c)*n)?(j|n|c)*n', join_tokens=True, tool=PreDefinedNlpToolNames.FLAIR)))
-    print(list(iter_entities_by_pos_pattern(text, pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION, join_tokens=True, tool=PreDefinedNlpToolNames.FLAIR)))
+    print(
+        list(
+            iter_entities_by_pos_pattern(
+                text, pos_pattern=r"((j|n|c)*n)?(j|n|c)*n", join_tokens=True
+            )
+        )
+    )
+    print(
+        list(
+            iter_entities_by_pos_pattern(
+                text,
+                pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION,
+                join_tokens=True,
+            )
+        )
+    )
+    print(
+        list(
+            iter_entities_by_pos_pattern(
+                text,
+                pos_pattern=r"((j|n|c)*n)?(j|n|c)*n",
+                join_tokens=True,
+                tool=PreDefinedNlpToolNames.FLAIR,
+            )
+        )
+    )
+    print(
+        list(
+            iter_entities_by_pos_pattern(
+                text,
+                pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION,
+                join_tokens=True,
+                tool=PreDefinedNlpToolNames.FLAIR,
+            )
+        )
+    )
 
     text = "turn on the song catboy on p. j. masks"
-    print(list(iter_entities_by_pos_pattern(text, pos_pattern=r'((j|n|c)*n)?(j|n|c)*n', join_tokens=True)))
-    print(list(iter_entities_by_pos_pattern(text, pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION, join_tokens=True)))
-    print(list(iter_entities_by_pos_pattern(text, pos_pattern=r'((j|n|c)*n)?(j|n|c)*n', join_tokens=True, tool=PreDefinedNlpToolNames.FLAIR)))
-    print(list(iter_entities_by_pos_pattern(text, pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION, join_tokens=True, tool=PreDefinedNlpToolNames.FLAIR)))
+    print(
+        list(
+            iter_entities_by_pos_pattern(
+                text, pos_pattern=r"((j|n|c)*n)?(j|n|c)*n", join_tokens=True
+            )
+        )
+    )
+    print(
+        list(
+            iter_entities_by_pos_pattern(
+                text,
+                pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION,
+                join_tokens=True,
+            )
+        )
+    )
+    print(
+        list(
+            iter_entities_by_pos_pattern(
+                text,
+                pos_pattern=r"((j|n|c)*n)?(j|n|c)*n",
+                join_tokens=True,
+                tool=PreDefinedNlpToolNames.FLAIR,
+            )
+        )
+    )
+    print(
+        list(
+            iter_entities_by_pos_pattern(
+                text,
+                pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION,
+                join_tokens=True,
+                tool=PreDefinedNlpToolNames.FLAIR,
+            )
+        )
+    )
 
     text = "what's the fastest breeding today"
-    print(list(iter_entities_by_pos_pattern(text, pos_pattern=r'((j|n|c)*n)?(j|n|c)*n', join_tokens=True)))
-    print(list(iter_entities_by_pos_pattern(text, pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION, join_tokens=True)))
-    print(list(iter_entities_by_pos_pattern(text, pos_pattern=r'((j|n|c)*n)?(j|n|c)*n', join_tokens=True, tool=PreDefinedNlpToolNames.FLAIR)))
-    print(list(iter_entities_by_pos_pattern(text, pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION, join_tokens=True, tool=PreDefinedNlpToolNames.FLAIR)))
+    print(
+        list(
+            iter_entities_by_pos_pattern(
+                text, pos_pattern=r"((j|n|c)*n)?(j|n|c)*n", join_tokens=True
+            )
+        )
+    )
+    print(
+        list(
+            iter_entities_by_pos_pattern(
+                text,
+                pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION,
+                join_tokens=True,
+            )
+        )
+    )
+    print(
+        list(
+            iter_entities_by_pos_pattern(
+                text,
+                pos_pattern=r"((j|n|c)*n)?(j|n|c)*n",
+                join_tokens=True,
+                tool=PreDefinedNlpToolNames.FLAIR,
+            )
+        )
+    )
+    print(
+        list(
+            iter_entities_by_pos_pattern(
+                text,
+                pos_pattern=DEFAULT_PATTERN_FOR_ENTITY_EXTRACTION,
+                join_tokens=True,
+                tool=PreDefinedNlpToolNames.FLAIR,
+            )
+        )
+    )

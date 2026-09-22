@@ -3,8 +3,8 @@ Test pre_condition parameter in execute_with_retry.
 
 This test suite verifies the pre_condition guard functionality added to execute_with_retry.
 """
-import pytest
 
+import pytest
 from rich_python_utils.common_utils.function_helper import execute_with_retry
 
 
@@ -17,7 +17,7 @@ class TestExecuteWithRetryPreCondition:
             func=lambda: 42,
             max_retry=3,
             pre_condition=lambda: False,
-            default_return_or_raise="skipped"
+            default_return_or_raise="skipped",
         )
         assert result == "skipped"
 
@@ -56,7 +56,7 @@ class TestExecuteWithRetryPreCondition:
             func=increment,
             max_retry=10,
             pre_condition=allow_execution,
-            output_validator=valid_result
+            output_validator=valid_result,
         )
         assert result == 3
         assert counter[0] == 3
@@ -80,7 +80,7 @@ class TestExecuteWithRetryPreCondition:
             max_retry=10,
             pre_condition=allow_execution,
             output_validator=valid_result,
-            default_return_or_raise="stopped_early"
+            default_return_or_raise="stopped_early",
         )
         # pre_condition stops after 2 attempts (counter=2)
         assert result == "stopped_early"
@@ -92,7 +92,7 @@ class TestExecuteWithRetryPreCondition:
             func=lambda: 42,
             max_retry=1,
             pre_condition=lambda: False,
-            default_return_or_raise="skipped"
+            default_return_or_raise="skipped",
         )
         assert result == "skipped"
 
@@ -118,12 +118,12 @@ class TestExecuteWithRetryPreCondition:
             max_retry=1,
             pre_condition=capture_args,
             args=[1, 2],
-            kwargs={'extra': 'value'}
+            kwargs={"extra": "value"},
         )
 
         assert len(received_args) == 1
-        assert received_args[0] == ((1, 2), {'extra': 'value'})
+        assert received_args[0] == ((1, 2), {"extra": "value"})
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v', '--tb=short'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v", "--tb=short"])

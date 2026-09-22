@@ -1,13 +1,11 @@
 from collections.abc import Sequence
 from math import inf
-from typing import List, Union, Iterable
 from numbers import Number
+from typing import Iterable, List, Union
 
 
 def full_capacity_dispatch_min_worker(
-        workload: int,
-        worker_capacities: Sequence[int],
-        return_worker_indexes: bool = False
+    workload: int, worker_capacities: Sequence[int], return_worker_indexes: bool = False
 ):
     """
     Calculates the minimum number of workers required to handle a given workload,
@@ -121,9 +119,7 @@ def full_capacity_dispatch_min_worker(
 
 
 def max_value_given_capacity(
-        capacity: int,
-        item_weights: Sequence[int],
-        item_values: Sequence[Number]
+    capacity: int, item_weights: Sequence[int], item_values: Sequence[Number]
 ) -> Number:
     """
     Calculates the maximum total value of items that can be placed into a knapsack of given capacity,
@@ -210,8 +206,7 @@ def max_value_given_capacity(
         for c in range(1, capacity + 1):
             if c >= item_weight:
                 value[i][c] = max(
-                    value[i - 1][c],
-                    value[i - 1][c - item_weight] + item_value
+                    value[i - 1][c], value[i - 1][c - item_weight] + item_value
                 )
             else:
                 value[i][c] = value[i - 1][c]
@@ -220,9 +215,7 @@ def max_value_given_capacity(
 
 
 def max_value_given_capacity_recursive(
-        capacity: Number,
-        item_weights: Sequence[Number],
-        item_values: Sequence[Number]
+    capacity: Number, item_weights: Sequence[Number], item_values: Sequence[Number]
 ) -> Number:
     """
     Solves the 0/1 Knapsack Problem using a recursive approach.
@@ -286,14 +279,16 @@ def max_value_given_capacity_recursive(
                 - `dp[i][0] = 0` for all items `i` (zero capacity means zero value).
 
     """
-    return _knapsack_recursion_helper(capacity, item_weights, item_values, len(item_weights))
+    return _knapsack_recursion_helper(
+        capacity, item_weights, item_values, len(item_weights)
+    )
 
 
 def _knapsack_recursion_helper(
-        capacity: Number,
-        item_weights: Sequence[Number],
-        item_values: Sequence[Number],
-        n: int
+    capacity: Number,
+    item_weights: Sequence[Number],
+    item_values: Sequence[Number],
+    n: int,
 ) -> int:
     # Base Case: No items left or capacity is 0
     if n == 0 or capacity == 0:
@@ -307,10 +302,9 @@ def _knapsack_recursion_helper(
         # 1. nth item included
         # 2. nth item not included
         included = item_values[n - 1] + _knapsack_recursion_helper(
-            capacity - item_weights[n - 1],
-            item_weights,
-            item_values,
-            n - 1
+            capacity - item_weights[n - 1], item_weights, item_values, n - 1
         )
-        excluded = _knapsack_recursion_helper(capacity, item_weights, item_values, n - 1)
+        excluded = _knapsack_recursion_helper(
+            capacity, item_weights, item_values, n - 1
+        )
         return max(included, excluded)

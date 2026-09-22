@@ -9,32 +9,34 @@ Property 5: Workflow error handler invocation
 
 Uses Hypothesis with @settings(max_examples=100) for each property.
 """
+
 import asyncio
 import os
 import shutil
 import tempfile
 
 import pytest
-from attr import attrs, attrib
+from attr import attrib, attrs
 from hypothesis import given, settings, strategies as st
-
-from rich_python_utils.common_objects.workflow.workflow import Workflow
+from rich_python_utils.common_objects.workflow.common.exceptions import WorkflowAborted
 from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
     ResultPassDownMode,
 )
-from rich_python_utils.common_objects.workflow.common.exceptions import WorkflowAborted
 from rich_python_utils.common_objects.workflow.common.step_result_save_options import (
     StepResultSaveOptions,
 )
+from rich_python_utils.common_objects.workflow.workflow import Workflow
 
 
 # ---------------------------------------------------------------------------
 # Concrete Workflow subclasses for testing
 # ---------------------------------------------------------------------------
 
+
 @attrs(slots=False)
 class SimpleTestWorkflow(Workflow):
     """Minimal concrete subclass — no save/resume."""
+
     def _get_result_path(self, result_id, *args, **kwargs):
         raise NotImplementedError("save not used in property tests")
 
@@ -42,6 +44,7 @@ class SimpleTestWorkflow(Workflow):
 @attrs(slots=False)
 class SaveableTestWorkflow(Workflow):
     """Concrete subclass that saves results to a temp directory."""
+
     _save_dir = attrib(default=None)
 
     def _get_result_path(self, result_id, *args, **kwargs):
@@ -52,12 +55,14 @@ class SaveableTestWorkflow(Workflow):
 # Step wrapper for attaching per-step attributes
 # ---------------------------------------------------------------------------
 
+
 class _StepWrapper:
     """Wraps a callable so per-step attributes can be attached."""
+
     def __init__(self, fn, **kwargs):
         self._fn = fn
-        self.__name__ = getattr(fn, '__name__', str(fn))
-        self.__module__ = getattr(fn, '__module__', None)
+        self.__name__ = getattr(fn, "__name__", str(fn))
+        self.__module__ = getattr(fn, "__module__", None)
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -79,24 +84,30 @@ num_steps_strategy = st.integers(min_value=1, max_value=5)
 input_strategy = st.integers(min_value=-100, max_value=100)
 
 # ResultPassDownMode — only the two main modes that work with int→int steps
-pass_down_mode_strategy = st.sampled_from([
-    ResultPassDownMode.ResultAsFirstArg,
-    ResultPassDownMode.NoPassDown,
-])
+pass_down_mode_strategy = st.sampled_from(
+    [
+        ResultPassDownMode.ResultAsFirstArg,
+        ResultPassDownMode.NoPassDown,
+    ]
+)
 
 
 def _make_sync_step(factor):
     """Create a sync step: x -> x * factor."""
+
     def step(x):
         return x * factor
+
     step.__name__ = f"sync_mul_{factor}"
     return step
 
 
 def _make_async_step(factor):
     """Create an async step: x -> x * factor."""
+
     async def step(x):
         return x * factor
+
     step.__name__ = f"async_mul_{factor}"
     return step
 
@@ -104,6 +115,7 @@ def _make_async_step(factor):
 # ---------------------------------------------------------------------------
 # Property 2: Workflow sync/async equivalence
 # ---------------------------------------------------------------------------
+
 
 class TestWorkflowSyncAsyncEquivalence:
     """Property 2: Workflow sync/async equivalence.
@@ -174,6 +186,7 @@ class TestWorkflowSyncAsyncEquivalence:
 # Property 3: Workflow save/resume round-trip
 # ---------------------------------------------------------------------------
 
+
 class TestWorkflowSaveResumeRoundTrip:
     """Property 3: Workflow save/resume round-trip.
 
@@ -193,9 +206,7 @@ class TestWorkflowSaveResumeRoundTrip:
         ),
         input_val=st.integers(min_value=-50, max_value=50),
     )
-    async def test_save_then_resume_produces_same_result(
-        self, factors, input_val
-    ):
+    async def test_save_then_resume_produces_same_result(self, factors, input_val):
         """Run _arun() with Always save, then resume — same final result.
 
         **Validates: Requirements 2.1, 2.2, 2.3, 2.4**
@@ -221,12 +232,11 @@ class TestWorkflowSaveResumeRoundTrip:
                 def step(x):
                     execution_log.append(idx)
                     return x * factor
+
                 step.__name__ = f"tracked_mul_{factor}"
                 return step
 
-            tracked_steps = [
-                _make_tracked_step(f, i) for i, f in enumerate(factors)
-            ]
+            tracked_steps = [_make_tracked_step(f, i) for i, f in enumerate(factors)]
 
             # Second run: resume from saved results.
             # Use an explicit int index (last step) because
@@ -261,6 +271,7 @@ class TestWorkflowSaveResumeRoundTrip:
 # ---------------------------------------------------------------------------
 # Property 4: Workflow loop-back correctness
 # ---------------------------------------------------------------------------
+
 
 class TestWorkflowLoopBackCorrectness:
     """Property 4: Workflow loop-back correctness.
@@ -330,6 +341,7 @@ class TestWorkflowLoopBackCorrectness:
 # Property 5: Workflow error handler invocation
 # ---------------------------------------------------------------------------
 
+
 class TestWorkflowErrorHandlerInvocation:
     """Property 5: Workflow error handler invocation.
 
@@ -355,6 +367,7 @@ class TestWorkflowErrorHandlerInvocation:
 
         **Validates: Requirements 5.1, 5.2**
         """
+
         def failing_step(x):
             raise ValueError("intentional failure")
 
@@ -379,8 +392,9 @@ class TestWorkflowErrorHandlerInvocation:
     @settings(max_examples=100)
     @given(
         error_msg=st.text(
-            min_size=1, max_size=50,
-            alphabet=st.characters(whitelist_categories=('L', 'N')),
+            min_size=1,
+            max_size=50,
+            alphabet=st.characters(whitelist_categories=("L", "N")),
         ),
     )
     async def test_no_handler_exception_propagates(self, error_msg):

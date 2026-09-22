@@ -1,6 +1,6 @@
 import re
 import unicodedata
-from typing import List, Mapping, Callable, Any, Union, Iterable, Dict, Optional
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Union
 
 from rich_python_utils.common_utils import process
 from rich_python_utils.common_utils.iter_helper import update_values
@@ -8,9 +8,9 @@ from rich_python_utils.string_utils.common import strip_
 
 
 def remove_accents(s: str) -> str:
-    nfkd_form = unicodedata.normalize('NFKD', s)
-    only_ascii = nfkd_form.encode('ASCII', 'ignore')
-    return only_ascii.decode('utf-8')
+    nfkd_form = unicodedata.normalize("NFKD", s)
+    only_ascii = nfkd_form.encode("ASCII", "ignore")
+    return only_ascii.decode("utf-8")
 
 
 def remove_trailing_bracketed_strings(s: str) -> str:
@@ -36,8 +36,8 @@ def remove_trailing_bracketed_strings(s: str) -> str:
         >>> remove_trailing_bracketed_strings("No brackets here")
         'No brackets here'
     """
-    year_pattern = r'(\s\([^()]*\))+$'
-    return re.sub(year_pattern, '', s).strip()
+    year_pattern = r"(\s\([^()]*\))+$"
+    return re.sub(year_pattern, "", s).strip()
 
 
 def extract_trailing_bracketed_strings(s: str) -> List[str]:
@@ -60,7 +60,7 @@ def extract_trailing_bracketed_strings(s: str) -> List[str]:
         >>> extract_trailing_bracketed_strings("No brackets here")
         []
     """
-    pattern = r'(?<=\s)\([^()]*\)$'
+    pattern = r"(?<=\s)\([^()]*\)$"
     bracketed_strings = []
     s = s.strip()
 
@@ -76,6 +76,7 @@ def extract_trailing_bracketed_strings(s: str) -> List[str]:
 
 
 # region common string processing
+
 
 def process_string(s: str, processors: Mapping = None, **kwargs) -> Union[str, Any]:
     """
@@ -111,37 +112,34 @@ def process_string(s: str, processors: Mapping = None, **kwargs) -> Union[str, A
         {'name': 'zgchen-pod-stjdp', 'ready': '1/1', 'status': 'Running', 'restarts': '0', 'age': '9d'}
     """
     import rich_python_utils.string_utils as str_utils
-    return process(
-        obj=s,
-        modules=[str, str_utils],
-        processors=processors,
-        **kwargs
-    )
 
+    return process(obj=s, modules=[str, str_utils], processors=processors, **kwargs)
 
 
 def process_lines(
-        line_iter: Union[str, Iterable[str]],
-        processors: Mapping = None,
-        ignore_empty_lines: bool = True,
-        ignore_empty_output: bool = True,
-        **kwargs
+    line_iter: Union[str, Iterable[str]],
+    processors: Mapping = None,
+    ignore_empty_lines: bool = True,
+    ignore_empty_output: bool = True,
+    **kwargs,
 ) -> Union[str, Any]:
-    for line in line_iter.split('\n') if isinstance(line_iter, str) else line_iter:
+    for line in line_iter.split("\n") if isinstance(line_iter, str) else line_iter:
         if not line and ignore_empty_lines:
             continue
         item = process_string(line, processors=processors, **kwargs)
         if not item and ignore_empty_output:
             continue
         yield item
+
+
 # endregion
 
 
 # region pattern protection utility
 
+
 def _get_restore_content(
-    registry_entry: Dict[str, Any],
-    restore_group: Union[None, int, List[int]]
+    registry_entry: Dict[str, Any], restore_group: Union[None, int, List[int]]
 ) -> str:
     """
     Extract content to restore based on restore_group parameter.
@@ -253,8 +251,8 @@ def _get_restore_content(
             actual_idx = idx if idx > 0 else len(groups) + idx + 1
             if 1 <= actual_idx <= len(groups):
                 group_content = groups[actual_idx - 1]
-                parts.append(group_content if group_content is not None else '')
-        return ''.join(parts)
+                parts.append(group_content if group_content is not None else "")
+        return "".join(parts)
 
     # Single group
     actual_idx = restore_group if restore_group > 0 else len(groups) + restore_group + 1
@@ -262,7 +260,7 @@ def _get_restore_content(
     # Validate index
     if 1 <= actual_idx <= len(groups):
         group_content = groups[actual_idx - 1]
-        return group_content if group_content is not None else ''
+        return group_content if group_content is not None else ""
 
     # Fallback to full match if index invalid
     return full_match
@@ -276,7 +274,7 @@ def apply_with_pattern_protection(
     placeholder_suffix: str = "__",
     restore_in_result: bool = True,
     restore_group: Union[None, int, List[int]] = -1,
-    restore_func: Optional[Callable[[Callable[[Any], Any], Any], Any]] = None
+    restore_func: Optional[Callable[[Callable[[Any], Any], Any], Any]] = None,
 ) -> Any:
     """
     Apply an operation on text with pattern-based protection and restoration.
@@ -469,7 +467,7 @@ def apply_with_pattern_protection(
             registry[placeholder] = {
                 "full_match": match.group(0),
                 "groups": match.groups(),
-                "pattern_idx": pattern_idx
+                "pattern_idx": pattern_idx,
             }
 
             # Replace match with placeholder
@@ -504,5 +502,6 @@ def apply_with_pattern_protection(
         final_result = restore_func(_restore_placeholder, result)
 
     return final_result
+
 
 # endregion

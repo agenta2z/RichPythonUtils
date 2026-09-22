@@ -12,14 +12,13 @@ import json
 import os
 
 import pytest
-
+from rich_python_utils.nlp_utils.semantic_search import tokenize as _tokenize
 from rich_python_utils.service_utils.retrieval_service.document import Document
 from rich_python_utils.service_utils.retrieval_service.file_retrieval_service import (
-    FileRetrievalService,
-    _encode_doc_id,
     _decode_doc_id,
+    _encode_doc_id,
+    FileRetrievalService,
 )
-from rich_python_utils.nlp_utils.semantic_search import tokenize as _tokenize
 
 
 class TestFileRetrievalServiceAdd:
@@ -67,7 +66,9 @@ class TestFileRetrievalServiceAdd:
 
     def test_add_preserves_metadata(self, tmp_path):
         svc = FileRetrievalService(base_dir=str(tmp_path))
-        doc = Document(doc_id="d1", content="hello", metadata={"key": "val", "tags": ["a", "b"]})
+        doc = Document(
+            doc_id="d1", content="hello", metadata={"key": "val", "tags": ["a", "b"]}
+        )
         svc.add(doc)
         result = svc.get_by_id("d1")
         assert result.metadata == {"key": "val", "tags": ["a", "b"]}
@@ -218,24 +219,34 @@ class TestFileRetrievalServiceSearch:
 
     def test_search_with_metadata_filters(self, tmp_path):
         svc = FileRetrievalService(base_dir=str(tmp_path))
-        svc.add(Document(doc_id="d1", content="python tutorial", metadata={"type": "article"}))
-        svc.add(Document(doc_id="d2", content="python guide", metadata={"type": "blog"}))
+        svc.add(
+            Document(
+                doc_id="d1", content="python tutorial", metadata={"type": "article"}
+            )
+        )
+        svc.add(
+            Document(doc_id="d2", content="python guide", metadata={"type": "blog"})
+        )
         results = svc.search("python", filters={"type": "article"})
         assert len(results) == 1
         assert results[0][0].doc_id == "d1"
 
     def test_search_with_list_filter(self, tmp_path):
         svc = FileRetrievalService(base_dir=str(tmp_path))
-        svc.add(Document(
-            doc_id="d1",
-            content="python tutorial",
-            metadata={"tags": ["python", "beginner"]},
-        ))
-        svc.add(Document(
-            doc_id="d2",
-            content="python advanced",
-            metadata={"tags": ["python", "advanced"]},
-        ))
+        svc.add(
+            Document(
+                doc_id="d1",
+                content="python tutorial",
+                metadata={"tags": ["python", "beginner"]},
+            )
+        )
+        svc.add(
+            Document(
+                doc_id="d2",
+                content="python advanced",
+                metadata={"tags": ["python", "advanced"]},
+            )
+        )
         results = svc.search("python", filters={"tags": ["python", "beginner"]})
         assert len(results) == 1
         assert results[0][0].doc_id == "d1"

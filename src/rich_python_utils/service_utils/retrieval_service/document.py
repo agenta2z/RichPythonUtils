@@ -8,7 +8,7 @@ Used by all RetrievalServiceBase implementations.
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from attr import attrs, attrib
+from attr import attrib, attrs
 
 
 @attrs

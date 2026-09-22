@@ -1,4 +1,5 @@
-from typing import Sequence, List
+from typing import List, Sequence
+
 
 def longest_common_subsequence(seq1: Sequence, seq2: Sequence) -> List:
     """
@@ -69,6 +70,7 @@ def longest_common_subsequence(seq1: Sequence, seq2: Sequence) -> List:
     lcs.reverse()
     return lcs
 
+
 def longest_common_consecutive_subsequence(seq1: Sequence, seq2: Sequence) -> List:
     """
     Find the longest common consecutive subsequence (LCCS) between two sequences.
@@ -123,5 +125,5 @@ def longest_common_consecutive_subsequence(seq1: Sequence, seq2: Sequence) -> Li
                 dp[i][j] = 0
 
     # Extract the longest common consecutive subsequence
-    lccs = seq1[end_index - max_len:end_index]
+    lccs = seq1[end_index - max_len : end_index]
     return lccs

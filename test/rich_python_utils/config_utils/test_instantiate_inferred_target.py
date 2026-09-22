@@ -10,10 +10,9 @@ from typing import ClassVar, Optional, Union
 
 import pytest
 from omegaconf import OmegaConf
-
 from rich_python_utils.config_utils import (
-    MissingTargetError,
     instantiate,
+    MissingTargetError,
     register_alias,
 )
 
@@ -133,13 +132,15 @@ class TestYamlDefaultNestedWinsOverTypeBased:
         register_alias("ParentBoth", _fqn(ParentWithBothInferenceOptions))
         register_alias("NestedAlias", _fqn(ConcreteChild))
 
-        cfg = OmegaConf.create({
-            "_target_": "ParentBoth",
-            "child": {
-                # No _target_ — should be inferred via __yaml_default_nested__
-                "value": "from-nested-alias",
-            },
-        })
+        cfg = OmegaConf.create(
+            {
+                "_target_": "ParentBoth",
+                "child": {
+                    # No _target_ — should be inferred via __yaml_default_nested__
+                    "value": "from-nested-alias",
+                },
+            }
+        )
         obj = instantiate(cfg)
         assert isinstance(obj, ParentWithBothInferenceOptions)
         assert isinstance(obj.child, ConcreteChild)
@@ -152,13 +153,15 @@ class TestConcreteTypedFieldInferred:
     def test_concrete_field_inferred(self):
         register_alias("ParentConcrete", _fqn(ParentWithConcreteField))
 
-        cfg = OmegaConf.create({
-            "_target_": "ParentConcrete",
-            "child": {
-                # No _target_ — should be inferred from field type ConcreteChild
-                "value": "inferred",
-            },
-        })
+        cfg = OmegaConf.create(
+            {
+                "_target_": "ParentConcrete",
+                "child": {
+                    # No _target_ — should be inferred from field type ConcreteChild
+                    "value": "inferred",
+                },
+            }
+        )
         obj = instantiate(cfg)
         assert isinstance(obj, ParentWithConcreteField)
         assert isinstance(obj.child, ConcreteChild)
@@ -171,12 +174,14 @@ class TestOptionalUnwrapsAndInfers:
     def test_optional_unwraps(self):
         register_alias("ParentOptional", _fqn(ParentWithOptionalField))
 
-        cfg = OmegaConf.create({
-            "_target_": "ParentOptional",
-            "child": {
-                "value": "optional-unwrapped",
-            },
-        })
+        cfg = OmegaConf.create(
+            {
+                "_target_": "ParentOptional",
+                "child": {
+                    "value": "optional-unwrapped",
+                },
+            }
+        )
         obj = instantiate(cfg)
         assert isinstance(obj, ParentWithOptionalField)
         assert isinstance(obj.child, ConcreteChild)
@@ -189,12 +194,14 @@ class TestUnionNotEligible:
     def test_union_not_inferred(self):
         register_alias("ParentUnion", _fqn(ParentWithUnionField))
 
-        cfg = OmegaConf.create({
-            "_target_": "ParentUnion",
-            "child": {
-                "value": "ambiguous",
-            },
-        })
+        cfg = OmegaConf.create(
+            {
+                "_target_": "ParentUnion",
+                "child": {
+                    "value": "ambiguous",
+                },
+            }
+        )
         # Without _target_ and Union type, Hydra should fail because
         # _target_ cannot be inferred. The child dict will be passed
         # as a plain dict (no _target_ injected).
@@ -210,12 +217,14 @@ class TestABCFieldNotEligible:
     def test_abc_not_inferred(self):
         register_alias("ParentABC", _fqn(ParentWithABCField))
 
-        cfg = OmegaConf.create({
-            "_target_": "ParentABC",
-            "child": {
-                "value": "abc-typed",
-            },
-        })
+        cfg = OmegaConf.create(
+            {
+                "_target_": "ParentABC",
+                "child": {
+                    "value": "abc-typed",
+                },
+            }
+        )
         # ABC type → not eligible for inference → child stays as plain dict
         obj = instantiate(cfg)
         assert isinstance(obj.child, dict)
@@ -229,13 +238,15 @@ class TestExplicitTargetFastPath:
         register_alias("ParentConcrete", _fqn(ParentWithConcreteField))
         register_alias("AnotherAlias", _fqn(AnotherConcrete))
 
-        cfg = OmegaConf.create({
-            "_target_": "ParentConcrete",
-            "child": {
-                "_target_": "AnotherAlias",  # Explicit — should NOT be overridden
-                "value": "explicit",
-            },
-        })
+        cfg = OmegaConf.create(
+            {
+                "_target_": "ParentConcrete",
+                "child": {
+                    "_target_": "AnotherAlias",  # Explicit — should NOT be overridden
+                    "value": "explicit",
+                },
+            }
+        )
         obj = instantiate(cfg)
         assert isinstance(obj, ParentWithConcreteField)
         # Even though field type is ConcreteChild, explicit _target_ wins
@@ -250,12 +261,14 @@ class TestYamlDefaultNestedWithABCField:
         register_alias("ParentNested", _fqn(ParentWithYamlDefaultNested))
         register_alias("NestedAlias", _fqn(ConcreteFromABC))
 
-        cfg = OmegaConf.create({
-            "_target_": "ParentNested",
-            "child": {
-                "value": "nested-override",
-            },
-        })
+        cfg = OmegaConf.create(
+            {
+                "_target_": "ParentNested",
+                "child": {
+                    "value": "nested-override",
+                },
+            }
+        )
         obj = instantiate(cfg)
         assert isinstance(obj, ParentWithYamlDefaultNested)
         assert isinstance(obj.child, ConcreteFromABC)

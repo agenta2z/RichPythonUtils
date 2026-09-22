@@ -24,42 +24,59 @@ import shutil
 import tempfile
 
 from resolve_path import resolve_path
+
 resolve_path()
 
+from rich_python_utils.service_utils.retrieval_service.document import Document
 from rich_python_utils.service_utils.retrieval_service.file_retrieval_service import (
     FileRetrievalService,
 )
-from rich_python_utils.service_utils.retrieval_service.document import Document
 
 
 PAPERS = [
     Document(
         doc_id="paper:quantum_ml",
         content="A novel quantum machine learning algorithm for molecular property "
-                "prediction using variational quantum circuits.",
-        metadata={"authors": ["Alice Chen", "Bob Patel"], "year": 2024,
-                  "topics": ["quantum_computing", "machine_learning"], "open_access": True},
+        "prediction using variational quantum circuits.",
+        metadata={
+            "authors": ["Alice Chen", "Bob Patel"],
+            "year": 2024,
+            "topics": ["quantum_computing", "machine_learning"],
+            "open_access": True,
+        },
     ),
     Document(
         doc_id="paper:crispr_delivery",
         content="Lipid nanoparticle delivery system for CRISPR-Cas9 gene editing "
-                "with efficient genome editing in liver cells.",
-        metadata={"authors": ["Diana Lee"], "year": 2024,
-                  "topics": ["gene_editing", "drug_delivery"], "open_access": False},
+        "with efficient genome editing in liver cells.",
+        metadata={
+            "authors": ["Diana Lee"],
+            "year": 2024,
+            "topics": ["gene_editing", "drug_delivery"],
+            "open_access": False,
+        },
     ),
     Document(
         doc_id="paper:climate_model",
         content="Improved climate model with ocean-atmosphere coupling at "
-                "unprecedented resolution for temperature trend prediction.",
-        metadata={"authors": ["Carol Kim", "Eve Zhang"], "year": 2023,
-                  "topics": ["climate_science", "machine_learning"], "open_access": True},
+        "unprecedented resolution for temperature trend prediction.",
+        metadata={
+            "authors": ["Carol Kim", "Eve Zhang"],
+            "year": 2023,
+            "topics": ["climate_science", "machine_learning"],
+            "open_access": True,
+        },
     ),
     Document(
         doc_id="paper:protein_structure",
         content="Deep learning methods predict protein tertiary structures with "
-                "near-experimental accuracy using transformer architectures.",
-        metadata={"authors": ["Bob Patel", "Diana Lee"], "year": 2023,
-                  "topics": ["machine_learning", "structural_biology"], "open_access": False},
+        "near-experimental accuracy using transformer architectures.",
+        metadata={
+            "authors": ["Bob Patel", "Diana Lee"],
+            "year": 2023,
+            "topics": ["machine_learning", "structural_biology"],
+            "open_access": False,
+        },
     ),
 ]
 
@@ -90,8 +107,12 @@ def main():
         results_protein_formatted = [(d.doc_id, s) for d, s in results_protein]
 
         # 4. Filters
-        results_year = svc.search("novel quantum algorithm prediction", filters={"year": 2024})
-        results_oa = svc.search("novel quantum algorithm prediction", filters={"open_access": True})
+        results_year = svc.search(
+            "novel quantum algorithm prediction", filters={"year": 2024}
+        )
+        results_oa = svc.search(
+            "novel quantum algorithm prediction", filters={"open_access": True}
+        )
         docs_2023 = svc.list_all(filters={"year": 2023})
 
         # 5. Persistence
@@ -103,7 +124,9 @@ def main():
         size_reopened = svc2.size()
 
         # 6. Namespaces and stats
-        svc2.add(Document(doc_id="ns_doc", content="Namespace test"), namespace="archive")
+        svc2.add(
+            Document(doc_id="ns_doc", content="Namespace test"), namespace="archive"
+        )
         ns_list = svc2.namespaces()
         stats = svc2.get_stats()
 
@@ -133,10 +156,14 @@ def main():
 
         print("\n[3] Searching documents")
         print("-" * 50)
-        print(f"    'quantum machine learning' -> {len(results_quantum_formatted)} results:")
+        print(
+            f"    'quantum machine learning' -> {len(results_quantum_formatted)} results:"
+        )
         for rid, score in results_quantum_formatted:
             print(f"        {rid:35s} score={score:.4f}")
-        print(f"    'protein deep learning' -> {len(results_protein_formatted)} results:")
+        print(
+            f"    'protein deep learning' -> {len(results_protein_formatted)} results:"
+        )
         for rid, score in results_protein_formatted:
             print(f"        {rid:35s} score={score:.4f}")
 
@@ -179,4 +206,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n[X] Error: {e}")
         import traceback
+
         traceback.print_exc()

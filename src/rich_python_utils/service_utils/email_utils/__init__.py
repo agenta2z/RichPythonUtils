@@ -14,40 +14,41 @@ Key Components:
 
 from .email_client_base import EmailClientBase
 from .exceptions import (
+    EmailAPIError,
     EmailAuthenticationError,
-    EmailRateLimitError,
     EmailNetworkError,
-    EmailAPIError
+    EmailRateLimitError,
 )
 from .models import QueueOperation, SyncState
 from .utils import (
-    parse_email_body,
-    extract_thread_subject,
     extract_queue_id_from_subject,
-    format_queue_subject
+    extract_thread_subject,
+    format_queue_subject,
+    parse_email_body,
 )
 
 # GmailClient is optional - requires google-auth packages
 try:
     from .gmail_client import GmailClient
+
     _gmail_available = True
 except ImportError:
     _gmail_available = False
     GmailClient = None
 
 __all__ = [
-    'EmailClientBase',
-    'EmailAuthenticationError',
-    'EmailRateLimitError',
-    'EmailNetworkError',
-    'EmailAPIError',
-    'QueueOperation',
-    'SyncState',
-    'parse_email_body',
-    'extract_thread_subject',
-    'extract_queue_id_from_subject',
-    'format_queue_subject',
+    "EmailClientBase",
+    "EmailAuthenticationError",
+    "EmailRateLimitError",
+    "EmailNetworkError",
+    "EmailAPIError",
+    "QueueOperation",
+    "SyncState",
+    "parse_email_body",
+    "extract_thread_subject",
+    "extract_queue_id_from_subject",
+    "format_queue_subject",
 ]
 
 if _gmail_available:
-    __all__.append('GmailClient')
+    __all__.append("GmailClient")

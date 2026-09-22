@@ -2,13 +2,13 @@
 
 Validates: Requirements 36.1, 36.2, 36.3, 36.4
 """
-import pytest
 
+import pytest
 from rich_python_utils.common_objects.workflow.common.exceptions import (
-    ExpansionError,
     ExpansionConfigError,
-    ExpansionReplayError,
+    ExpansionError,
     ExpansionLimitExceeded,
+    ExpansionReplayError,
 )
 
 
@@ -25,7 +25,12 @@ class TestExpansionExceptionHierarchy:
         assert issubclass(ExpansionLimitExceeded, ExpansionError)
 
     def test_all_inherit_from_exception(self):
-        for cls in (ExpansionError, ExpansionConfigError, ExpansionReplayError, ExpansionLimitExceeded):
+        for cls in (
+            ExpansionError,
+            ExpansionConfigError,
+            ExpansionReplayError,
+            ExpansionLimitExceeded,
+        ):
             assert issubclass(cls, Exception)
 
 

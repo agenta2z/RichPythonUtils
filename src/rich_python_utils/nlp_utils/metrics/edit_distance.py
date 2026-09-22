@@ -1,21 +1,29 @@
 import copy
 import warnings
 
-from attr import attrs, attrib
-
+from attr import attrib, attrs
 from rich_python_utils.common_utils.iter_helper import max_len__
 from rich_python_utils.common_utils.map_helper import get_
 from rich_python_utils.common_utils.typing_helper import is_str
 from rich_python_utils.nlp_utils.common import Languages
-from rich_python_utils.string_utils.common import startswith_any, endswith_any, contains_any
-from rich_python_utils.nlp_utils.string_sanitization import string_sanitize, StringSanitizationOptions, StringSanitizationConfig, remove_common_tokens_except_for_sub_tokens
+from rich_python_utils.nlp_utils.string_sanitization import (
+    remove_common_tokens_except_for_sub_tokens,
+    string_sanitize,
+    StringSanitizationConfig,
+    StringSanitizationOptions,
+)
+from rich_python_utils.string_utils.common import (
+    contains_any,
+    endswith_any,
+    startswith_any,
+)
 from rich_python_utils.string_utils.tokenization import tokenize
 
 try:
     from Levenshtein import distance
 except:
     warnings.warn("failed to import 'Levenshtein'")
-from typing import Callable, Union, Iterable, Tuple, Any
+from typing import Any, Callable, Iterable, Tuple, Union
 
 
 def regular_normalized_edit_distance(s1: str, s2: str) -> float:
@@ -71,84 +79,45 @@ def regular_edit_distance_based_similarity(s1: str, s2: str) -> float:
     return 1 - regular_normalized_edit_distance(s1, s2)
 
 
-def equals_in_tokens(
-        str1: str,
-        str2: str,
-        tokenizer=None
-) -> bool:
-    return (
-            str1 == str2 or
-            sorted(tokenize(str1, tokenizer)) == sorted(tokenize(str2, tokenizer))
+def equals_in_tokens(str1: str, str2: str, tokenizer=None) -> bool:
+    return str1 == str2 or sorted(tokenize(str1, tokenizer)) == sorted(
+        tokenize(str2, tokenizer)
     )
 
 
 def _upweight_first_last_chrs(
-        s: str,
-        upweight_first_chr: Union[int, bool],
-        upweight_last_chr: Union[int, bool]
+    s: str, upweight_first_chr: Union[int, bool], upweight_last_chr: Union[int, bool]
 ) -> str:
     if upweight_first_chr:
         if isinstance(upweight_first_chr, bool) or upweight_first_chr == 1:
             s = s[0] + s
         elif isinstance(upweight_first_chr, int):
-            s = ''.join([s[0]] * (upweight_first_chr - 1)) + s
+            s = "".join([s[0]] * (upweight_first_chr - 1)) + s
 
     if upweight_last_chr:
         if isinstance(upweight_last_chr, bool) or upweight_last_chr == 1:
             s = s + s[-1]
         elif isinstance(upweight_last_chr, int):
-            s = s + ''.join([s[0]] * (upweight_last_chr - 1))
+            s = s + "".join([s[0]] * (upweight_last_chr - 1))
 
     return s
 
 
 PreDefinedStartComparisonWeights = {
     Languages.English: (
-        (
-            (('a', 'e', 'i', 'o', 'u'), None),
-            1.2,
-            3
-        ),
-        (
-            ('a', 'i'),
-            1.2,
-            3
-        ),
-        (
-            ('i', 'o'),
-            1.2,
-            3
-        ),
-        (
-            ('i', 'u'),
-            1.2,
-            3
-        ),
+        ((("a", "e", "i", "o", "u"), None), 1.2, 3),
+        (("a", "i"), 1.2, 3),
+        (("i", "o"), 1.2, 3),
+        (("i", "u"), 1.2, 3),
     )
 }
 
 PreDefinedEndComparisonWeights = {
     Languages.English: (
-        (
-            (('a', 'e', 'i', 'o', 'u'), None),
-            1.1,
-            3
-        ),
-        (
-            ('a', 'i'),
-            1.1,
-            3
-        ),
-        (
-            ('i', 'o'),
-            1.1,
-            3
-        ),
-        (
-            ('i', 'u'),
-            1.1,
-            3
-        ),
+        ((("a", "e", "i", "o", "u"), None), 1.1, 3),
+        (("a", "i"), 1.1, 3),
+        (("i", "o"), 1.1, 3),
+        (("i", "u"), 1.1, 3),
     )
 }
 
@@ -165,16 +134,16 @@ def _get_start_comparison_weight(str1: str, str2: str, conflict_config):
             #  `str1` does not, up to the specified range.
             _range = max(max_len__(_start1), max_len__(_start2), _range)
             if (
-                    _start2 and
-                    contains_any(str1[:_range], _start1) and
-                    not contains_any(str2[:_range], _start1) and
-                    (
-                            not _start2 or
-                            (
-                                    contains_any(str2[:_range], _start2) and
-                                    not contains_any(str1[:_range], _start2)
-                            )
+                _start2
+                and contains_any(str1[:_range], _start1)
+                and not contains_any(str2[:_range], _start1)
+                and (
+                    not _start2
+                    or (
+                        contains_any(str2[:_range], _start2)
+                        and not contains_any(str1[:_range], _start2)
                     )
+                )
             ):
                 return _weight
         else:
@@ -183,24 +152,28 @@ def _get_start_comparison_weight(str1: str, str2: str, conflict_config):
             # and `str1` does not. If a match is found, the weight associated with the matching
             # tuple is returned.
             if (
-                    _start2 and
-                    startswith_any(str1, _start1) and
-                    not startswith_any(str2, _start1) and
-                    (
-                            not _start2 or
-                            (
-                                    startswith_any(str2, _start2) and
-                                    not startswith_any(str1, _start2)
-                            )
+                _start2
+                and startswith_any(str1, _start1)
+                and not startswith_any(str2, _start1)
+                and (
+                    not _start2
+                    or (
+                        startswith_any(str2, _start2)
+                        and not startswith_any(str1, _start2)
                     )
+                )
             ):
                 return _weight
 
 
 def get_start_comparison_weight(str1, str2, conflict_config) -> float:
-    result = _get_start_comparison_weight(str1=str1, str2=str2, conflict_config=conflict_config)
+    result = _get_start_comparison_weight(
+        str1=str1, str2=str2, conflict_config=conflict_config
+    )
     if result is None:
-        result = _get_start_comparison_weight(str1=str2, str2=str1, conflict_config=conflict_config)
+        result = _get_start_comparison_weight(
+            str1=str2, str2=str1, conflict_config=conflict_config
+        )
     if result is None:
         return 1.0
     return result
@@ -211,38 +184,39 @@ def _get_end_comparison_weight(str1, str2, conflict_config):
         if _range is not None:
             _range = max(max_len__(_end1), max_len__(_end2), _range)
             if (
-                    _end2 and
-                    contains_any(str1[-_range:], _end1) and
-                    not contains_any(str2[-_range:], _end1) and
-                    (
-                            not _end2 or
-                            (
-                                    contains_any(str2[-_range:], _end2) and
-                                    not contains_any(str1[-_range:], _end2)
-                            )
+                _end2
+                and contains_any(str1[-_range:], _end1)
+                and not contains_any(str2[-_range:], _end1)
+                and (
+                    not _end2
+                    or (
+                        contains_any(str2[-_range:], _end2)
+                        and not contains_any(str1[-_range:], _end2)
                     )
+                )
             ):
                 return _weight
         else:
             if (
-                    _end2 and
-                    endswith_any(str1, _end1) and
-                    not endswith_any(str2, _end1) and
-                    (
-                            not _end2 or
-                            (
-                                    endswith_any(str2, _end2) and
-                                    not endswith_any(str1, _end2)
-                            )
-                    )
+                _end2
+                and endswith_any(str1, _end1)
+                and not endswith_any(str2, _end1)
+                and (
+                    not _end2
+                    or (endswith_any(str2, _end2) and not endswith_any(str1, _end2))
+                )
             ):
                 return _weight
 
 
 def get_end_comparison_weight(str1, str2, conflict_config):
-    result = _get_end_comparison_weight(str1=str1, str2=str2, conflict_config=conflict_config)
+    result = _get_end_comparison_weight(
+        str1=str1, str2=str2, conflict_config=conflict_config
+    )
     if result is None:
-        result = _get_end_comparison_weight(str1=str2, str2=str1, conflict_config=conflict_config)
+        result = _get_end_comparison_weight(
+            str1=str2, str2=str1, conflict_config=conflict_config
+        )
     if result is None:
         return 1.0
     return result
@@ -291,7 +265,9 @@ class EditDistanceOptions:
     min_length_for_distance = attrib(type=Union[int, bool], default=False)
     min_length_for_distance_for_str1 = attrib(type=Union[int, bool], default=False)
     min_length_for_distance_for_str2 = attrib(type=Union[int, bool], default=False)
-    weight_distance_if_strs_have_common_start = attrib(type=Union[bool, float], default=False)
+    weight_distance_if_strs_have_common_start = attrib(
+        type=Union[bool, float], default=False
+    )
     str_common_start_size = attrib(type=int, default=3)
     min_str_common_start_to_enable_soft_weight = attrib(type=int, default=2)
     min_str_start_similarity_to_enable_soft_weight = attrib(type=float, default=0.55)
@@ -299,11 +275,19 @@ class EditDistanceOptions:
     weight_distance_if_str2_is_substr = attrib(type=Union[bool, float], default=False)
     weight_distance_if_str1_heads_str2 = attrib(type=Union[bool, float], default=False)
     weight_distance_if_str2_heads_str1 = attrib(type=Union[bool, float], default=False)
-    weight_distance_if_str1_first_token_is_sub_str = attrib(type=Union[bool, float], default=False)
-    weight_distance_if_str2_first_token_is_sub_str = attrib(type=Union[bool, float], default=False)
+    weight_distance_if_str1_first_token_is_sub_str = attrib(
+        type=Union[bool, float], default=False
+    )
+    weight_distance_if_str2_first_token_is_sub_str = attrib(
+        type=Union[bool, float], default=False
+    )
     min_str_length_to_enable_substr_weight = attrib(type=int, default=3)
-    weight_distance_by_comparing_start = attrib(type=Iterable[Tuple[Tuple, float]], default=None)
-    weight_distance_by_comparing_end = attrib(type=Iterable[Tuple[Tuple, float]], default=None)
+    weight_distance_by_comparing_start = attrib(
+        type=Iterable[Tuple[Tuple, float]], default=None
+    )
+    weight_distance_by_comparing_end = attrib(
+        type=Iterable[Tuple[Tuple, float]], default=None
+    )
 
     # region edit distance tweak for short strs
     weight_distance_for_short_strs = attrib(type=Union[bool, float], default=False)
@@ -329,7 +313,7 @@ class EditDistanceOptions:
             )
 
     def edit_distance_for_empty_or_short_strs(
-            self, str1: str, str2: str, normalized: bool
+        self, str1: str, str2: str, normalized: bool
     ) -> Union[float, int]:
         """
         Computes the edit distance for empty or short input strings
@@ -383,19 +367,19 @@ class EditDistanceOptions:
                 return 1.0 if normalized else len(str1)
 
         if (
-                (
-                        self.min_length_for_distance
-                        and (len(str1) < self.min_length_for_distance)
-                        and (len(str2) < self.min_length_for_distance)
-                )
-                or (
+            (
+                self.min_length_for_distance
+                and (len(str1) < self.min_length_for_distance)
+                and (len(str2) < self.min_length_for_distance)
+            )
+            or (
                 self.min_length_for_distance_for_str1
                 and len(str1) < self.min_length_for_distance_for_str1
-        )
-                or (
+            )
+            or (
                 self.min_length_for_distance_for_str2
                 and len(str2) < self.min_length_for_distance_for_str2
-        )
+            )
         ):
             return 0.0 if normalized else 0
 
@@ -445,36 +429,36 @@ class EditDistanceOptions:
         str1_in_str2, str2_in_str1 = (str1 in str2), (str2 in str1)
 
         if (
-                self.weight_distance_if_strs_have_common_start and
-                not (str1_in_str2 or str2_in_str1) and
-                len(str1) > str_common_start_size and
-                len(str2) > str_common_start_size
+            self.weight_distance_if_strs_have_common_start
+            and not (str1_in_str2 or str2_in_str1)
+            and len(str1) > str_common_start_size
+            and len(str2) > str_common_start_size
         ):
             str1_start = str1.replace(" ", "")[:str_common_start_size]
             str2_start = str2.replace(" ", "")[:str_common_start_size]
             if self.min_str_start_similarity_to_enable_soft_weight is None:
-                strs_have_common_start = (str1_start == str2_start)
+                strs_have_common_start = str1_start == str2_start
                 if strs_have_common_start:
                     edit_distance *= self.weight_distance_if_strs_have_common_start
             elif (
-                    str1[:self.min_str_common_start_to_enable_soft_weight] ==
-                    str2[:self.min_str_common_start_to_enable_soft_weight]
+                str1[: self.min_str_common_start_to_enable_soft_weight]
+                == str2[: self.min_str_common_start_to_enable_soft_weight]
             ):
                 strs_have_common_start = regular_edit_distance_based_similarity(
                     str1_start, str2_start
                 )
                 if (
-                        strs_have_common_start >
-                        self.min_str_start_similarity_to_enable_soft_weight
+                    strs_have_common_start
+                    > self.min_str_start_similarity_to_enable_soft_weight
                 ):
                     edit_distance *= 1 - (
-                            (1 - self.weight_distance_if_strs_have_common_start)
-                            * strs_have_common_start
+                        (1 - self.weight_distance_if_strs_have_common_start)
+                        * strs_have_common_start
                     )
 
         if (
-                self.min_str_length_to_enable_substr_weight is None
-                or min(len(str1), len(str2)) >= self.min_str_length_to_enable_substr_weight
+            self.min_str_length_to_enable_substr_weight is None
+            or min(len(str1), len(str2)) >= self.min_str_length_to_enable_substr_weight
         ):
             if self.weight_distance_if_str1_heads_str2 and str2.startswith(str1):
                 edit_distance *= self.weight_distance_if_str2_heads_str1
@@ -483,8 +467,9 @@ class EditDistanceOptions:
             elif self.weight_distance_if_str1_first_token_is_sub_str:
                 str1_first_token = str1.split()[0]
                 if (
-                        self.min_str_length_to_enable_substr_weight is None
-                        or len(str1_first_token) >= self.min_str_length_to_enable_substr_weight
+                    self.min_str_length_to_enable_substr_weight is None
+                    or len(str1_first_token)
+                    >= self.min_str_length_to_enable_substr_weight
                 ) and str1_first_token in str2:
                     edit_distance *= self.weight_distance_if_str1_first_token_is_sub_str
 
@@ -495,28 +480,34 @@ class EditDistanceOptions:
             elif self.weight_distance_if_str2_first_token_is_sub_str:
                 str2_first_token = str2.split()[0]
                 if (
-                        self.min_str_length_to_enable_substr_weight is None
-                        or len(str2_first_token) >= self.min_str_length_to_enable_substr_weight
+                    self.min_str_length_to_enable_substr_weight is None
+                    or len(str2_first_token)
+                    >= self.min_str_length_to_enable_substr_weight
                 ) and str2_first_token in str1:
                     edit_distance *= self.weight_distance_if_str2_first_token_is_sub_str
 
         if self.weight_distance_by_comparing_start:
             edit_distance *= get_start_comparison_weight(
-                str1=str1, str2=str2, conflict_config=self.weight_distance_by_comparing_start
+                str1=str1,
+                str2=str2,
+                conflict_config=self.weight_distance_by_comparing_start,
             )
 
         if self.weight_distance_by_comparing_end:
             edit_distance *= get_end_comparison_weight(
-                str1=str1, str2=str2, conflict_config=self.weight_distance_by_comparing_end
+                str1=str1,
+                str2=str2,
+                conflict_config=self.weight_distance_by_comparing_end,
             )
 
         if (
-                self.weight_distance_for_short_strs
-                and (
-                (not self.requires_same_first_chr_to_enable_short_str_weight) or str1[0] == str2[0]
-        )
-                and len(str1) <= self.max_str_length_to_enable_short_str_weight
-                and len(str2) <= self.max_str_length_to_enable_short_str_weight
+            self.weight_distance_for_short_strs
+            and (
+                (not self.requires_same_first_chr_to_enable_short_str_weight)
+                or str1[0] == str2[0]
+            )
+            and len(str1) <= self.max_str_length_to_enable_short_str_weight
+            and len(str2) <= self.max_str_length_to_enable_short_str_weight
         ):
             edit_distance = edit_distance * self.weight_distance_for_short_strs
 
@@ -567,16 +558,17 @@ def edit_distance_marginal_case(str1: str, str2: str, normalized: bool = True) -
 
 
 def _edit_distance(
-        str1: str,
-        str2: str,
-        normalized: bool = True,
-        consider_sorted_tokens: Union[bool, Callable] = False,
-        consider_same_num_tokens: Union[bool, Callable] = False,
-        options: EditDistanceOptions = None,
-        sanitization_config:
-        Union[Iterable[StringSanitizationOptions], StringSanitizationConfig] = None,
-        tokenizer: Union[None, str, Callable, Any] = None,
-        **str_sanitization_kwargs
+    str1: str,
+    str2: str,
+    normalized: bool = True,
+    consider_sorted_tokens: Union[bool, Callable] = False,
+    consider_same_num_tokens: Union[bool, Callable] = False,
+    options: EditDistanceOptions = None,
+    sanitization_config: Union[
+        Iterable[StringSanitizationOptions], StringSanitizationConfig
+    ] = None,
+    tokenizer: Union[None, str, Callable, Any] = None,
+    **str_sanitization_kwargs,
 ) -> float:
     # region STEP1: dealing with marginal cases
     # Check for empty or short strings, and handle them using either the provided
@@ -596,14 +588,15 @@ def _edit_distance(
         # and tokenizer. If necessary, save intermediate results for further processing.
         if sanitization_config:
             sanitized_strs, intermediate_results = string_sanitize(
-                str1, str2,
+                str1,
+                str2,
                 config=sanitization_config,
                 tokenizer=tokenizer,
                 return_intermediate_results_before_actions=[
                     StringSanitizationOptions.MAKE_FUZZY,
-                    StringSanitizationOptions.REMOVE_SPACES
+                    StringSanitizationOptions.REMOVE_SPACES,
                 ],
-                **str_sanitization_kwargs
+                **str_sanitization_kwargs,
             )
 
             if not sanitized_strs[0] or not sanitized_strs[1]:
@@ -626,14 +619,14 @@ def _edit_distance(
         # If spaces were removed during sanitization, restore them
         # for tokenization purposes.
         if (
-                intermediate_results is not None and
-                StringSanitizationOptions.REMOVE_SPACES in intermediate_results
+            intermediate_results is not None
+            and StringSanitizationOptions.REMOVE_SPACES in intermediate_results
         ):
             # restores spaces in `str1` and `str2` in order to tokenize
             str1, str2 = intermediate_results[StringSanitizationOptions.REMOVE_SPACES]
-            con = ''
+            con = ""
         else:
-            con = ' '
+            con = " "
 
         # Considers edit distances after 1) sorting tokens or 2) disregarding additional characters
         # in the longer string.
@@ -661,9 +654,7 @@ def _edit_distance(
                 # Update the edit distance using the provided reduce method
                 # (min, max, average, or custom function).
                 if callable(reduce_method):
-                    edit_dist = reduce_method(
-                        (edit_dist, edit_dist2, edit_dist3)
-                    )
+                    edit_dist = reduce_method((edit_dist, edit_dist2, edit_dist3))
 
             # Update the edit distance considering sorted tokens, if requested.
             if consider_sorted_tokens:
@@ -688,16 +679,18 @@ def _edit_distance(
 
 
 def edit_distance(
-        str1: str,
-        str2: str,
-        return_ratio=True,
-        consider_sorted_tokens: Union[bool, Callable] = False,
-        consider_same_num_tokens: Union[bool, Callable] = False,
-        consider_non_overlap_tokens: Union[bool, Callable] = False,
-        options: EditDistanceOptions = None,
-        sanitization_config: Union[Iterable[StringSanitizationOptions], StringSanitizationConfig] = None,
-        tokenizer: Union[None, str, Callable, Any] = None,
-        **str_sanitization_kwargs
+    str1: str,
+    str2: str,
+    return_ratio=True,
+    consider_sorted_tokens: Union[bool, Callable] = False,
+    consider_same_num_tokens: Union[bool, Callable] = False,
+    consider_non_overlap_tokens: Union[bool, Callable] = False,
+    options: EditDistanceOptions = None,
+    sanitization_config: Union[
+        Iterable[StringSanitizationOptions], StringSanitizationConfig
+    ] = None,
+    tokenizer: Union[None, str, Callable, Any] = None,
+    **str_sanitization_kwargs,
 ) -> float:
     """
     Computes the edit distance (Levenshtein distance) between two strings;
@@ -779,14 +772,18 @@ def edit_distance(
         ... )
         0.7894736842105263
     """
-    if 'sanitization_actions' in str_sanitization_kwargs:
-        raise ValueError("'sanitization_actions' is no longer supported; "
-                         "use 'sanitization_config' instead")
+    if "sanitization_actions" in str_sanitization_kwargs:
+        raise ValueError(
+            "'sanitization_actions' is no longer supported; "
+            "use 'sanitization_config' instead"
+        )
 
     # region STEP1: process arguments
     edit_dist = edit_distance_marginal_case(str1, str2, normalized=return_ratio)
     if edit_dist is None:
-        if sanitization_config and not isinstance(sanitization_config, StringSanitizationConfig):
+        if sanitization_config and not isinstance(
+            sanitization_config, StringSanitizationConfig
+        ):
             sanitization_config = StringSanitizationConfig(actions=sanitization_config)
 
         if consider_sorted_tokens is True:
@@ -811,10 +808,12 @@ def edit_distance(
             options=options,
             sanitization_config=sanitization_config,
             tokenizer=tokenizer,
-            **str_sanitization_kwargs
+            **str_sanitization_kwargs,
         )
         if consider_non_overlap_tokens:
-            str1, str2 = remove_common_tokens_except_for_sub_tokens(str1, str2, tokenizer=tokenizer)
+            str1, str2 = remove_common_tokens_except_for_sub_tokens(
+                str1, str2, tokenizer=tokenizer
+            )
             if str1 and str2:
                 edit_dist2 = _edit_distance(
                     str1=str1,
@@ -825,7 +824,7 @@ def edit_distance(
                     options=options,
                     sanitization_config=sanitization_config,
                     tokenizer=tokenizer,
-                    **str_sanitization_kwargs
+                    **str_sanitization_kwargs,
                 )
                 edit_dist = consider_non_overlap_tokens(edit_dist, edit_dist2)
 

@@ -34,11 +34,8 @@ def join_(*path_parts, ignore_empty=True):
             )
         )
         for _path_parts in product__(
-            *path_parts,
-            atom_types=(str, bytes, PathLike),
-            ignore_none=True
+            *path_parts, atom_types=(str, bytes, PathLike), ignore_none=True
         )
     ]
 
     return out[0] if len(out) == 1 else out
-

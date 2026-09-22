@@ -8,25 +8,26 @@ import shutil
 from abc import ABC
 from datetime import datetime, timezone
 from enum import Enum, StrEnum
-from typing import Any, Dict, List, Optional, Sequence, Callable, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 
-from attr import attrs, attrib
-
+from attr import attrib, attrs
 from rich_python_utils.common_objects.workflow.common.exceptions import (
-    WorkflowAborted,
     ExpansionConfigError,
-    ExpansionReplayError,
     ExpansionLimitExceeded,
+    ExpansionReplayError,
+    WorkflowAborted,
 )
 from rich_python_utils.common_objects.workflow.common.expansion import (
-    ExpansionResult,
     ExpansionRecord,
+    ExpansionResult,
+)
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
 )
 from rich_python_utils.common_objects.workflow.common.step_result_save_options import (
-    StepResultSaveOptions
+    StepResultSaveOptions,
 )
 from rich_python_utils.common_objects.workflow.common.step_wrapper import StepWrapper
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
 from rich_python_utils.common_objects.workflow.common.worknode_base import WorkNodeBase
 from rich_python_utils.common_utils.async_utils import call_maybe_async
 from rich_python_utils.io_utils.artifact import artifact_type
@@ -34,9 +35,9 @@ from rich_python_utils.io_utils.pickle_io import _get_field_names
 
 
 class WorkflowLogTypes(StrEnum):
-    StepError = 'WorkflowStepError'
-    CheckpointWarning = 'WorkflowCheckpointWarning'
-    ExpansionWarning = 'WorkflowExpansionWarning'
+    StepError = "WorkflowStepError"
+    CheckpointWarning = "WorkflowCheckpointWarning"
+    ExpansionWarning = "WorkflowExpansionWarning"
 
 
 # Forward reference: CheckpointState is defined after Workflow to avoid circular dependency.
@@ -161,6 +162,7 @@ class Workflow(WorkNodeBase, ABC):
 
         >>> del w_resume
     """
+
     _steps = attrib(type=Sequence[Callable], default=None)
     _state = attrib(default=None, init=False)
     max_loop_iterations = attrib(type=int, default=10)
@@ -178,30 +180,30 @@ class Workflow(WorkNodeBase, ABC):
 
     def _get_step_name(self, step, index) -> Optional[str]:
         """Get step name via per-step attribute pattern."""
-        return getattr(step, 'name', None)
+        return getattr(step, "name", None)
 
     def _update_state(self, state, result, step, step_name, step_index) -> dict:
         """Update state after a step completes.
 
         Delegates to a per-step ``update_state`` attribute if present.
         """
-        updater = getattr(step, 'update_state', None)
+        updater = getattr(step, "update_state", None)
         if updater is not None:
             updated = updater(state, result)
             if updated is not None:
                 return updated
         return state
 
-    def _on_step_complete(self, result, step_name, step_index, state,
-                          *args, **kwargs):
+    def _on_step_complete(self, result, step_name, step_index, state, *args, **kwargs):
         """Hook called after a step completes (only on non-loop-back iterations).
 
         Default is a no-op.  Subclasses override for per-step dispatch.
         """
         return None
 
-    def _default_error_handler(self, error, step_result_so_far, state,
-                               step_name, step_index):
+    def _default_error_handler(
+        self, error, step_result_so_far, state, step_name, step_index
+    ):
         """Default error handler — re-raises, preserving current behaviour."""
         raise error
 
@@ -218,7 +220,7 @@ class Workflow(WorkNodeBase, ABC):
         if isinstance(target, int):
             return target
         for idx, step in enumerate(steps):
-            if getattr(step, 'name', None) == target:
+            if getattr(step, "name", None) == target:
                 return idx
         raise ValueError(f"Loop target step '{target}' not found")
 
@@ -247,24 +249,24 @@ class Workflow(WorkNodeBase, ABC):
             ExpansionConfigError: for lambdas, closures, or objects
                 missing ``__module__``/``__qualname__``.
         """
-        if not hasattr(fn, '__qualname__'):
+        if not hasattr(fn, "__qualname__"):
             raise ExpansionConfigError(
                 f"reconstruct_from_seed {fn!r} has no __qualname__ attribute. "
                 "It must be a module-level function (not a functools.partial, "
                 "lambda, or closure)."
             )
-        if not hasattr(fn, '__module__'):
+        if not hasattr(fn, "__module__"):
             raise ExpansionConfigError(
                 f"reconstruct_from_seed {fn!r} has no __module__ attribute. "
                 "It must be a module-level function."
             )
         qualname = fn.__qualname__
-        if '<lambda>' in qualname:
+        if "<lambda>" in qualname:
             raise ExpansionConfigError(
                 f"reconstruct_from_seed must not be a lambda (got qualname={qualname!r}). "
                 "Use a named module-level function instead."
             )
-        if '<locals>' in qualname:
+        if "<locals>" in qualname:
             raise ExpansionConfigError(
                 f"reconstruct_from_seed must not be a closure (got qualname={qualname!r}). "
                 "Use a named module-level function instead."
@@ -277,7 +279,7 @@ class Workflow(WorkNodeBase, ABC):
         expansion is active (Req 31).
         """
         if self._expansion_active:
-            name = getattr(step, 'name', None)
+            name = getattr(step, "name", None)
             if name is None:
                 name = f"__step_{step_index}__"
             return name
@@ -295,7 +297,7 @@ class Workflow(WorkNodeBase, ABC):
         for key, value in self._loop_counts.items():
             if isinstance(key, int) and 0 <= key < len(self._steps):
                 step = self._steps[key]
-                name = getattr(step, 'name', None)
+                name = getattr(step, "name", None)
                 if name is None:
                     name = f"__step_{key}__"
                 new_counts[name] = value
@@ -319,26 +321,27 @@ class Workflow(WorkNodeBase, ABC):
             self._steps = list(self._steps)
 
         for step in self._steps:
-            loop_back_to = getattr(step, 'loop_back_to', None)
+            loop_back_to = getattr(step, "loop_back_to", None)
             if loop_back_to is not None and isinstance(loop_back_to, int):
                 if 0 <= loop_back_to < len(self._steps):
                     target_step = self._steps[loop_back_to]
-                    target_name = getattr(target_step, 'name', None)
+                    target_name = getattr(target_step, "name", None)
                     if target_name is None:
                         # Assign synthetic name to unnamed target step
                         target_name = f"__step_{loop_back_to}__"
                         if isinstance(target_step, StepWrapper):
                             target_step.name = target_name
-                        elif hasattr(target_step, 'name'):
+                        elif hasattr(target_step, "name"):
                             target_step.name = target_name
                     # Update loop_back_to to use name instead of index
                     if isinstance(step, StepWrapper):
                         step.loop_back_to = target_name
-                    elif hasattr(step, 'loop_back_to'):
+                    elif hasattr(step, "loop_back_to"):
                         step.loop_back_to = target_name
 
-    def _handle_expansion(self, step_index, expansion_result, state,
-                          orig_args=None, orig_kwargs=None):
+    def _handle_expansion(
+        self, step_index, expansion_result, state, orig_args=None, orig_kwargs=None
+    ):
         """Process an ExpansionResult: validate, insert steps, record.
 
         Args:
@@ -369,9 +372,7 @@ class Workflow(WorkNodeBase, ABC):
         # Validate all new_steps are callable (Req 9.4)
         for idx, s in enumerate(new_steps):
             if not callable(s):
-                raise TypeError(
-                    f"new_steps[{idx}] is not callable: {s!r}"
-                )
+                raise TypeError(f"new_steps[{idx}] is not callable: {s!r}")
 
         # Check max_total_steps limit (Req 6.3, 6.4)
         new_total = len(self._steps) + len(new_steps)
@@ -384,16 +385,14 @@ class Workflow(WorkNodeBase, ABC):
         # Check name uniqueness (Req 2.3)
         existing_names = set()
         for s in self._steps:
-            n = getattr(s, 'name', None)
+            n = getattr(s, "name", None)
             if n is not None:
                 existing_names.add(n)
         for s in new_steps:
-            n = getattr(s, 'name', None)
+            n = getattr(s, "name", None)
             if n is not None:
                 if n in existing_names:
-                    raise ValueError(
-                        f"Duplicate step name in expansion: {n!r}"
-                    )
+                    raise ValueError(f"Duplicate step name in expansion: {n!r}")
                 existing_names.add(n)
 
         # Validate seed factory if provided (Req 25.4)
@@ -411,7 +410,7 @@ class Workflow(WorkNodeBase, ABC):
         # Wrap plain callables in StepWrapper for synthetic name tracking (S4 fix)
         wrapped_steps = []
         for idx, s in enumerate(new_steps):
-            if not isinstance(s, StepWrapper) and not hasattr(s, 'name'):
+            if not isinstance(s, StepWrapper) and not hasattr(s, "name"):
                 synthetic_name = f"__expanded_{self._expansion_count}_{idx}__"
                 s = StepWrapper(s, name=synthetic_name)
             wrapped_steps.append(s)
@@ -423,7 +422,7 @@ class Workflow(WorkNodeBase, ABC):
 
         # Get the expanding step's name for the record (S1 fix: use name, not index)
         expanding_step = self._steps[step_index]
-        expanding_step_name = getattr(expanding_step, 'name', None) or str(step_index)
+        expanding_step_name = getattr(expanding_step, "name", None) or str(step_index)
 
         # Create ExpansionRecord
         record = ExpansionRecord(
@@ -449,7 +448,7 @@ class Workflow(WorkNodeBase, ABC):
             state["__expansion_count"] = self._expansion_count
 
         # Handle splice mode (Req 26): store original args for first expanded step
-        if expansion_result.mode == 'splice':
+        if expansion_result.mode == "splice":
             self._splice_orig_args = orig_args
             self._splice_orig_kwargs = orig_kwargs
             self._splice_step_index = step_index + 1  # first expanded step
@@ -496,7 +495,7 @@ class Workflow(WorkNodeBase, ABC):
             # Resolve insertion point by step NAME (S1 fix)
             insert_after_idx = None
             for idx, step in enumerate(self._steps):
-                name = getattr(step, 'name', None)
+                name = getattr(step, "name", None)
                 if name == after_step_name:
                     insert_after_idx = idx
                     break
@@ -518,7 +517,7 @@ class Workflow(WorkNodeBase, ABC):
                     mod = importlib.import_module(factory_module)
                     # Navigate dotted qualname (e.g., "Class.method")
                     obj = mod
-                    for part in factory_qualname.split('.'):
+                    for part in factory_qualname.split("."):
                         obj = getattr(obj, part)
                     factory_fn = obj
                     reconstructed_steps = factory_fn(seed)
@@ -531,7 +530,10 @@ class Workflow(WorkNodeBase, ABC):
 
             # Priority 2: Registry-based reconstruction
             if reconstructed_steps is None and expansion_id is not None:
-                if self.expansion_step_registry and expansion_id in self.expansion_step_registry:
+                if (
+                    self.expansion_step_registry
+                    and expansion_id in self.expansion_step_registry
+                ):
                     factory = self.expansion_step_registry[expansion_id]
                     reconstructed_steps = factory(expansion_id)
 
@@ -546,8 +548,10 @@ class Workflow(WorkNodeBase, ABC):
             # Wrap plain callables in StepWrapper (S4 fix)
             wrapped = []
             for idx, s in enumerate(reconstructed_steps):
-                if not isinstance(s, StepWrapper) and not hasattr(s, 'name'):
-                    synthetic_name = f"__reconstructed_{expansion_id or after_step_name}_{idx}__"
+                if not isinstance(s, StepWrapper) and not hasattr(s, "name"):
+                    synthetic_name = (
+                        f"__reconstructed_{expansion_id or after_step_name}_{idx}__"
+                    )
                     s = StepWrapper(s, name=synthetic_name)
                 wrapped.append(s)
 
@@ -579,8 +583,7 @@ class Workflow(WorkNodeBase, ABC):
         if self.max_expansion_events > 0:
             return True
         return any(
-            getattr(s, 'loop_back_to', None) is not None
-            for s in (self._steps or ())
+            getattr(s, "loop_back_to", None) is not None for s in (self._steps or ())
         )
 
     @staticmethod
@@ -590,7 +593,9 @@ class Workflow(WorkNodeBase, ABC):
 
     def _save_checkpoint(self, checkpoint_dict, *args, **kwargs):
         """Save a workflow checkpoint, delegating to _save_result for subclass compat."""
-        checkpoint_path = self._resolve_result_path("__wf_checkpoint__", *args, **kwargs)
+        checkpoint_path = self._resolve_result_path(
+            "__wf_checkpoint__", *args, **kwargs
+        )
         self._save_result(checkpoint_dict, output_path=checkpoint_path)
 
     def _try_load_checkpoint(self, *args, **kwargs) -> Optional[dict]:
@@ -617,7 +622,7 @@ class Workflow(WorkNodeBase, ABC):
                     "next_step_index": ckpt.next_step_index,
                     "loop_counts": ckpt.loop_counts,
                     "state": ckpt.state,
-                    "expansions": getattr(ckpt, 'expansions', []),
+                    "expansions": getattr(ckpt, "expansions", []),
                 }
             if not isinstance(ckpt, dict) or "next_step_index" not in ckpt:
                 return None
@@ -645,8 +650,9 @@ class Workflow(WorkNodeBase, ABC):
         except Exception:
             return None
 
-    def _save_loop_checkpoint(self, step_index, next_step_index,
-                              last_saved_result_id, state, *args, **kwargs):
+    def _save_loop_checkpoint(
+        self, step_index, next_step_index, last_saved_result_id, state, *args, **kwargs
+    ):
         """Save a loop checkpoint after the loop decision is resolved.
 
         Shared by both _run() and _arun() to avoid duplication.
@@ -655,10 +661,11 @@ class Workflow(WorkNodeBase, ABC):
         self._setup_child_workflows(state, *args, **kwargs)
 
         # Validate serializability on first checkpoint only.
-        if not getattr(self, '_state_picklability_verified', False):
-            if self.checkpoint_mode == 'jsonfy':
+        if not getattr(self, "_state_picklability_verified", False):
+            if self.checkpoint_mode == "jsonfy":
                 try:
                     from rich_python_utils.io_utils.json_io import jsonfy
+
                     jsonfy(state)
                 except Exception as e:
                     raise TypeError(
@@ -690,14 +697,15 @@ class Workflow(WorkNodeBase, ABC):
         }
 
         # Req 26.5: Persist splice state for checkpoint/resume
-        _splice_args = getattr(self, '_splice_orig_args', None)
-        _splice_kwargs = getattr(self, '_splice_orig_kwargs', None)
-        _splice_idx = getattr(self, '_splice_step_index', None)
+        _splice_args = getattr(self, "_splice_orig_args", None)
+        _splice_kwargs = getattr(self, "_splice_orig_kwargs", None)
+        _splice_idx = getattr(self, "_splice_step_index", None)
         if _splice_idx is not None:
             # Validate serializability of splice args
-            if self.checkpoint_mode == 'jsonfy':
+            if self.checkpoint_mode == "jsonfy":
                 try:
                     from rich_python_utils.io_utils.json_io import jsonfy
+
                     jsonfy(_splice_args)
                     jsonfy(_splice_kwargs)
                 except Exception as e:
@@ -718,7 +726,7 @@ class Workflow(WorkNodeBase, ABC):
             checkpoint_dict["splice_orig_kwargs"] = _splice_kwargs
             checkpoint_dict["splice_step_index"] = _splice_idx
 
-        if self.checkpoint_mode == 'jsonfy' and CheckpointState is not None:
+        if self.checkpoint_mode == "jsonfy" and CheckpointState is not None:
             checkpoint_dict = CheckpointState(**checkpoint_dict)
 
         self._save_checkpoint(checkpoint_dict, *args, **kwargs)
@@ -805,7 +813,7 @@ class Workflow(WorkNodeBase, ABC):
         - Jsonfy .json files (step_name___seq1.pkl.json)
         """
         base_dir = os.path.dirname(step_result_path)
-        base_name_parts = os.path.basename(step_result_path).rsplit('.', 1)
+        base_name_parts = os.path.basename(step_result_path).rsplit(".", 1)
         stem = base_name_parts[0]
 
         # Try file pattern first (legacy: step_name___seq1.pkl)
@@ -814,16 +822,15 @@ class Workflow(WorkNodeBase, ABC):
             pattern += f".{base_name_parts[1]}"
         matches = glob.glob(pattern)
         # Filter out .json files from the file pattern (they need separate handling)
-        matches = [m for m in matches if not m.endswith('.json')]
+        matches = [m for m in matches if not m.endswith(".json")]
 
         if not matches:
             # Try directory pattern (parts mode: step_name___seq1/)
             dir_pattern = os.path.join(base_dir, f"{stem}___seq*")
             matches = [
-                m for m in glob.glob(dir_pattern)
-                if os.path.isdir(m) and os.path.exists(
-                    os.path.join(m, "main.pkl")
-                )
+                m
+                for m in glob.glob(dir_pattern)
+                if os.path.isdir(m) and os.path.exists(os.path.join(m, "main.pkl"))
             ]
 
         if not matches:
@@ -838,9 +845,7 @@ class Workflow(WorkNodeBase, ABC):
         if not matches:
             return None
 
-        matches.sort(
-            key=lambda p: int(re.search(r'___seq(\d+)', p).group(1))
-        )
+        matches.sort(key=lambda p: int(re.search(r"___seq(\d+)", p).group(1)))
         return matches[-1]
 
     # ------------------------------------------------------------------
@@ -863,7 +868,7 @@ class Workflow(WorkNodeBase, ABC):
         # Merge artifact_types from both self and source
         all_entries = []
         for cls in [type(self), type(source)]:
-            entries = getattr(cls, '__artifact_types__', None)
+            entries = getattr(cls, "__artifact_types__", None)
             if entries:
                 all_entries.extend(entries)
         if not all_entries:
@@ -873,15 +878,17 @@ class Workflow(WorkNodeBase, ABC):
         seen_types = set()
         unique_entries = []
         for entry in all_entries:
-            tt = entry['target_type']
+            tt = entry["target_type"]
             if tt not in seen_types:
                 seen_types.add(tt)
                 unique_entries.append(entry)
 
         children = {}
         for entry in unique_entries:
-            target_type = entry['target_type']
-            if not (isinstance(target_type, type) and issubclass(target_type, Workflow)):
+            target_type = entry["target_type"]
+            if not (
+                isinstance(target_type, type) and issubclass(target_type, Workflow)
+            ):
                 continue
             if isinstance(source, dict):
                 for key, val in source.items():
@@ -905,9 +912,8 @@ class Workflow(WorkNodeBase, ABC):
             return
 
         # Check if either self or state has artifact metadata
-        has_metadata = (
-            getattr(type(self), '__artifact_types__', None) or
-            getattr(type(state), '__artifact_types__', None)
+        has_metadata = getattr(type(self), "__artifact_types__", None) or getattr(
+            type(state), "__artifact_types__", None
         )
         if not has_metadata:
             return
@@ -921,7 +927,7 @@ class Workflow(WorkNodeBase, ABC):
         all_children.update(self._find_child_workflows_in(state))
 
         for attr_name, (child, entry) in all_children.items():
-            subfolder = entry.get('subfolder')
+            subfolder = entry.get("subfolder")
             if subfolder:
                 child_dir = os.path.join(parent_result_dir, subfolder, attr_name)
             else:
@@ -934,45 +940,43 @@ class Workflow(WorkNodeBase, ABC):
 
     def _get_step_identifier(self, step: Callable, index: int) -> Dict[str, Any]:
         """Get serializable identifier for a step callable.
-        
+
         Args:
             step: The callable step function
             index: The index of the step in the sequence
-            
+
         Returns:
             Dict containing step identifier information
         """
         identifier = {
-            'index': index,
-            'name': None,
-            'module': None,
-            'ref': None,
+            "index": index,
+            "name": None,
+            "module": None,
+            "ref": None,
         }
-        
-        if hasattr(step, '__name__'):
-            identifier['name'] = step.__name__
-        if hasattr(step, '__module__'):
-            identifier['module'] = step.__module__
-        if identifier['name'] and identifier['module']:
-            identifier['ref'] = f"{identifier['module']}.{identifier['name']}"
-        
+
+        if hasattr(step, "__name__"):
+            identifier["name"] = step.__name__
+        if hasattr(step, "__module__"):
+            identifier["module"] = step.__module__
+        if identifier["name"] and identifier["module"]:
+            identifier["ref"] = f"{identifier['module']}.{identifier['name']}"
+
         return identifier
 
     def to_serializable_obj(
-        self, 
-        mode: str = 'auto',
-        _output_format: Optional[str] = None
+        self, mode: str = "auto", _output_format: Optional[str] = None
     ) -> Dict[str, Any]:
         """Serialize Workflow to dict.
-        
+
         Serializes step configuration and stores step identifiers that can
         be resolved during deserialization. Dynamically added steps are marked
         with ``"expanded": True`` and their ``expansion_id``.
-        
+
         Args:
             mode: Serialization mode ('auto', 'dict', 'pickle')
             _output_format: Target output format for conflict detection
-            
+
         Returns:
             Dict containing workflow configuration and step identifiers.
         """
@@ -982,7 +986,7 @@ class Workflow(WorkNodeBase, ABC):
             result_pass_down_mode_str = self.result_pass_down_mode.value
         elif callable(self.result_pass_down_mode):
             # For callable mode, store reference if possible
-            if hasattr(self.result_pass_down_mode, '__name__'):
+            if hasattr(self.result_pass_down_mode, "__name__"):
                 result_pass_down_mode_str = f"callable:{self.result_pass_down_mode.__module__}.{self.result_pass_down_mode.__name__}"
             else:
                 result_pass_down_mode_str = None  # Non-serializable callable
@@ -990,14 +994,14 @@ class Workflow(WorkNodeBase, ABC):
         # Build a set of expanded step indices and their expansion_ids
         # from _expansion_records so we can mark them in the serialized output.
         expanded_indices: Dict[int, Optional[str]] = {}
-        expansion_records = getattr(self, '_expansion_records', None) or []
+        expansion_records = getattr(self, "_expansion_records", None) or []
         if expansion_records and self._steps:
             for record in expansion_records:
                 # Find the step that triggered the expansion by name
                 after_name = record.after_step_name
                 after_idx = None
                 for idx, step in enumerate(self._steps):
-                    if getattr(step, 'name', None) == after_name:
+                    if getattr(step, "name", None) == after_name:
                         after_idx = idx
                         break
                 if after_idx is None:
@@ -1016,31 +1020,31 @@ class Workflow(WorkNodeBase, ABC):
             for i, step in enumerate(self._steps):
                 ident = self._get_step_identifier(step, i)
                 if i in expanded_indices:
-                    ident['expanded'] = True
-                    ident['expansion_id'] = expanded_indices[i]
+                    ident["expanded"] = True
+                    ident["expansion_id"] = expanded_indices[i]
                 step_identifiers.append(ident)
 
         result = {
-            '_type': type(self).__name__,
-            '_module': type(self).__module__,
-            'version': '1.0',
-            'name': self.name,
-            'steps': step_identifiers,
-            'config': {
-                'enable_result_save': (
-                    self.enable_result_save.value 
-                    if isinstance(self.enable_result_save, StepResultSaveOptions) 
+            "_type": type(self).__name__,
+            "_module": type(self).__module__,
+            "version": "1.0",
+            "name": self.name,
+            "steps": step_identifiers,
+            "config": {
+                "enable_result_save": (
+                    self.enable_result_save.value
+                    if isinstance(self.enable_result_save, StepResultSaveOptions)
                     else self.enable_result_save
                 ),
-                'resume_with_saved_results': self.resume_with_saved_results,
-                'result_pass_down_mode': result_pass_down_mode_str,
-                'enable_optional_post_process': self.enable_optional_post_process,
-            }
+                "resume_with_saved_results": self.resume_with_saved_results,
+                "result_pass_down_mode": result_pass_down_mode_str,
+                "enable_optional_post_process": self.enable_optional_post_process,
+            },
         }
 
         # Include expansion_records in the serialized output when present
         if expansion_records:
-            result['expansion_records'] = [vars(r) for r in expansion_records]
+            result["expansion_records"] = [vars(r) for r in expansion_records]
 
         return result
 
@@ -1111,7 +1115,9 @@ class Workflow(WorkNodeBase, ABC):
 
                 for i in range(saved_step_results_back_search_start_index, -1, -1):
                     result_id = self._get_step_name(self._steps[i], i) or i
-                    step_result_path = self._resolve_result_path(result_id, *args, **kwargs)
+                    step_result_path = self._resolve_result_path(
+                        result_id, *args, **kwargs
+                    )
                     exists_step_result_or_preloaded_step_result = self._exists_result(
                         result_id=result_id, result_path=step_result_path
                     )
@@ -1127,30 +1133,32 @@ class Workflow(WorkNodeBase, ABC):
                             exists_step_result_or_preloaded_step_result = True
 
                     if (
-                            exists_step_result_or_preloaded_step_result is not None and
-                            exists_step_result_or_preloaded_step_result is not False
+                        exists_step_result_or_preloaded_step_result is not None
+                        and exists_step_result_or_preloaded_step_result is not False
                     ):
-                        self.log_info((f'step {i} result exists', True))
+                        self.log_info((f"step {i} result exists", True))
                         start_step_i = i
                         break
                     else:
-                        self.log_info((f'step {i} result exists', False))
+                        self.log_info((f"step {i} result exists", False))
 
                 # Load the found result
                 if start_step_i != -1:
                     step_result = self._load_result(
                         result_id=start_step_i,
                         result_path_or_preloaded_result=(
-                            step_result_path if
-                            isinstance(exists_step_result_or_preloaded_step_result, bool)
+                            step_result_path
+                            if isinstance(
+                                exists_step_result_or_preloaded_step_result, bool
+                            )
                             else exists_step_result_or_preloaded_step_result
-                        )
+                        ),
                     )
 
         # --- State initialization ---
         _uses_state = any(
-            getattr(s, 'update_state', None) is not None
-            or getattr(s, 'receives_state', False)
+            getattr(s, "update_state", None) is not None
+            or getattr(s, "receives_state", False)
             for s in self._steps
         )
         if _checkpoint_state is not None:
@@ -1212,7 +1220,7 @@ class Workflow(WorkNodeBase, ABC):
                 try:  # INNER try: per-step error handling
                     # Handle input arguments to the step:
                     # Req 26.4: Splice mode — first expanded step receives emitter's original input
-                    _splice_step_idx = getattr(self, '_splice_step_index', None)
+                    _splice_step_idx = getattr(self, "_splice_step_index", None)
                     if _splice_step_idx is not None and i == _splice_step_idx:
                         _s_args = self._splice_orig_args or args
                         _s_kwargs = self._splice_orig_kwargs or kwargs
@@ -1237,7 +1245,7 @@ class Workflow(WorkNodeBase, ABC):
                     # outer handler instead of being logged as WorkflowStepError.
                     raise
                 except Exception as err:
-                    error_handler = getattr(this_step, 'error_handler', None)
+                    error_handler = getattr(this_step, "error_handler", None)
                     if error_handler is not None:
                         step_result = error_handler(
                             err, step_result, state, step_name, i
@@ -1249,13 +1257,16 @@ class Workflow(WorkNodeBase, ABC):
                             and self.enable_result_save == StepResultSaveOptions.OnError
                         )
 
-                        self.log_error({
-                            'step_failed': i,
-                            'step_name': step_name,
-                            'result_save_on_error_enabled': result_save_on_error_enabled,
-                            'exception_type': type(err).__name__,
-                            'exception_message': str(err),
-                        }, log_type=WorkflowLogTypes.StepError)
+                        self.log_error(
+                            {
+                                "step_failed": i,
+                                "step_name": step_name,
+                                "result_save_on_error_enabled": result_save_on_error_enabled,
+                                "exception_type": type(err).__name__,
+                                "exception_message": str(err),
+                            },
+                            log_type=WorkflowLogTypes.StepError,
+                        )
 
                         if i > 0 and result_save_on_error_enabled:
                             self._save_result(
@@ -1269,16 +1280,20 @@ class Workflow(WorkNodeBase, ABC):
                 # Expansion check: after step execution, BEFORE _post_process (Req 35)
                 if isinstance(step_result, ExpansionResult):
                     # Req 27: Forbidden combination check
-                    if getattr(this_step, 'loop_back_to', None) is not None:
+                    if getattr(this_step, "loop_back_to", None) is not None:
                         raise ExpansionConfigError(
                             f"Step '{step_name}' has loop_back_to set and returned ExpansionResult. "
                             "This combination is forbidden."
                         )
                     actual_result = step_result.result
-                    _splice_mode = step_result.mode == 'splice'
-                    self._handle_expansion(i, step_result, state,
-                                           orig_args=(nargs if i > 0 else args),
-                                           orig_kwargs=(nkwargs if i > 0 else kwargs))
+                    _splice_mode = step_result.mode == "splice"
+                    self._handle_expansion(
+                        i,
+                        step_result,
+                        state,
+                        orig_args=(nargs if i > 0 else args),
+                        orig_kwargs=(nkwargs if i > 0 else kwargs),
+                    )
                     step_result = actual_result
 
                 # After the step executes successfully, run the mandatory _post_process hook.
@@ -1288,8 +1303,11 @@ class Workflow(WorkNodeBase, ABC):
 
                 # If optional post-processing is enabled both on the workflow and on this step,
                 # run the _optional_post_process hook next.
-                if getattr(this_step, 'enable_optional_post_process',
-                           self.enable_optional_post_process):
+                if getattr(
+                    this_step,
+                    "enable_optional_post_process",
+                    self.enable_optional_post_process,
+                ):
                     _step_result = self._optional_post_process(
                         step_result, *args, **kwargs
                     )
@@ -1306,12 +1324,14 @@ class Workflow(WorkNodeBase, ABC):
                 # Save result based on the configured saving options.
                 # Req 26: Skip result save for emitter step when splice mode is active
                 enable_result_save = getattr(
-                    this_step, 'enable_result_save', self.enable_result_save
+                    this_step, "enable_result_save", self.enable_result_save
                 )
                 if _splice_mode:
                     _splice_mode = False  # Reset after skipping save for emitter
-                elif (enable_result_save is True
-                        or enable_result_save == StepResultSaveOptions.Always):
+                elif (
+                    enable_result_save is True
+                    or enable_result_save == StepResultSaveOptions.Always
+                ):
                     if _has_loops:
                         self._exec_seq += 1
                         _current_result_id = self._make_seq_result_id(
@@ -1328,16 +1348,16 @@ class Workflow(WorkNodeBase, ABC):
                     _last_saved_result_id = _current_result_id
 
                 # Loop check — only evaluated when the step has loop_back_to.
-                loop_back_to = getattr(this_step, 'loop_back_to', None)
+                loop_back_to = getattr(this_step, "loop_back_to", None)
                 if loop_back_to is not None:
-                    loop_condition = getattr(this_step, 'loop_condition', None)
+                    loop_condition = getattr(this_step, "loop_condition", None)
                     should_loop = (
-                        loop_condition(state, step_result)
-                        if loop_condition else False
+                        loop_condition(state, step_result) if loop_condition else False
                     )
                     if should_loop:
                         max_iters = getattr(
-                            this_step, 'max_loop_iterations',
+                            this_step,
+                            "max_loop_iterations",
                             self.max_loop_iterations,
                         )
                         _lc_key = self._get_loop_count_key(this_step, i)
@@ -1350,22 +1370,22 @@ class Workflow(WorkNodeBase, ABC):
                             # Checkpoint: looping back
                             if _has_loops and _last_saved_result_id is not None:
                                 self._save_loop_checkpoint(
-                                    i, target_i, _last_saved_result_id,
-                                    state, *args, **kwargs
+                                    i,
+                                    target_i,
+                                    _last_saved_result_id,
+                                    state,
+                                    *args,
+                                    **kwargs,
                                 )
                             if _has_loops:
-                                self._clear_step_in_progress_marker(
-                                    *args, **kwargs
-                                )
+                                self._clear_step_in_progress_marker(*args, **kwargs)
                                 self._step_was_previously_attempted = False
                                 self._previous_attempt_info = None
                             i = target_i
                             continue  # jump back, skip _on_step_complete
                         else:
                             # Loop exhausted — invoke handler if present.
-                            on_exhausted = getattr(
-                                this_step, 'on_loop_exhausted', None
-                            )
+                            on_exhausted = getattr(this_step, "on_loop_exhausted", None)
                             if on_exhausted:
                                 on_exhausted(state, step_result)
 
@@ -1377,8 +1397,7 @@ class Workflow(WorkNodeBase, ABC):
                 # Checkpoint: advancing to next step
                 if _has_loops and _last_saved_result_id is not None:
                     self._save_loop_checkpoint(
-                        i, i + 1, _last_saved_result_id,
-                        state, *args, **kwargs
+                        i, i + 1, _last_saved_result_id, state, *args, **kwargs
                     )
                 if _has_loops:
                     self._clear_step_in_progress_marker(*args, **kwargs)
@@ -1451,7 +1470,9 @@ class Workflow(WorkNodeBase, ABC):
 
                 for i in range(saved_step_results_back_search_start_index, -1, -1):
                     result_id = self._get_step_name(self._steps[i], i) or i
-                    step_result_path = self._resolve_result_path(result_id, *args, **kwargs)
+                    step_result_path = self._resolve_result_path(
+                        result_id, *args, **kwargs
+                    )
                     exists_step_result_or_preloaded_step_result = self._exists_result(
                         result_id=result_id, result_path=step_result_path
                     )
@@ -1467,30 +1488,32 @@ class Workflow(WorkNodeBase, ABC):
                             exists_step_result_or_preloaded_step_result = True
 
                     if (
-                            exists_step_result_or_preloaded_step_result is not None and
-                            exists_step_result_or_preloaded_step_result is not False
+                        exists_step_result_or_preloaded_step_result is not None
+                        and exists_step_result_or_preloaded_step_result is not False
                     ):
-                        self.log_info((f'step {i} result exists', True))
+                        self.log_info((f"step {i} result exists", True))
                         start_step_i = i
                         break
                     else:
-                        self.log_info((f'step {i} result exists', False))
+                        self.log_info((f"step {i} result exists", False))
 
                 # Load the found result
                 if start_step_i != -1:
                     step_result = self._load_result(
                         result_id=start_step_i,
                         result_path_or_preloaded_result=(
-                            step_result_path if
-                            isinstance(exists_step_result_or_preloaded_step_result, bool)
+                            step_result_path
+                            if isinstance(
+                                exists_step_result_or_preloaded_step_result, bool
+                            )
                             else exists_step_result_or_preloaded_step_result
-                        )
+                        ),
                     )
 
         # --- State initialization ---
         _uses_state = any(
-            getattr(s, 'update_state', None) is not None
-            or getattr(s, 'receives_state', False)
+            getattr(s, "update_state", None) is not None
+            or getattr(s, "receives_state", False)
             for s in self._steps
         )
         if _checkpoint_state is not None:
@@ -1550,11 +1573,13 @@ class Workflow(WorkNodeBase, ABC):
 
                 try:  # INNER try: per-step error handling
                     # Req 26.4: Splice mode — first expanded step receives emitter's original input
-                    _splice_step_idx = getattr(self, '_splice_step_index', None)
+                    _splice_step_idx = getattr(self, "_splice_step_index", None)
                     if _splice_step_idx is not None and i == _splice_step_idx:
                         _s_args = self._splice_orig_args or args
                         _s_kwargs = self._splice_orig_kwargs or kwargs
-                        step_result = await call_maybe_async(this_step, *_s_args, **_s_kwargs)
+                        step_result = await call_maybe_async(
+                            this_step, *_s_args, **_s_kwargs
+                        )
                         # Clean up splice state after first expanded step executes
                         del self._splice_orig_args
                         del self._splice_orig_kwargs
@@ -1564,7 +1589,9 @@ class Workflow(WorkNodeBase, ABC):
                         nargs, nkwargs = self._get_args_for_downstream(
                             prev_step_result, args, kwargs
                         )
-                        step_result = await call_maybe_async(this_step, *nargs, **nkwargs)
+                        step_result = await call_maybe_async(
+                            this_step, *nargs, **nkwargs
+                        )
                     else:
                         step_result = await call_maybe_async(this_step, *args, **kwargs)
 
@@ -1574,7 +1601,7 @@ class Workflow(WorkNodeBase, ABC):
                     # outer handler instead of being logged as WorkflowStepError.
                     raise
                 except Exception as err:
-                    error_handler = getattr(this_step, 'error_handler', None)
+                    error_handler = getattr(this_step, "error_handler", None)
                     if error_handler is not None:
                         step_result = await call_maybe_async(
                             error_handler, err, step_result, state, step_name, i
@@ -1586,13 +1613,16 @@ class Workflow(WorkNodeBase, ABC):
                             and self.enable_result_save == StepResultSaveOptions.OnError
                         )
 
-                        self.log_error({
-                            'step_failed': i,
-                            'step_name': step_name,
-                            'result_save_on_error_enabled': result_save_on_error_enabled,
-                            'exception_type': type(err).__name__,
-                            'exception_message': str(err),
-                        }, log_type=WorkflowLogTypes.StepError)
+                        self.log_error(
+                            {
+                                "step_failed": i,
+                                "step_name": step_name,
+                                "result_save_on_error_enabled": result_save_on_error_enabled,
+                                "exception_type": type(err).__name__,
+                                "exception_message": str(err),
+                            },
+                            log_type=WorkflowLogTypes.StepError,
+                        )
 
                         if i > 0 and result_save_on_error_enabled:
                             self._save_result(
@@ -1606,25 +1636,34 @@ class Workflow(WorkNodeBase, ABC):
                 # Expansion check: after step execution, BEFORE _post_process (Req 35)
                 if isinstance(step_result, ExpansionResult):
                     # Req 27: Forbidden combination check
-                    if getattr(this_step, 'loop_back_to', None) is not None:
+                    if getattr(this_step, "loop_back_to", None) is not None:
                         raise ExpansionConfigError(
                             f"Step '{step_name}' has loop_back_to set and returned ExpansionResult. "
                             "This combination is forbidden."
                         )
                     actual_result = step_result.result
-                    _splice_mode = step_result.mode == 'splice'
-                    self._handle_expansion(i, step_result, state,
-                                           orig_args=(nargs if i > 0 else args),
-                                           orig_kwargs=(nkwargs if i > 0 else kwargs))
+                    _splice_mode = step_result.mode == "splice"
+                    self._handle_expansion(
+                        i,
+                        step_result,
+                        state,
+                        orig_args=(nargs if i > 0 else args),
+                        orig_kwargs=(nkwargs if i > 0 else kwargs),
+                    )
                     step_result = actual_result
 
                 # Post-process hooks
-                _step_result = await call_maybe_async(self._post_process, step_result, *args, **kwargs)
+                _step_result = await call_maybe_async(
+                    self._post_process, step_result, *args, **kwargs
+                )
                 if _step_result is not None:
                     step_result = _step_result
 
-                if getattr(this_step, 'enable_optional_post_process',
-                           self.enable_optional_post_process):
+                if getattr(
+                    this_step,
+                    "enable_optional_post_process",
+                    self.enable_optional_post_process,
+                ):
                     _step_result = await call_maybe_async(
                         self._optional_post_process, step_result, *args, **kwargs
                     )
@@ -1641,12 +1680,14 @@ class Workflow(WorkNodeBase, ABC):
                 # Save result based on the configured saving options.
                 # Req 26: Skip result save for emitter step when splice mode is active
                 enable_result_save = getattr(
-                    this_step, 'enable_result_save', self.enable_result_save
+                    this_step, "enable_result_save", self.enable_result_save
                 )
                 if _splice_mode:
                     _splice_mode = False  # Reset after skipping save for emitter
-                elif (enable_result_save is True
-                        or enable_result_save == StepResultSaveOptions.Always):
+                elif (
+                    enable_result_save is True
+                    or enable_result_save == StepResultSaveOptions.Always
+                ):
                     if _has_loops:
                         self._exec_seq += 1
                         _current_result_id = self._make_seq_result_id(
@@ -1663,16 +1704,18 @@ class Workflow(WorkNodeBase, ABC):
                     _last_saved_result_id = _current_result_id
 
                 # Loop check — only evaluated when the step has loop_back_to.
-                loop_back_to = getattr(this_step, 'loop_back_to', None)
+                loop_back_to = getattr(this_step, "loop_back_to", None)
                 if loop_back_to is not None:
-                    loop_condition = getattr(this_step, 'loop_condition', None)
+                    loop_condition = getattr(this_step, "loop_condition", None)
                     should_loop = (
                         await call_maybe_async(loop_condition, state, step_result)
-                        if loop_condition else False
+                        if loop_condition
+                        else False
                     )
                     if should_loop:
                         max_iters = getattr(
-                            this_step, 'max_loop_iterations',
+                            this_step,
+                            "max_loop_iterations",
                             self.max_loop_iterations,
                         )
                         _lc_key = self._get_loop_count_key(this_step, i)
@@ -1685,34 +1728,39 @@ class Workflow(WorkNodeBase, ABC):
                             # Checkpoint: looping back
                             if _has_loops and _last_saved_result_id is not None:
                                 self._save_loop_checkpoint(
-                                    i, target_i, _last_saved_result_id,
-                                    state, *args, **kwargs
+                                    i,
+                                    target_i,
+                                    _last_saved_result_id,
+                                    state,
+                                    *args,
+                                    **kwargs,
                                 )
                             if _has_loops:
-                                self._clear_step_in_progress_marker(
-                                    *args, **kwargs
-                                )
+                                self._clear_step_in_progress_marker(*args, **kwargs)
                                 self._step_was_previously_attempted = False
                                 self._previous_attempt_info = None
                             i = target_i
                             continue  # jump back, skip _on_step_complete
                         else:
-                            on_exhausted = getattr(
-                                this_step, 'on_loop_exhausted', None
-                            )
+                            on_exhausted = getattr(this_step, "on_loop_exhausted", None)
                             if on_exhausted:
                                 await call_maybe_async(on_exhausted, state, step_result)
 
                 # Step-complete hook (only fires when NOT looping back).
                 await call_maybe_async(
-                    self._on_step_complete, step_result, step_name, i, state, *args, **kwargs
+                    self._on_step_complete,
+                    step_result,
+                    step_name,
+                    i,
+                    state,
+                    *args,
+                    **kwargs,
                 )
 
                 # Checkpoint: advancing to next step
                 if _has_loops and _last_saved_result_id is not None:
                     self._save_loop_checkpoint(
-                        i, i + 1, _last_saved_result_id,
-                        state, *args, **kwargs
+                        i, i + 1, _last_saved_result_id, state, *args, **kwargs
                     )
                 if _has_loops:
                     self._clear_step_in_progress_marker(*args, **kwargs)
@@ -1730,7 +1778,8 @@ class Workflow(WorkNodeBase, ABC):
 # --- CheckpointState (jsonfy-mode only) ---
 # Defined after Workflow to use it as @artifact_type target.
 
-@artifact_type(Workflow, type='json', group='workflows')
+
+@artifact_type(Workflow, type="json", group="workflows")
 @attrs(slots=False)
 class CheckpointState:
     """Wrapper for checkpoint state dict with artifact metadata for jsonfy mode.
@@ -1738,6 +1787,7 @@ class CheckpointState:
     Only instantiated when checkpoint_mode='jsonfy'; pickle mode saves
     raw dicts directly via pickle_save(..., enable_parts=True).
     """
+
     version = attrib(default=1)
     exec_seq = attrib(default=0)
     step_index = attrib(default=0)
@@ -1750,5 +1800,4 @@ class CheckpointState:
 
 # Update the module-level forward reference used by _try_load_checkpoint and _save_loop_checkpoint.
 # This replaces the None sentinel defined at the top of the module.
-globals()['CheckpointState'] = CheckpointState
-
+globals()["CheckpointState"] = CheckpointState

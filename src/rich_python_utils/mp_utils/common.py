@@ -1,19 +1,27 @@
-from collections import defaultdict, Counter
+from collections import Counter, defaultdict
 from multiprocessing import cpu_count
 from time import sleep
-from typing import Union, Iterator, Iterable, List, Tuple, Set, Mapping
+from typing import Iterable, Iterator, List, Mapping, Set, Tuple, Union
 
-from tqdm import tqdm
-
-from rich_python_utils.common_utils import split_iter, merge_mappings, merge_list_valued_mappings, merge_set_valued_mappings, merge_counter_valued_mappings, sum_dicts
+from rich_python_utils.common_utils import (
+    merge_counter_valued_mappings,
+    merge_list_valued_mappings,
+    merge_mappings,
+    merge_set_valued_mappings,
+    split_iter,
+    sum_dicts,
+)
 from rich_python_utils.console_utils import hprint_message
 from rich_python_utils.datetime_utils.tictoc import tic, toc
+from tqdm import tqdm
 
 
 def _check_num_p(num_p: int):
     if num_p <= 0:
-        raise ValueError(f"The number of processes specified in `num_p` must be positive; "
-                         f"got {num_p}.")
+        raise ValueError(
+            f"The number of processes specified in `num_p` must be positive; "
+            f"got {num_p}."
+        )
 
 
 def get_suggested_num_workers(num_p: int = None):
@@ -41,10 +49,10 @@ def get_suggested_num_workers(num_p: int = None):
 
 
 def dispatch_data(
-        num_p: int,
-        data_iter: Union[Iterator, Iterable, List],
-        args: Tuple,
-        verbose: bool = __debug__
+    num_p: int,
+    data_iter: Union[Iterator, Iterable, List],
+    args: Tuple,
+    verbose: bool = __debug__,
 ) -> List[Tuple]:
     """
     Splits the provided data into chunks and prepares arguments for parallel processing.
@@ -83,25 +91,20 @@ def dispatch_data(
     _check_num_p(num_p)
 
     tic("Splitting task", verbose=verbose)
-    splits = split_iter(
-        it=data_iter,
-        num_splits=num_p,
-        use_tqdm=verbose
-    )
+    splits = split_iter(it=data_iter, num_splits=num_p, use_tqdm=verbose)
     toc(verbose=verbose)
 
     num_p = len(splits)
     if num_p == 0:
-        raise ValueError(f"The number of data splits is zero. "
-                         f"Possibly no data was read from the provided iterator.")
+        raise ValueError(
+            f"The number of data splits is zero. "
+            f"Possibly no data was read from the provided iterator."
+        )
     else:
         job_args = [None] * num_p
         for pidx in range(num_p):
             if verbose:
-                hprint_message(
-                    'pid', pidx,
-                    'workload', len(splits[pidx])
-                )
+                hprint_message("pid", pidx, "workload", len(splits[pidx]))
             job_args[pidx] = (pidx, splits[pidx], *args)
         return job_args
 
@@ -156,27 +159,32 @@ def start_and_wait_jobs(jobs: [Union[List, Tuple]], interval: float = 0.01):
 def _merge_list(results):
     return sum(results, [])
 
+
 def _sum(results):
     return sum(results)
 
+
 def get_merger(merge_method):
-    if merge_method == 'list':
+    if merge_method == "list":
         return _merge_list
-    elif merge_method == 'dict':
+    elif merge_method == "dict":
         return merge_mappings
-    elif merge_method == 'list_dict':
+    elif merge_method == "list_dict":
         return merge_list_valued_mappings
-    elif merge_method == 'set_dict':
+    elif merge_method == "set_dict":
         return merge_set_valued_mappings
-    elif merge_method == 'counter_dict':
+    elif merge_method == "counter_dict":
         return merge_counter_valued_mappings
-    elif merge_method == 'sum':
+    elif merge_method == "sum":
         return _sum
     raise ValueError(
         f"The provided results does not support the default merge method {merge_method}."
     )
 
-def merge_results(result_collection, mergers: Union[List, Tuple] = None, _in_place: bool = True):
+
+def merge_results(
+    result_collection, mergers: Union[List, Tuple] = None, _in_place: bool = True
+):
     """
     Merges a collection of results using specified merge methods or default merge logic.
 
@@ -224,17 +232,17 @@ def merge_results(result_collection, mergers: Union[List, Tuple] = None, _in_pla
     """
 
     def _default_merger_1(results, merge_method: str):
-        if merge_method == 'list':
+        if merge_method == "list":
             return sum(results, [])
-        elif merge_method == 'dict':
+        elif merge_method == "dict":
             return merge_mappings(results, in_place=_in_place)
-        elif merge_method == 'list_dict':
+        elif merge_method == "list_dict":
             return merge_list_valued_mappings(results, in_place=_in_place)
-        elif merge_method == 'set_dict':
+        elif merge_method == "set_dict":
             return merge_set_valued_mappings(results, in_place=_in_place)
-        elif merge_method == 'counter_dict':
+        elif merge_method == "counter_dict":
             return merge_counter_valued_mappings(results, in_place=_in_place)
-        elif merge_method == 'sum':
+        elif merge_method == "sum":
             return sum(results)
         raise ValueError(
             f"The provided results does not support the default merge method {merge_method}."

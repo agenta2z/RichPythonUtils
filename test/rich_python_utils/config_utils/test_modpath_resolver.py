@@ -7,8 +7,10 @@ from pathlib import Path
 
 import pytest
 from omegaconf import OmegaConf
-
-from rich_python_utils.config_utils._resolvers import _modpath_resolver, ensure_resolvers
+from rich_python_utils.config_utils._resolvers import (
+    _modpath_resolver,
+    ensure_resolvers,
+)
 
 
 # ---------------------------------------------------------------------------

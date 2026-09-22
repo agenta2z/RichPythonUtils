@@ -1,9 +1,11 @@
 import re
-from typing import Tuple, Optional, Union, Iterable, List, Any, Sequence
+from typing import Any, Iterable, List, Optional, Sequence, Tuple, Union
 
-from rich_python_utils.common_utils.typing_helper import str2val_, make_list
-from rich_python_utils.string_utils.common import cut, strip_, index__, index_pair
-from rich_python_utils.common_objects.search_fallback_options import SearchFallbackOptions
+from rich_python_utils.common_objects.search_fallback_options import (
+    SearchFallbackOptions,
+)
+from rich_python_utils.common_utils.typing_helper import make_list, str2val_
+from rich_python_utils.string_utils.common import cut, index__, index_pair, strip_
 from rich_python_utils.string_utils.regex import _get_whole_word_pattern
 
 
@@ -30,21 +32,21 @@ def birsplit(s: str, sep: str) -> Tuple[str, Optional[str]]:
 
 
 def split_(
-        s: str,
-        sep: Union[str, Iterable[str]] = None,
-        maxsplit: int = -1,
-        n: int = None,
-        minsplit: int = -1,
-        pad: Any = None,
-        tile_padding: bool = True,
-        remove_empty_split: bool = False,
-        parse: bool = False,
-        lstrip: bool = False,
-        rstrip: bool = False,
-        return_ori_num_splits: bool = False,
-        split_by_whole_words: bool = False,
-        use_space_as_word_boundary: bool = True,
-        rsplit_mode: bool = False,
+    s: str,
+    sep: Union[str, Iterable[str]] = None,
+    maxsplit: int = -1,
+    n: int = None,
+    minsplit: int = -1,
+    pad: Any = None,
+    tile_padding: bool = True,
+    remove_empty_split: bool = False,
+    parse: bool = False,
+    lstrip: bool = False,
+    rstrip: bool = False,
+    return_ori_num_splits: bool = False,
+    split_by_whole_words: bool = False,
+    use_space_as_word_boundary: bool = True,
+    rsplit_mode: bool = False,
 ):
     """
     Advanced string-splitting function with options for parsing, trimming,
@@ -153,7 +155,9 @@ def split_(
         raise ValueError("`n` must be >= `minsplit`.")
 
     # rsplit only supports a single delimiter or None, and no word-boundary splitting
-    if rsplit_mode and (split_by_whole_words or (isinstance(sep, (list, tuple)) and len(sep) > 1)):
+    if rsplit_mode and (
+        split_by_whole_words or (isinstance(sep, (list, tuple)) and len(sep) > 1)
+    ):
         raise ValueError(
             "rsplit_mode=True is only supported with a single string delimiter (or None) "
             "and split_by_whole_words=False."
@@ -187,7 +191,7 @@ def split_(
                     splits = s.split(sep)
     elif isinstance(sep, Sequence):
         # Multiple delimiters => combine into a regex pattern
-        pattern = '|'.join(f'(?:{re.escape(_sep)})' for _sep in sep)
+        pattern = "|".join(f"(?:{re.escape(_sep)})" for _sep in sep)
         if split_by_whole_words:
             pattern = _get_whole_word_pattern(pattern, use_space_as_word_boundary)
         if maxsplit > 0:
@@ -221,7 +225,7 @@ def split_(
 
     # STEP9: Remove empty splits if desired
     if remove_empty_split:
-        splits = [x for x in splits if x != '']
+        splits = [x for x in splits if x != ""]
 
     # STEP10: Possibly pad or truncate to get exactly n elements
     final_count = len(splits)
@@ -254,7 +258,7 @@ def split_(
     return splits
 
 
-def csv_line_split(line: str, separator: str = ',') -> List[str]:
+def csv_line_split(line: str, separator: str = ",") -> List[str]:
     """
     Split a single line of a CSV-like string into a list of values, handling quoted values.
 
@@ -272,14 +276,14 @@ def csv_line_split(line: str, separator: str = ',') -> List[str]:
     """
     parts = []
     in_quote = False
-    current_part = ''
+    current_part = ""
 
     for char in line:
         if char == '"':
             in_quote = not in_quote
         elif char == separator and not in_quote:
             parts.append(current_part)
-            current_part = ''
+            current_part = ""
         else:
             current_part += char
 
@@ -289,13 +293,13 @@ def csv_line_split(line: str, separator: str = ',') -> List[str]:
 
 
 def split_with_escape_and_quotes(
-        s: str,
-        delimiter: str,
-        escape: Optional[str] = '\\',
-        quotes: Optional[Tuple[str, str]] = ('[', ']'),
-        keep_quotes: bool = True,
-        keep_escape: bool = False,
-        max_split: Optional[int] = None
+    s: str,
+    delimiter: str,
+    escape: Optional[str] = "\\",
+    quotes: Optional[Tuple[str, str]] = ("[", "]"),
+    keep_quotes: bool = True,
+    keep_escape: bool = False,
+    max_split: Optional[int] = None,
 ):
     """
     Function to split a string by a delimiter, but ignoring delimiters that are escaped or inside quotes.
@@ -362,11 +366,15 @@ def split_with_escape_and_quotes(
     split_count = 0
 
     for char in s:
-        if escape and char == escape and not escaped:  # Check if escape is not None and not empty
+        if (
+            escape and char == escape and not escaped
+        ):  # Check if escape is not None and not empty
             escaped = True
             if keep_escape:
                 current.append(char)
-        elif quotes and char in quotes and not escaped:  # Check if quotes is not None and not empty
+        elif (
+            quotes and char in quotes and not escaped
+        ):  # Check if quotes is not None and not empty
             quoted = not quoted
             if keep_quotes:
                 current.append(char)
@@ -386,10 +394,10 @@ def split_with_escape_and_quotes(
 
 class SplitOptions:
     def __init__(
-            self,
-            separator,
-            must_exist_or_default_value: Union[bool, str] = False,
-            search_option: SearchFallbackOptions = SearchFallbackOptions.RaiseError
+        self,
+        separator,
+        must_exist_or_default_value: Union[bool, str] = False,
+        search_option: SearchFallbackOptions = SearchFallbackOptions.RaiseError,
     ):
         self.separator = separator
         self.must_exist_or_default_value = must_exist_or_default_value
@@ -397,20 +405,20 @@ class SplitOptions:
 
 
 def split_multiple(
-        s: str,
-        separators: List[
-            Union[
-                Union[str, Iterable[str]],
-                Tuple[Union[str, Iterable[str]], Union[bool, str]]
-            ]
-        ],
-        return_first: bool = True,
-        return_last: bool = True,
-        lstrip: bool = False,
-        rstrip: bool = False,
-        skip_empty_split: bool = False,
-        start: int = 0,
-        flexible_separators: bool = False
+    s: str,
+    separators: List[
+        Union[
+            Union[str, Iterable[str]],
+            Tuple[Union[str, Iterable[str]], Union[bool, str]],
+        ]
+    ],
+    return_first: bool = True,
+    return_last: bool = True,
+    lstrip: bool = False,
+    rstrip: bool = False,
+    skip_empty_split: bool = False,
+    start: int = 0,
+    flexible_separators: bool = False,
 ):
     """
     Splits a string based on multiple separators, yielding each split segment of the string.
@@ -546,7 +554,10 @@ def split_multiple(
                 _sep_must_exist_flag_or_default_yield = False
                 if isinstance(_separator, tuple) and len(_separator) == 2:
                     _separator, _sep_must_exist_flag_or_default_yield = _separator
-                    if _sep_must_exist_flag_or_default_yield is True and _any_sep_must_exist_flag is False:
+                    if (
+                        _sep_must_exist_flag_or_default_yield is True
+                        and _any_sep_must_exist_flag is False
+                    ):
                         _any_sep_must_exist_flag = True
                         _must_exist_seperator = _separator
                 is_pair_based_split = isinstance(_separator, tuple)
@@ -562,10 +573,12 @@ def split_multiple(
                     separator0_idx = _separator0_idx
                     separator = _separator
                     must_exist_or_default_value = _sep_must_exist_flag_or_default_yield
-                    j = (i + _j)
+                    j = i + _j
             if j == -1:
                 if _any_sep_must_exist_flag:
-                    raise ValueError(f"separator '{separator}' cannot be found in the input string \"{s}\"")
+                    raise ValueError(
+                        f"separator '{separator}' cannot be found in the input string \"{s}\""
+                    )
                 else:
                     return
             if i != j:
@@ -584,7 +597,7 @@ def split_multiple(
                 start,
                 return_end=True,
                 return_at_first_match=return_at_first_match,
-                search_fallback_option=search_option
+                search_fallback_option=search_option,
             )
             if return_first or (not is_first):
                 split = strip_(s[start:_start], lstrip, rstrip)
@@ -594,7 +607,9 @@ def split_multiple(
             start = end
         except ValueError:
             if must_exist_or_default_value is True:
-                raise ValueError(f"separator '{separator}' cannot be found in the input string \"{s}\"")
+                raise ValueError(
+                    f"separator '{separator}' cannot be found in the input string \"{s}\""
+                )
             elif must_exist_or_default_value is not False:
                 is_first = False
                 yield must_exist_or_default_value
