@@ -10,6 +10,7 @@ class ResultPassDownMode(IntEnum):
         ResultAsFirstArg (int): Pass the result of the previous step as the first positional argument (replacing the existing first positional argument).
         ResultAsLeadingArgs (int): If result is a tuple, splat it in front of existing positional args; otherwise insert as first positional arg.
     """
+
     NoPassDown = 0
     ResultAsFirstArg = 1
     ResultAsLeadingArgs = 2

@@ -1,6 +1,6 @@
 import random
 from collections import Counter
-from typing import Union, Dict, List, Optional, Iterable, Sequence, Set
+from typing import Dict, Iterable, List, Optional, Sequence, Set, Union
 
 
 def check_and_decrement_count(elem, counts: Union[Counter, Dict]) -> bool:
@@ -37,7 +37,12 @@ def check_and_decrement_count(elem, counts: Union[Counter, Dict]) -> bool:
     return False
 
 
-def filter_elements_by_counts(input_list: List, counts: Union[Counter, Dict], update_counts: bool = False, return_indexes:bool = False) -> List:
+def filter_elements_by_counts(
+    input_list: List,
+    counts: Union[Counter, Dict],
+    update_counts: bool = False,
+    return_indexes: bool = False,
+) -> List:
     """
     Filters elements from the input list based on their counts in a provided Counter or Dictionary.
     Elements are removed from the input list if their count in the Counter/Dictionary is non-zero.
@@ -70,12 +75,22 @@ def filter_elements_by_counts(input_list: List, counts: Union[Counter, Dict], up
         counts = counts.copy()
 
     if return_indexes:
-        return [i for i, elem in enumerate(input_list) if not check_and_decrement_count(elem, counts)]
+        return [
+            i
+            for i, elem in enumerate(input_list)
+            if not check_and_decrement_count(elem, counts)
+        ]
     else:
-        return [elem for elem in input_list if not check_and_decrement_count(elem, counts)]
+        return [
+            elem for elem in input_list if not check_and_decrement_count(elem, counts)
+        ]
 
 
-def ordered_sample(input_list: List, sample_size: Optional[int], must_keep: Optional[Union[Sequence, Set]] = None) -> List:
+def ordered_sample(
+    input_list: List,
+    sample_size: Optional[int],
+    must_keep: Optional[Union[Sequence, Set]] = None,
+) -> List:
     """
     Samples elements from a list, keeping the original order, and ensuring certain specified elements are included.
     If `must_keep` is not empty, these elements are included first, and additional elements are randomly sampled from the remaining list.
@@ -115,10 +130,17 @@ def ordered_sample(input_list: List, sample_size: Optional[int], must_keep: Opti
         must_keep_counts = Counter(must_keep)
         out = []
         if additional_sample_size:
-            remaining_list_indexes = filter_elements_by_counts(input_list, must_keep_counts, update_counts=False, return_indexes=True)
-            additional_samples_indexes = set(random.sample(remaining_list_indexes, additional_sample_size))
+            remaining_list_indexes = filter_elements_by_counts(
+                input_list, must_keep_counts, update_counts=False, return_indexes=True
+            )
+            additional_samples_indexes = set(
+                random.sample(remaining_list_indexes, additional_sample_size)
+            )
             for i, elem in enumerate(input_list):
-                if check_and_decrement_count(elem, counts=must_keep_counts) or i in additional_samples_indexes:
+                if (
+                    check_and_decrement_count(elem, counts=must_keep_counts)
+                    or i in additional_samples_indexes
+                ):
                     out.append(elem)
                 if len(out) == sample_size:
                     break
@@ -130,5 +152,7 @@ def ordered_sample(input_list: List, sample_size: Optional[int], must_keep: Opti
                     break
         return out
     else:
-        return [input_list[i] for i in sorted(random.sample(range(len(input_list)), sample_size))]
-
+        return [
+            input_list[i]
+            for i in sorted(random.sample(range(len(input_list)), sample_size))
+        ]

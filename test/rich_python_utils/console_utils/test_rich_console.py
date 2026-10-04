@@ -14,40 +14,69 @@ This test suite covers:
 - Edge cases and error handling
 """
 
-import pytest
-import logging
 import json
-from unittest.mock import Mock, patch, MagicMock
-from rich.text import Text
+import logging
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 from rich.console import Console
+from rich.text import Text
 from rich_python_utils.console_utils.rich_console_utils import (
-    # Color constants
-    HPRINT_TITLE_COLOR, HPRINT_HEADER_OR_HIGHLIGHT_COLOR, HPRINT_MESSAGE_BODY_COLOR,
-    EPRINT_TITLE_COLOR, EPRINT_HEADER_OR_HIGHLIGHT_COLOR, EPRINT_MESSAGE_BODY_COLOR,
-    WPRINT_TITLE_COLOR, WPRINT_HEADER_OR_HIGHLIGHT_COLOR, WPRINT_MESSAGE_BODY_COLOR,
-    # Backtick-based functions
-    cprint, hprint, eprint, wprint,
     _parse_backtick_highlights,
-    # Message functions
-    cprint_message, hprint_message, eprint_message, wprint_message,
-    # Pairs functions
-    cprint_pairs, hprint_pairs, eprint_pairs, wprint_pairs,
+    checkpoint,
     # Pair string parsing
-    color_print_pair_str, hprint_message_pair_str,
-    # Logging utilities
-    log_pairs, info_print, debug_print,
-    # Section formatting
-    hprint_section_title, hprint_section_separator,
-    # Panel functions
-    cprint_panel, hprint_panel, eprint_panel, wprint_panel,
-    # Rich features
-    print_table, print_syntax, print_markdown, print_json, progress_bar,
-    # Utility functions
-    print_attrs, retrieve_and_print_attrs, checkpoint,
-    # Logger
-    get_rich_logger,
+    color_print_pair_str,
     # Console instance
     console,
+    # Backtick-based functions
+    cprint,
+    # Message functions
+    cprint_message,
+    # Pairs functions
+    cprint_pairs,
+    # Panel functions
+    cprint_panel,
+    debug_print,
+    eprint,
+    EPRINT_HEADER_OR_HIGHLIGHT_COLOR,
+    eprint_message,
+    EPRINT_MESSAGE_BODY_COLOR,
+    eprint_pairs,
+    eprint_panel,
+    EPRINT_TITLE_COLOR,
+    # Logger
+    get_rich_logger,
+    hprint,
+    HPRINT_HEADER_OR_HIGHLIGHT_COLOR,
+    hprint_message,
+    HPRINT_MESSAGE_BODY_COLOR,
+    hprint_message_pair_str,
+    hprint_pairs,
+    hprint_panel,
+    hprint_section_separator,
+    # Section formatting
+    hprint_section_title,
+    # Color constants
+    HPRINT_TITLE_COLOR,
+    info_print,
+    # Logging utilities
+    log_pairs,
+    # Utility functions
+    print_attrs,
+    print_json,
+    print_markdown,
+    print_syntax,
+    # Rich features
+    print_table,
+    progress_bar,
+    retrieve_and_print_attrs,
+    wprint,
+    WPRINT_HEADER_OR_HIGHLIGHT_COLOR,
+    wprint_message,
+    WPRINT_MESSAGE_BODY_COLOR,
+    wprint_pairs,
+    wprint_panel,
+    WPRINT_TITLE_COLOR,
 )
 
 
@@ -78,7 +107,9 @@ class TestBacktickHighlightingHelper:
 
     def test_parse_backtick_simple(self):
         """Test parsing simple backtick-highlighted text."""
-        result = _parse_backtick_highlights("Processing `file.txt`", highlight_color="cyan")
+        result = _parse_backtick_highlights(
+            "Processing `file.txt`", highlight_color="cyan"
+        )
         assert isinstance(result, Text)
         # Text should contain both plain and highlighted segments
         assert len(result.spans) > 0
@@ -98,7 +129,9 @@ class TestBacktickHighlightingHelper:
 
     def test_parse_backtick_custom_quote(self):
         """Test parsing with custom quote character."""
-        result = _parse_backtick_highlights("Highlight *this*", color_quote='*', highlight_color="red")
+        result = _parse_backtick_highlights(
+            "Highlight *this*", color_quote="*", highlight_color="red"
+        )
         assert isinstance(result, Text)
 
     def test_parse_backtick_non_string(self):
@@ -147,7 +180,7 @@ class TestBacktickPrintingFunctions:
 
     def test_cprint_no_end_newline(self, capsys):
         """Test cprint with custom end parameter."""
-        cprint("No newline", end='')
+        cprint("No newline", end="")
         captured = capsys.readouterr()
         assert captured.out == "No newline" or "No newline" in captured.out
 
@@ -164,7 +197,7 @@ class TestMessagePrinting:
 
     def test_hprint_message_pairs(self, capsys):
         """Test hprint_message with pairs (calls hprint_pairs)."""
-        hprint_message('key1', 'val1', 'key2', 'val2')
+        hprint_message("key1", "val1", "key2", "val2")
         captured = capsys.readouterr()
         assert "key1" in captured.out
         assert "val1" in captured.out
@@ -211,7 +244,7 @@ class TestPairsPrinting:
 
     def test_hprint_pairs_simple(self, capsys):
         """Test simple hprint_pairs with key-value pairs."""
-        hprint_pairs('key1', 'value1', 'key2', 'value2')
+        hprint_pairs("key1", "value1", "key2", "value2")
         captured = capsys.readouterr()
         assert "key1" in captured.out
         assert "value1" in captured.out
@@ -220,7 +253,7 @@ class TestPairsPrinting:
 
     def test_hprint_pairs_with_title(self, capsys):
         """Test hprint_pairs with section title."""
-        hprint_pairs('metric', 100, title='Results')
+        hprint_pairs("metric", 100, title="Results")
         captured = capsys.readouterr()
         assert "Results" in captured.out
         assert "metric" in captured.out
@@ -228,14 +261,14 @@ class TestPairsPrinting:
 
     def test_hprint_pairs_with_comment(self, capsys):
         """Test hprint_pairs with title and comment."""
-        hprint_pairs('a', 1, title='Title', comment='Comment text')
+        hprint_pairs("a", 1, title="Title", comment="Comment text")
         captured = capsys.readouterr()
         assert "Title" in captured.out
         assert "Comment text" in captured.out
 
     def test_eprint_pairs(self, capsys):
         """Test eprint_pairs with error formatting."""
-        eprint_pairs('error_code', 404, 'type', 'NotFound')
+        eprint_pairs("error_code", 404, "type", "NotFound")
         captured = capsys.readouterr()
         assert "error_code" in captured.out
         assert "404" in captured.out
@@ -243,7 +276,7 @@ class TestPairsPrinting:
 
     def test_wprint_pairs(self, capsys):
         """Test wprint_pairs with warning formatting."""
-        wprint_pairs('warning', 'W001', 'severity', 'medium')
+        wprint_pairs("warning", "W001", "severity", "medium")
         captured = capsys.readouterr()
         assert "warning" in captured.out
         assert "W001" in captured.out
@@ -252,11 +285,12 @@ class TestPairsPrinting:
     def test_cprint_pairs_custom_colors(self, capsys):
         """Test cprint_pairs with fully customizable colors."""
         cprint_pairs(
-            'key', 'value',
-            first_color='green',
-            second_color='yellow',
-            title='Custom',
-            title_color='magenta'
+            "key",
+            "value",
+            first_color="green",
+            second_color="yellow",
+            title="Custom",
+            title_color="magenta",
         )
         captured = capsys.readouterr()
         assert "key" in captured.out
@@ -265,20 +299,22 @@ class TestPairsPrinting:
 
     def test_pairs_with_separator(self, capsys):
         """Test pairs printing with custom separator."""
-        hprint_pairs('a', 1, 'b', 2, sep=' | ')
+        hprint_pairs("a", 1, "b", 2, sep=" | ")
         captured = capsys.readouterr()
         # Output should use the custom separator
 
     def test_pairs_output_collection(self):
         """Test output collection functionality."""
         output_list = []
-        hprint_pairs('a', 1, 'b', 2, title='Test', output_title_and_contents=output_list)
+        hprint_pairs(
+            "a", 1, "b", 2, title="Test", output_title_and_contents=output_list
+        )
         assert len(output_list) > 0
 
     def test_pairs_with_logger(self):
         """Test pairs functions log to provided logger."""
         mock_logger = Mock(spec=logging.Logger)
-        hprint_pairs('key', 'value', logger=mock_logger)
+        hprint_pairs("key", "value", logger=mock_logger)
         mock_logger.info.assert_called_once()
 
 
@@ -296,7 +332,7 @@ class TestPairStringParsing:
 
     def test_color_print_pair_str_custom_delimiters(self, capsys):
         """Test color_print_pair_str with custom delimiters."""
-        color_print_pair_str("a=1;b=2", pair_delimiter=';', kv_delimiter='=')
+        color_print_pair_str("a=1;b=2", pair_delimiter=";", kv_delimiter="=")
         captured = capsys.readouterr()
         assert "a" in captured.out
         assert "1" in captured.out
@@ -322,7 +358,7 @@ class TestLoggingUtilities:
     def test_log_pairs_basic(self):
         """Test log_pairs logs key-value pairs."""
         mock_logging_fun = Mock()
-        log_pairs(mock_logging_fun, ('key1', 'val1'), ('key2', 'val2'))
+        log_pairs(mock_logging_fun, ("key1", "val1"), ("key2", "val2"))
         mock_logging_fun.assert_called_once()
         call_args = mock_logging_fun.call_args[0][0]
         assert "key1" in call_args
@@ -337,8 +373,10 @@ class TestLoggingUtilities:
 
     def test_info_print_class_tag(self, capsys):
         """Test info_print with class as tag."""
+
         class TestClass:
             pass
+
         info_print(TestClass, "Message")
         captured = capsys.readouterr()
         assert "TestClass" in captured.out
@@ -346,8 +384,10 @@ class TestLoggingUtilities:
 
     def test_info_print_respects_verbose(self, capsys):
         """Test info_print respects _verbose attribute."""
+
         class QuietClass:
             _verbose = False
+
         info_print(QuietClass, "Should not print")
         captured = capsys.readouterr()
         assert captured.out == "" or "Should not print" not in captured.out
@@ -395,11 +435,8 @@ class TestRichFeatures:
 
     def test_print_table_simple(self, capsys):
         """Test print_table displays data as table."""
-        data = [
-            {'name': 'Alice', 'age': 30},
-            {'name': 'Bob', 'age': 25}
-        ]
-        print_table(data, title='People')
+        data = [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]
+        print_table(data, title="People")
         captured = capsys.readouterr()
         assert "Alice" in captured.out
         assert "Bob" in captured.out
@@ -414,8 +451,8 @@ class TestRichFeatures:
 
     def test_print_table_custom_columns(self, capsys):
         """Test print_table with custom column selection."""
-        data = [{'a': 1, 'b': 2, 'c': 3}]
-        print_table(data, columns=['a', 'c'])
+        data = [{"a": 1, "b": 2, "c": 3}]
+        print_table(data, columns=["a", "c"])
         captured = capsys.readouterr()
         assert "1" in captured.out
         assert "3" in captured.out
@@ -423,7 +460,7 @@ class TestRichFeatures:
     def test_print_syntax(self, capsys):
         """Test print_syntax displays syntax-highlighted code."""
         code = "def hello():\n    print('Hello')"
-        print_syntax(code, language='python')
+        print_syntax(code, language="python")
         captured = capsys.readouterr()
         assert "def" in captured.out or "hello" in captured.out
 
@@ -436,7 +473,7 @@ class TestRichFeatures:
 
     def test_print_json_dict(self, capsys):
         """Test print_json with dictionary data."""
-        data = {'name': 'test', 'value': 123}
+        data = {"name": "test", "value": 123}
         print_json(data)
         captured = capsys.readouterr()
         assert "name" in captured.out
@@ -455,7 +492,7 @@ class TestRichFeatures:
         with progress_bar("Testing", total=10) as progress:
             assert progress is not None
             # Progress object should be usable
-            assert hasattr(progress, 'add_task')
+            assert hasattr(progress, "add_task")
 
 
 class TestUtilityFunctions:
@@ -463,6 +500,7 @@ class TestUtilityFunctions:
 
     def test_print_attrs_simple(self, capsys):
         """Test print_attrs prints object attributes."""
+
         class TestObj:
             def __init__(self):
                 self.attr1 = "value1"
@@ -478,6 +516,7 @@ class TestUtilityFunctions:
 
     def test_print_attrs_excludes_private(self, capsys):
         """Test print_attrs excludes private attributes by default."""
+
         class TestObj:
             def __init__(self):
                 self.public = "visible"
@@ -492,6 +531,7 @@ class TestUtilityFunctions:
 
     def test_print_attrs_include_private(self, capsys):
         """Test print_attrs can include private attributes."""
+
         class TestObj:
             def __init__(self):
                 self._private = "shown"
@@ -503,13 +543,14 @@ class TestUtilityFunctions:
 
     def test_retrieve_and_print_attrs(self, capsys):
         """Test retrieve_and_print_attrs returns and prints attributes."""
+
         class TestObj:
             def __init__(self):
                 self.name = "test"
                 self.value = 123
 
         obj = TestObj()
-        name, value = retrieve_and_print_attrs(obj, 'name', 'value')
+        name, value = retrieve_and_print_attrs(obj, "name", "value")
 
         assert name == "test"
         assert value == 123
@@ -518,13 +559,13 @@ class TestUtilityFunctions:
         assert "name" in captured.out
         assert "value" in captured.out
 
-    @patch('builtins.input', return_value='YES')
+    @patch("builtins.input", return_value="YES")
     def test_checkpoint_yes(self, mock_input):
         """Test checkpoint returns True when user enters YES."""
         result = checkpoint()
         assert result is True
 
-    @patch('builtins.input', side_effect=['no', 'YES'])
+    @patch("builtins.input", side_effect=["no", "YES"])
     def test_checkpoint_retry(self, mock_input):
         """Test checkpoint keeps prompting until YES is entered."""
         result = checkpoint()
@@ -537,21 +578,21 @@ class TestRichLogger:
 
     def test_get_rich_logger_basic(self):
         """Test get_rich_logger creates logger with Rich handler."""
-        logger = get_rich_logger('test_logger')
+        logger = get_rich_logger("test_logger")
         assert isinstance(logger, logging.Logger)
-        assert logger.name == 'test_logger'
+        assert logger.name == "test_logger"
         assert len(logger.handlers) > 0
 
     def test_get_rich_logger_level(self):
         """Test get_rich_logger respects log level."""
-        logger = get_rich_logger('test_logger', level=logging.DEBUG)
+        logger = get_rich_logger("test_logger", level=logging.DEBUG)
         assert logger.level == logging.DEBUG
 
     def test_get_rich_logger_unique(self):
         """Test get_rich_logger clears existing handlers."""
-        logger1 = get_rich_logger('unique_logger')
+        logger1 = get_rich_logger("unique_logger")
         initial_handlers = len(logger1.handlers)
-        logger2 = get_rich_logger('unique_logger')
+        logger2 = get_rich_logger("unique_logger")
         # Should clear and add new handler
         assert len(logger2.handlers) == initial_handlers
 
@@ -585,20 +626,22 @@ class TestEdgeCases:
 
     def test_single_pair_value(self, capsys):
         """Test pairs handle single value (odd number of args)."""
-        hprint_pairs('key1', 'val1', 'key2')
+        hprint_pairs("key1", "val1", "key2")
         captured = capsys.readouterr()
         assert "key1" in captured.out
         assert "key2" in captured.out
 
     def test_custom_replacement_for_empty(self, capsys):
         """Test custom replacement for empty content."""
-        hprint_message(title="Test", content="", replacement_for_empty_content="<missing>")
+        hprint_message(
+            title="Test", content="", replacement_for_empty_content="<missing>"
+        )
         captured = capsys.readouterr()
         assert "<missing>" in captured.out
 
     def test_complex_object_content(self, capsys):
         """Test functions handle complex objects as content."""
-        obj = {'nested': {'value': 123}}
+        obj = {"nested": {"value": 123}}
         hprint_message(title="Object", content=obj)
         captured = capsys.readouterr()
         # Should convert to string representation

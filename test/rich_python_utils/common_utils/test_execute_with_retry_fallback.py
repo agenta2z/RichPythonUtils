@@ -15,6 +15,7 @@ Tests correctness properties from the design document:
 
 **Validates: Requirements 6.2, 10.4, 10.5, 10.6, 10.7, 11.2, 11.3, 13.1, 13.2, 14.2**
 """
+
 import asyncio
 import sys
 import time
@@ -31,9 +32,11 @@ if _src_dir.exists() and str(_src_dir) not in sys.path:
     sys.path.insert(0, str(_src_dir))
 
 import pytest
-from hypothesis import given, settings, strategies as st, assume
-
-from rich_python_utils.common_utils.function_helper import execute_with_retry, FallbackMode
+from hypothesis import assume, given, settings, strategies as st
+from rich_python_utils.common_utils.function_helper import (
+    execute_with_retry,
+    FallbackMode,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -42,33 +45,41 @@ from rich_python_utils.common_utils.function_helper import execute_with_retry, F
 
 small_max_retry = st.integers(min_value=1, max_value=5)
 chain_length = st.integers(min_value=1, max_value=4)
-fallback_mode_strategy = st.sampled_from([FallbackMode.ON_EXHAUSTED, FallbackMode.ON_FIRST_FAILURE])
+fallback_mode_strategy = st.sampled_from(
+    [FallbackMode.ON_EXHAUSTED, FallbackMode.ON_FIRST_FAILURE]
+)
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def make_recording_callable(call_log, label):
     """Create a callable that records its invocations and always raises."""
+
     def _func(*args, **kwargs):
         call_log.append(label)
         raise RuntimeError(f"fail-{label}")
+
     return _func
 
 
 def make_counting_callable(counter_dict, label):
     """Create a callable that counts invocations and always raises."""
     counter_dict[label] = 0
+
     def _func(*args, **kwargs):
         counter_dict[label] += 1
         raise RuntimeError(f"fail-{label}")
+
     return _func
 
 
 # ---------------------------------------------------------------------------
 # Property 1: Backward Compatibility Preservation (sync)
 # ---------------------------------------------------------------------------
+
 
 class TestBackwardCompatibilityPreservation:
     """Property 1: Backward Compatibility Preservation (sync).
@@ -127,6 +138,7 @@ class TestBackwardCompatibilityPreservation:
 
         **Validates: Requirements 6.2, 14.2**
         """
+
         def always_fail():
             raise RuntimeError("intentional failure")
 
@@ -177,6 +189,7 @@ class TestBackwardCompatibilityPreservation:
 # Property 6: Fallback Chain Exhaustion (sync)
 # ---------------------------------------------------------------------------
 
+
 class TestFallbackChainExhaustion:
     """Property 6: Fallback Chain Exhaustion (sync).
 
@@ -210,8 +223,7 @@ class TestFallbackChainExhaustion:
 
         primary = make_counting_callable(counters, "primary")
         fallbacks = [
-            make_counting_callable(counters, f"fb_{i}")
-            for i in range(num_fallbacks)
+            make_counting_callable(counters, f"fb_{i}") for i in range(num_fallbacks)
         ]
 
         expected_total = chain_size * (1 + max_retry)
@@ -251,8 +263,7 @@ class TestFallbackChainExhaustion:
 
         primary = make_counting_callable(counters, "primary")
         fallbacks = [
-            make_counting_callable(counters, f"fb_{i}")
-            for i in range(num_fallbacks)
+            make_counting_callable(counters, f"fb_{i}") for i in range(num_fallbacks)
         ]
 
         expected_total = 1 + num_fallbacks * (1 + max_retry)
@@ -284,6 +295,7 @@ class TestFallbackChainExhaustion:
 # Property 7: Fallback Ordering Guarantee (sync)
 # ---------------------------------------------------------------------------
 
+
 class TestFallbackOrderingGuarantee:
     """Property 7: Fallback Ordering Guarantee (sync).
 
@@ -312,8 +324,7 @@ class TestFallbackOrderingGuarantee:
 
         primary = make_recording_callable(call_log, "primary")
         fallbacks = [
-            make_recording_callable(call_log, f"fb_{i}")
-            for i in range(num_fallbacks)
+            make_recording_callable(call_log, f"fb_{i}") for i in range(num_fallbacks)
         ]
 
         with pytest.raises(Exception):
@@ -356,8 +367,7 @@ class TestFallbackOrderingGuarantee:
 
         primary = make_counting_callable(counters, "primary")
         fallbacks = [
-            make_counting_callable(counters, f"fb_{i}")
-            for i in range(num_fallbacks)
+            make_counting_callable(counters, f"fb_{i}") for i in range(num_fallbacks)
         ]
 
         with pytest.raises(Exception):
@@ -379,6 +389,7 @@ class TestFallbackOrderingGuarantee:
 # ---------------------------------------------------------------------------
 # Property 8: Timeout Supersedes Fallback (sync)
 # ---------------------------------------------------------------------------
+
 
 class TestTimeoutSupersedesFallback:
     """Property 8: Timeout Supersedes Fallback (sync).
@@ -412,6 +423,7 @@ class TestTimeoutSupersedesFallback:
                 call_log.append(label)
                 time.sleep(0.05)
                 raise RuntimeError(f"fail-{label}")
+
             return _func
 
         primary = slow_fail("primary")
@@ -446,6 +458,7 @@ class TestTimeoutSupersedesFallback:
 # Property 9: Fallback Exception Filtering (sync)
 # ---------------------------------------------------------------------------
 
+
 class TestFallbackExceptionFiltering:
     """Property 9: Fallback Exception Filtering (sync).
 
@@ -473,7 +486,9 @@ class TestFallbackExceptionFiltering:
         filter_idx=st.integers(min_value=0, max_value=2),
         raise_idx=st.integers(min_value=0, max_value=2),
     )
-    def test_matching_exception_triggers_transition(self, filter_idx: int, raise_idx: int):
+    def test_matching_exception_triggers_transition(
+        self, filter_idx: int, raise_idx: int
+    ):
         """When the raised exception matches fallback_on_exceptions, the
         fallback chain should transition to the next callable.
 
@@ -564,6 +579,7 @@ class TestFallbackExceptionFiltering:
 # Property 17: on_fallback_callback Single-Fire
 # ---------------------------------------------------------------------------
 
+
 class TestOnFallbackCallbackSingleFire:
     """Property 17: on_fallback_callback Single-Fire Per Transition.
 
@@ -597,17 +613,18 @@ class TestOnFallbackCallbackSingleFire:
 
         primary = make_counting_callable(counters, "primary")
         fallbacks = [
-            make_counting_callable(counters, f"fb_{i}")
-            for i in range(num_fallbacks)
+            make_counting_callable(counters, f"fb_{i}") for i in range(num_fallbacks)
         ]
 
         def on_fallback(from_func, to_func, exception, total_attempts):
-            callback_log.append({
-                "from": from_func,
-                "to": to_func,
-                "exception": exception,
-                "total_attempts": total_attempts,
-            })
+            callback_log.append(
+                {
+                    "from": from_func,
+                    "to": to_func,
+                    "exception": exception,
+                    "total_attempts": total_attempts,
+                }
+            )
 
         with pytest.raises(Exception):
             execute_with_retry(
@@ -647,12 +664,14 @@ class TestOnFallbackCallbackSingleFire:
             raise RuntimeError("fallback fail")
 
         def on_fallback(from_func, to_func, exception, total_attempts):
-            callback_log.append({
-                "from": from_func,
-                "to": to_func,
-                "exception": exception,
-                "total_attempts": total_attempts,
-            })
+            callback_log.append(
+                {
+                    "from": from_func,
+                    "to": to_func,
+                    "exception": exception,
+                    "total_attempts": total_attempts,
+                }
+            )
 
         with pytest.raises(Exception):
             execute_with_retry(
@@ -679,6 +698,7 @@ class TestOnFallbackCallbackSingleFire:
 # ---------------------------------------------------------------------------
 # Property 18: on_retry_callback Attempt Reset
 # ---------------------------------------------------------------------------
+
 
 class TestOnRetryCallbackAttemptReset:
     """Property 18: on_retry_callback Attempt Reset.
@@ -712,6 +732,7 @@ class TestOnRetryCallbackAttemptReset:
             def _func():
                 call_log.append(label)
                 raise RuntimeError(f"fail-{label}")
+
             return _func
 
         primary = make_func("primary")
@@ -757,6 +778,7 @@ class TestOnRetryCallbackAttemptReset:
 # Property 19: Input Validation
 # ---------------------------------------------------------------------------
 
+
 class TestInputValidation:
     """Property 19: Input Validation for Contradictory Configs.
 
@@ -782,7 +804,9 @@ class TestInputValidation:
         """
         fallbacks = [lambda: None for _ in range(num_fallbacks)]
 
-        with pytest.raises(ValueError, match="fallback_func provided but fallback_mode is NEVER"):
+        with pytest.raises(
+            ValueError, match="fallback_func provided but fallback_mode is NEVER"
+        ):
             execute_with_retry(
                 func=lambda: None,
                 fallback_func=fallbacks,
@@ -800,7 +824,9 @@ class TestInputValidation:
 
         **Validates: Input validation requirements**
         """
-        with pytest.raises(ValueError, match="fallback_mode is not NEVER but no fallback_func"):
+        with pytest.raises(
+            ValueError, match="fallback_mode is not NEVER but no fallback_func"
+        ):
             execute_with_retry(
                 func=lambda: None,
                 fallback_mode=mode,
@@ -818,6 +844,7 @@ class TestInputValidation:
 
         **Validates: Input validation requirements**
         """
+
         async def async_fallback():
             pass
 
@@ -840,7 +867,9 @@ class TestInputValidation:
 
         **Validates: Input validation requirements**
         """
-        with pytest.raises(ValueError, match="fallback_mode is not NEVER but no fallback_func"):
+        with pytest.raises(
+            ValueError, match="fallback_mode is not NEVER but no fallback_func"
+        ):
             execute_with_retry(
                 func=lambda: None,
                 fallback_func=[],

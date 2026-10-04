@@ -45,59 +45,52 @@ Date: 2025-01-15
 import os as _os
 
 # Check if user wants to force a specific backend
-_FORCE_BACKEND = _os.getenv('CONSOLE_UTILS_BACKEND', '').lower()
+_FORCE_BACKEND = _os.getenv("CONSOLE_UTILS_BACKEND", "").lower()
 
 # Try Rich implementation first (unless colorama is forced), fall back to colorama
-_skip_rich = (_FORCE_BACKEND == 'colorama')
+_skip_rich = _FORCE_BACKEND == "colorama"
 
 try:
     if _skip_rich:
         raise ImportError("Rich backend skipped by CONSOLE_UTILS_BACKEND=colorama")
     from .rich_console_utils import (
-        # Message printing
-        hprint_message,
-        eprint_message,
-        wprint_message,
-        cprint_message,
-
-        # Pairs printing
-        hprint_pairs,
-        eprint_pairs,
-        wprint_pairs,
-        cprint_pairs,
-
-        # Section formatting
-        hprint_section_title,
-        cprint_section_separator,
-        hprint_section_separator,
-        eprint_section_separator,
-        wprint_section_separator,
-
-        # Panel printing
-        cprint_panel,
-        hprint_panel,
-        eprint_panel,
-        wprint_panel,
-
-        # Rich-specific features
-        print_table,
-        print_syntax,
-        print_markdown,
-        print_json,
-        progress_bar,
-        get_rich_logger,
-
-        # Utilities
-        print_attrs,
-        retrieve_and_print_attrs,
-        checkpoint,
-        clear_message,  # Message tracking utility
-
-        # Console instance
-        console,
-
         # Internal capability flags
         _CURSOR_CONTROL_SUPPORTED,
+        checkpoint,
+        clear_message,  # Message tracking utility
+        # Console instance
+        console,
+        cprint_message,
+        cprint_pairs,
+        # Panel printing
+        cprint_panel,
+        cprint_section_separator,
+        eprint_message,
+        eprint_pairs,
+        eprint_panel,
+        eprint_section_separator,
+        get_rich_logger,
+        # Message printing
+        hprint_message,
+        # Pairs printing
+        hprint_pairs,
+        hprint_panel,
+        hprint_section_separator,
+        # Section formatting
+        hprint_section_title,
+        # Utilities
+        print_attrs,
+        print_json,
+        print_markdown,
+        print_syntax,
+        # Rich-specific features
+        print_table,
+        progress_bar,
+        retrieve_and_print_attrs,
+        wprint_message,
+        wprint_pairs,
+        wprint_panel,
+        wprint_section_separator,
     )
 
     _BACKEND = "rich"
@@ -105,45 +98,42 @@ try:
 except ImportError as e:
     # Fall back to colorama implementation
     import warnings
+
     warnings.warn(
         f"Rich library not available ({e}), falling back to colorama-based console utils. "
         "Install 'rich' for enhanced formatting features.",
-        ImportWarning
+        ImportWarning,
     )
 
     from .colorama_console_utils import (
+        # Internal capability flags
+        _CURSOR_CONTROL_SUPPORTED,
+        checkpoint,
+        clear_message,  # Message tracking utility
+        cprint_message,
+        cprint_pairs,
+        eprint_message,
+        eprint_pairs,
         # Message printing
         hprint_message,
-        eprint_message,
-        wprint_message,
-        cprint_message,
-
         # Pairs printing
         hprint_pairs,
-        eprint_pairs,
-        wprint_pairs,
-        cprint_pairs,
-
+        hprint_section_separator,
         # Section formatting
         hprint_section_title,
-        hprint_section_separator,
-
         # Utilities
         print_attrs,
         retrieve_and_print_attrs,
-        checkpoint,
-        clear_message,  # Message tracking utility
-
-        # Internal capability flags
-        _CURSOR_CONTROL_SUPPORTED,
+        wprint_message,
+        wprint_pairs,
     )
 
     # Import colorama-specific functions for compatibility
     try:
         from .colorama_console_utils import (
+            cprint_section_separator,
             eprint_section_separator,
             wprint_section_separator,
-            cprint_section_separator,
         )
     except ImportError:
         # If these don't exist in colorama version, create stubs
@@ -174,30 +164,30 @@ except ImportError as e:
 # Optional Textual interactive features
 try:
     from .textual_console_utils import (
-        # Prompts
-        prompt_confirm,
-        prompt_choice,
-        prompt_input,
-
+        display_help,
         # Display
         display_table,
-        display_help,
-        show_notification,
-
+        InteractiveTable,
+        LiveMetrics,
+        LogViewer,
         # Apps (for advanced usage)
         ProgressDashboard,
-        InteractiveTable,
-        LogViewer,
-        LiveMetrics,
+        prompt_choice,
+        # Prompts
+        prompt_confirm,
+        prompt_input,
+        show_notification,
     )
+
     _HAS_TEXTUAL = True
 
 except ImportError as e:
     import warnings
+
     warnings.warn(
         f"Textual library not available ({e}). "
         "Install 'textual' for interactive TUI features.",
-        ImportWarning
+        ImportWarning,
     )
 
     _HAS_TEXTUAL = False
@@ -217,7 +207,7 @@ except ImportError as e:
 # Export backend info for debugging/feature detection
 __backend__ = _BACKEND
 __has_textual__ = _HAS_TEXTUAL
-__version__ = '1.0.0'
+__version__ = "1.0.0"
 
 # Backward compatibility aliases
 hprint = hprint_message
@@ -227,66 +217,60 @@ cprint = cprint_message
 
 __all__ = [
     # Core functions (available in both backends)
-    'hprint_message',
-    'eprint_message',
-    'wprint_message',
-    'cprint_message',
-    'hprint_pairs',
-    'eprint_pairs',
-    'wprint_pairs',
-    'cprint_pairs',
-    'hprint_section_title',
-    'hprint_section_separator',
-    'eprint_section_separator',
-    'wprint_section_separator',
-    'print_attrs',
-    'retrieve_and_print_attrs',
-    'checkpoint',
-    'clear_message',  # Message tracking utility
-
+    "hprint_message",
+    "eprint_message",
+    "wprint_message",
+    "cprint_message",
+    "hprint_pairs",
+    "eprint_pairs",
+    "wprint_pairs",
+    "cprint_pairs",
+    "hprint_section_title",
+    "hprint_section_separator",
+    "eprint_section_separator",
+    "wprint_section_separator",
+    "print_attrs",
+    "retrieve_and_print_attrs",
+    "checkpoint",
+    "clear_message",  # Message tracking utility
     # Backward compatibility aliases
-    'hprint',
-    'eprint',
-    'wprint',
-    'cprint',
-
+    "hprint",
+    "eprint",
+    "wprint",
+    "cprint",
     # Rich-specific (None if Rich not available)
-    'cprint_section_separator',
-    'cprint_panel',
-    'hprint_panel',
-    'eprint_panel',
-    'wprint_panel',
-    'print_table',
-    'print_syntax',
-    'print_markdown',
-    'print_json',
-    'progress_bar',
-    'get_rich_logger',
-    'console',
-
+    "cprint_section_separator",
+    "cprint_panel",
+    "hprint_panel",
+    "eprint_panel",
+    "wprint_panel",
+    "print_table",
+    "print_syntax",
+    "print_markdown",
+    "print_json",
+    "progress_bar",
+    "get_rich_logger",
+    "console",
     # Textual-specific (None if Textual not available)
-    'prompt_confirm',
-    'prompt_choice',
-    'prompt_input',
-    'display_table',
-    'display_help',
-    'show_notification',
-    'ProgressDashboard',
-    'InteractiveTable',
-    'LogViewer',
-    'LiveMetrics',
-
+    "prompt_confirm",
+    "prompt_choice",
+    "prompt_input",
+    "display_table",
+    "display_help",
+    "show_notification",
+    "ProgressDashboard",
+    "InteractiveTable",
+    "LogViewer",
+    "LiveMetrics",
     # Metadata
-    '__backend__',
-    '__has_textual__',
-    '__version__',
-
+    "__backend__",
+    "__has_textual__",
+    "__version__",
     # Internal capability flags
-    '_CURSOR_CONTROL_SUPPORTED',
-
+    "_CURSOR_CONTROL_SUPPORTED",
     # Backend selection utilities
-    'get_available_backends',
-    'get_current_backend',
+    "get_available_backends",
+    "get_current_backend",
 ]
 
 
@@ -298,10 +282,11 @@ def get_available_backends():
     Returns:
         list: Available backends ('rich', 'colorama')
     """
-    backends = ['colorama']  # colorama is always available (required dependency)
+    backends = ["colorama"]  # colorama is always available (required dependency)
     try:
         import rich
-        backends.insert(0, 'rich')  # rich is preferred if available
+
+        backends.insert(0, "rich")  # rich is preferred if available
     except ImportError:
         pass
     return backends

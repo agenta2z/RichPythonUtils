@@ -18,22 +18,24 @@ will add file and networkx).
 import uuid
 
 import pytest
-from hypothesis import given, settings, assume, HealthCheck
-from hypothesis import strategies as st
-
-from rich_python_utils.algorithms.graph.traversal import bfs_traversal
-from rich_python_utils.service_utils.graph_service.graph_node import GraphEdge, GraphNode
-from rich_python_utils.service_utils.graph_service.materialize import materialize_subgraph
-from rich_python_utils.service_utils.graph_service.memory_graph_service import (
-    MemoryGraphService,
-)
-
 from conftest import (
-    graph_node_strategy,
-    graph_edge_strategy,
-    _safe_string,
     _node_type_strategy,
     _properties_strategy,
+    _safe_string,
+    graph_edge_strategy,
+    graph_node_strategy,
+)
+from hypothesis import assume, given, HealthCheck, settings, strategies as st
+from rich_python_utils.algorithms.graph.traversal import bfs_traversal
+from rich_python_utils.service_utils.graph_service.graph_node import (
+    GraphEdge,
+    GraphNode,
+)
+from rich_python_utils.service_utils.graph_service.materialize import (
+    materialize_subgraph,
+)
+from rich_python_utils.service_utils.graph_service.memory_graph_service import (
+    MemoryGraphService,
 )
 
 
@@ -312,7 +314,8 @@ class TestGraphEdgeAddGetEdgesRoundTrip:
 
         # Find the matching edge
         matching = [
-            e for e in edges
+            e
+            for e in edges
             if e.source_id == source_id
             and e.target_id == target_id
             and e.edge_type == edge_type
@@ -446,16 +449,16 @@ class TestMaterializeSubgraphProducesCorrectLinks:
 
         # Add edges from start to all targets
         for tid in target_ids:
-            svc.add_edge(GraphEdge(
-                source_id=start_id,
-                target_id=tid,
-                edge_type=edge_type,
-            ))
+            svc.add_edge(
+                GraphEdge(
+                    source_id=start_id,
+                    target_id=tid,
+                    edge_type=edge_type,
+                )
+            )
 
         # Materialize
-        start = materialize_subgraph(
-            svc, start_id, edge_type=edge_type, depth=1
-        )
+        start = materialize_subgraph(svc, start_id, edge_type=edge_type, depth=1)
 
         assert start.node_id == start_id
 
@@ -497,15 +500,15 @@ class TestMaterializeSubgraphProducesCorrectLinks:
 
         # Build chain: node_ids[0] -> node_ids[1] -> node_ids[2] -> ...
         for i in range(len(node_ids) - 1):
-            svc.add_edge(GraphEdge(
-                source_id=node_ids[i],
-                target_id=node_ids[i + 1],
-                edge_type=edge_type,
-            ))
+            svc.add_edge(
+                GraphEdge(
+                    source_id=node_ids[i],
+                    target_id=node_ids[i + 1],
+                    edge_type=edge_type,
+                )
+            )
 
-        start = materialize_subgraph(
-            svc, node_ids[0], edge_type=edge_type, depth=2
-        )
+        start = materialize_subgraph(svc, node_ids[0], edge_type=edge_type, depth=2)
 
         # Verify chain links
         assert start.node_id == node_ids[0]
@@ -566,18 +569,18 @@ class TestMaterializedNodesCompatibleWithBfsDfs:
 
         # Add edges from start to all others
         for tid in node_ids[1:]:
-            svc.add_edge(GraphEdge(
-                source_id=start_id,
-                target_id=tid,
-                edge_type=edge_type,
-            ))
+            svc.add_edge(
+                GraphEdge(
+                    source_id=start_id,
+                    target_id=tid,
+                    edge_type=edge_type,
+                )
+            )
 
-        start = materialize_subgraph(
-            svc, start_id, edge_type=edge_type, depth=1
-        )
+        start = materialize_subgraph(svc, start_id, edge_type=edge_type, depth=1)
 
         # BFS traversal should not raise and should visit all nodes
-        visited = list(bfs_traversal(start, {GraphNode: 'next'}))
+        visited = list(bfs_traversal(start, {GraphNode: "next"}))
         visited_ids = sorted([n.node_id for n in visited])
 
         assert visited_ids == sorted(node_ids), (
@@ -613,19 +616,19 @@ class TestMaterializedNodesCompatibleWithBfsDfs:
 
         # Build chain
         for i in range(len(node_ids) - 1):
-            svc.add_edge(GraphEdge(
-                source_id=node_ids[i],
-                target_id=node_ids[i + 1],
-                edge_type=edge_type,
-            ))
+            svc.add_edge(
+                GraphEdge(
+                    source_id=node_ids[i],
+                    target_id=node_ids[i + 1],
+                    edge_type=edge_type,
+                )
+            )
 
         depth = len(node_ids) - 1
-        start = materialize_subgraph(
-            svc, node_ids[0], edge_type=edge_type, depth=depth
-        )
+        start = materialize_subgraph(svc, node_ids[0], edge_type=edge_type, depth=depth)
 
         # BFS traversal should visit all nodes in chain order
-        visited = list(bfs_traversal(start, {GraphNode: 'next'}))
+        visited = list(bfs_traversal(start, {GraphNode: "next"}))
         visited_ids = [n.node_id for n in visited]
 
         assert visited_ids == node_ids, (

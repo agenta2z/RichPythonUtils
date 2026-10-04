@@ -4,6 +4,7 @@ Defines signal types returned by steps/nodes to trigger expansion,
 a subgraph specification for WorkGraph expansion, and a serializable
 record type for checkpoint persistence.
 """
+
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Literal, Optional, Sequence, Set, Union
 
@@ -23,12 +24,13 @@ class ExpansionResult:
               'splice' skips saving emitter result, first expanded step gets
               emitter's original input (Req 26).
     """
+
     result: Any
     new_steps: Sequence[Callable]
     expansion_id: Optional[str] = None
     seed: Optional[Any] = None
     reconstruct_from_seed: Optional[Callable] = None
-    mode: Literal['follow', 'splice'] = 'follow'
+    mode: Literal["follow", "splice"] = "follow"
 
 
 @dataclass
@@ -39,6 +41,7 @@ class SubgraphSpec:
         nodes: All nodes in the subgraph (including internal nodes).
         entry_nodes: Nodes that connect to the expanding node's next list.
     """
+
     nodes: List[Any]  # List[WorkGraphNode] — Any to avoid circular import
     entry_nodes: List[Any]
 
@@ -69,8 +72,8 @@ class SubgraphSpec:
         Use seed-based or registry-based reconstruction for resume.
         """
         return {
-            'nodes': [n.to_serializable_obj() for n in self.nodes],
-            'entry_node_names': [n.name for n in self.entry_nodes],
+            "nodes": [n.to_serializable_obj() for n in self.nodes],
+            "entry_node_names": [n.name for n in self.entry_nodes],
         }
 
 
@@ -89,12 +92,13 @@ class GraphExpansionResult:
         include_self: NextNodesSelector-like control for self-loop (Req 23).
         include_others: NextNodesSelector-like control for downstream selection (Req 23).
     """
+
     result: Any
     subgraph: SubgraphSpec
     expansion_id: Optional[str] = None
     seed: Optional[Any] = None
     reconstruct_from_seed: Optional[Callable] = None
-    attach_mode: Literal['insert'] = 'insert'
+    attach_mode: Literal["insert"] = "insert"
     include_self: bool = False
     include_others: Union[bool, Set[str]] = True
 
@@ -113,6 +117,7 @@ class ExpansionRecord:
         factory_module: __module__ of reconstruct_from_seed (Req 25).
         factory_qualname: __qualname__ of reconstruct_from_seed (Req 25).
     """
+
     after_step_name: str
     expansion_id: Optional[str]
     num_steps: int

@@ -7,7 +7,6 @@ mirroring how it works for variables. With master_version="aggregation":
 """
 
 import pytest
-
 from rich_python_utils.string_utils.formatting.template_manager import TemplateManager
 
 
@@ -37,7 +36,6 @@ def tm(templates_with_master_version):
 
 
 class TestMasterVersionCallLookup:
-
     def test_master_version_finds_subdirectory_template(self, tm):
         result = tm("initial", master_version="aggregation", name="Alice")
         assert "AGGREGATION" in result
@@ -63,7 +61,6 @@ class TestMasterVersionCallLookup:
 
 
 class TestMasterVersionGetRawTemplate:
-
     def test_get_raw_template_with_master_version(self, tm):
         raw = tm.get_raw_template("initial", master_version="aggregation")
         assert raw is not None
@@ -81,27 +78,28 @@ class TestMasterVersionGetRawTemplate:
 
 
 class TestMasterVersionBackwardCompat:
-
     def test_existing_template_version_still_works(self, templates_with_master_version):
         main_dir = templates_with_master_version / "space" / "main"
         (main_dir / "initial.enterprise.jinja2").write_text("ENTERPRISE: {{ name }}")
 
         tm = TemplateManager(
             templates=str(templates_with_master_version),
-                        active_template_root_space="space",
+            active_template_root_space="space",
             active_template_type="main",
             template_version="enterprise",
         )
         result = tm("initial", name="Frank")
         assert "ENTERPRISE" in result
 
-    def test_master_version_and_template_version_coexist(self, templates_with_master_version):
+    def test_master_version_and_template_version_coexist(
+        self, templates_with_master_version
+    ):
         main_dir = templates_with_master_version / "space" / "main"
         (main_dir / "initial.enterprise.jinja2").write_text("ENTERPRISE: {{ name }}")
 
         tm = TemplateManager(
             templates=str(templates_with_master_version),
-                        active_template_root_space="space",
+            active_template_root_space="space",
             active_template_type="main",
             template_version="enterprise",
         )

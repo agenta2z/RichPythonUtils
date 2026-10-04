@@ -15,7 +15,7 @@ class TestXMLCodeBlockIntegration:
 
     def test_python_code_with_bitwise_operators(self):
         """Test XML containing Python code with bitwise operators (&, |, <, >)."""
-        xml = '''
+        xml = """
         <tutorial>
             <title>Python Bitwise Operations</title>
             <example>```python
@@ -26,35 +26,35 @@ w = 4 << 1  # Left shift
 result = x < y and y > z
 ```</example>
         </tutorial>
-        '''
+        """
         result = xml_to_dict(xml)
-        assert 'tutorial' in result
-        assert 'example' in result['tutorial']
-        assert '```python' in result['tutorial']['example']
-        assert '&' in result['tutorial']['example']
-        assert '|' in result['tutorial']['example']
-        assert '<' in result['tutorial']['example']
-        assert '>' in result['tutorial']['example']
+        assert "tutorial" in result
+        assert "example" in result["tutorial"]
+        assert "```python" in result["tutorial"]["example"]
+        assert "&" in result["tutorial"]["example"]
+        assert "|" in result["tutorial"]["example"]
+        assert "<" in result["tutorial"]["example"]
+        assert ">" in result["tutorial"]["example"]
 
     def test_python_code_extract_content_only(self):
         """Test extracting only code content without markdown syntax."""
-        xml = '''
+        xml = """
         <tutorial>
             <example>```python
 x = 5 & 3
 y = 10 < 20
 ```</example>
         </tutorial>
-        '''
+        """
         result = xml_to_dict(xml, code_block_restore_group=-1)
-        code = result['tutorial']['example']
-        assert 'x = 5 & 3' in code
-        assert '```' not in code
-        assert 'python' not in code or code.startswith('x')
+        code = result["tutorial"]["example"]
+        assert "x = 5 & 3" in code
+        assert "```" not in code
+        assert "python" not in code or code.startswith("x")
 
     def test_html_code_block(self):
         """Test XML containing HTML code blocks."""
-        xml = '''
+        xml = """
         <documentation>
             <html_example>```html
 <div class="container">
@@ -63,16 +63,16 @@ y = 10 < 20
 </div>
 ```</html_example>
         </documentation>
-        '''
+        """
         result = xml_to_dict(xml, code_block_restore_group=-1)
-        html_code = result['documentation']['html_example']
+        html_code = result["documentation"]["html_example"]
         assert '<div class="container">' in html_code
-        assert '&' in html_code
-        assert '<' in html_code
+        assert "&" in html_code
+        assert "<" in html_code
 
     def test_javascript_code_block(self):
         """Test XML containing JavaScript code."""
-        xml = '''
+        xml = """
         <guide>
             <js_example>```javascript
 const x = a && b || c;
@@ -81,17 +81,17 @@ if (x < 10 && y > 5) {
 }
 ```</js_example>
         </guide>
-        '''
+        """
         result = xml_to_dict(xml, code_block_restore_group=-1)
-        js_code = result['guide']['js_example']
-        assert '&&' in js_code
-        assert '||' in js_code
-        assert '<' in js_code
-        assert '>' in js_code
+        js_code = result["guide"]["js_example"]
+        assert "&&" in js_code
+        assert "||" in js_code
+        assert "<" in js_code
+        assert ">" in js_code
 
     def test_xml_code_block_inception(self):
         """Test XML containing XML code (meta!)."""
-        xml = '''
+        xml = """
         <example>
             <xml_code>```xml
 <?xml version="1.0"?>
@@ -101,16 +101,16 @@ if (x < 10 && y > 5) {
 </data>
 ```</xml_code>
         </example>
-        '''
+        """
         result = xml_to_dict(xml, code_block_restore_group=-1)
-        xml_code = result['example']['xml_code']
+        xml_code = result["example"]["xml_code"]
         assert '<?xml version="1.0"?>' in xml_code
-        assert '&' in xml_code
-        assert '<data>' in xml_code
+        assert "&" in xml_code
+        assert "<data>" in xml_code
 
     def test_sql_code_block(self):
         """Test XML containing SQL code."""
-        xml = '''
+        xml = """
         <database>
             <query>```sql
 SELECT * FROM users
@@ -119,16 +119,16 @@ WHERE age > 18 AND age < 65
   AND created_at >= '2023-01-01'
 ```</query>
         </database>
-        '''
+        """
         result = xml_to_dict(xml, code_block_restore_group=-1)
-        sql_code = result['database']['query']
-        assert '>' in sql_code
-        assert '<' in sql_code
-        assert '<>' in sql_code
+        sql_code = result["database"]["query"]
+        assert ">" in sql_code
+        assert "<" in sql_code
+        assert "<>" in sql_code
 
     def test_multiple_code_blocks_different_languages(self):
         """Test XML with multiple code blocks in different languages."""
-        xml = '''
+        xml = """
         <tutorial>
             <python_example>```python
 x = 5 & 3
@@ -144,15 +144,15 @@ console.log(`Result: ${x}`);
 </div>
 ```</html_example>
         </tutorial>
-        '''
+        """
         result = xml_to_dict(xml, code_block_restore_group=-1)
-        assert '&' in result['tutorial']['python_example']
-        assert '&&' in result['tutorial']['javascript_example']
-        assert '<div' in result['tutorial']['html_example']
+        assert "&" in result["tutorial"]["python_example"]
+        assert "&&" in result["tutorial"]["javascript_example"]
+        assert "<div" in result["tutorial"]["html_example"]
 
     def test_markdown_code_block(self):
         """Test XML containing markdown with special characters."""
-        xml = '''
+        xml = """
         <document>
             <markdown>```markdown
 # Title
@@ -164,16 +164,16 @@ console.log(`Result: ${x}`);
 [Link](http://example.com?param=1&other=2)
 ```</markdown>
         </document>
-        '''
+        """
         result = xml_to_dict(xml, code_block_restore_group=-1)
-        md_code = result['document']['markdown']
-        assert '&' in md_code
-        assert '<tag>' in md_code
-        assert '&&' in md_code
+        md_code = result["document"]["markdown"]
+        assert "&" in md_code
+        assert "<tag>" in md_code
+        assert "&&" in md_code
 
     def test_code_block_with_nested_xml(self):
         """Test code block containing nested XML structure."""
-        xml = '''
+        xml = """
         <example>
             <description>How to parse XML</description>
             <code>```python
@@ -183,66 +183,66 @@ if result['item'] < 10:
     process(result)
 ```</code>
         </example>
-        '''
+        """
         result = xml_to_dict(xml)
-        assert '<root>' in result['example']['code']
-        assert '&' in result['example']['code']
-        assert '<' in result['example']['code']
+        assert "<root>" in result["example"]["code"]
+        assert "&" in result["example"]["code"]
+        assert "<" in result["example"]["code"]
 
     def test_protection_disabled_with_lenient_parsing(self):
         """Verify that lenient parsing handles special chars when protection is disabled."""
-        xml = '''
+        xml = """
         <test>
             <code>```python
 x = 5 & 3
 ```</code>
         </test>
-        '''
+        """
         # With protection disabled but lenient parsing enabled (default),
         # the & gets auto-escaped and parsing succeeds
         result = xml_to_dict(xml, protect_code_blocks=False, lenient_parsing=True)
-        assert 'test' in result
+        assert "test" in result
         # The code block markers become XML tags/content since not protected
         # This demonstrates why protection is useful
 
     def test_code_block_preserve_full_markdown_default(self):
         """Test that default behavior preserves full markdown syntax."""
-        xml = '''
+        xml = """
         <example>
             <code>```python
 x = 5
 ```</code>
         </example>
-        '''
+        """
         result = xml_to_dict(xml)
-        assert '```python' in result['example']['code']
-        assert '```' in result['example']['code']
+        assert "```python" in result["example"]["code"]
+        assert "```" in result["example"]["code"]
 
     def test_code_block_extract_language_only(self):
         """Test extracting only the language identifier."""
-        xml = '''
+        xml = """
         <example>
             <code>```python
 x = 5
 ```</code>
         </example>
-        '''
+        """
         result = xml_to_dict(xml, code_block_restore_group=1)
-        assert result['example']['code'] == 'python'
+        assert result["example"]["code"] == "python"
 
     def test_code_block_no_language_specifier(self):
         """Test code blocks without language specifier."""
-        xml = '''
+        xml = """
         <example>
             <code>```
 generic code here
 x = 5 & 3
 ```</code>
         </example>
-        '''
+        """
         result = xml_to_dict(xml, code_block_restore_group=-1)
-        assert 'generic code' in result['example']['code']
-        assert '&' in result['example']['code']
+        assert "generic code" in result["example"]["code"]
+        assert "&" in result["example"]["code"]
 
     def test_multiline_code_with_complex_content(self):
         """Test multiline code blocks with complex content."""
@@ -263,43 +263,43 @@ def process_data(x, y):
         </tutorial>
         '''
         result = xml_to_dict(xml, code_block_restore_group=-1)
-        code = result['tutorial']['example']
-        assert 'def process_data' in code
-        assert '&' in code
-        assert '<result>' in code
-        assert '10 < 20' in code
+        code = result["tutorial"]["example"]
+        assert "def process_data" in code
+        assert "&" in code
+        assert "<result>" in code
+        assert "10 < 20" in code
 
     def test_empty_code_block(self):
         """Test handling of empty code blocks."""
-        xml = '''
+        xml = """
         <example>
             <code>```python
 ```</code>
         </example>
-        '''
+        """
         result = xml_to_dict(xml, code_block_restore_group=-1)
         # Empty code block should result in empty or whitespace string
-        assert result['example']['code'].strip() == ''
+        assert result["example"]["code"].strip() == ""
 
     def test_custom_code_block_pattern(self):
         """Test using custom code block patterns."""
-        xml = '''
+        xml = """
         <example>
             <code>~~~python
 x = 5 & 3
 ~~~</code>
         </example>
-        '''
+        """
         result = xml_to_dict(
             xml,
-            code_block_patterns=r'~~~([a-z]+)\n(.*?)~~~',
-            code_block_restore_group=-1
+            code_block_patterns=r"~~~([a-z]+)\n(.*?)~~~",
+            code_block_restore_group=-1,
         )
-        assert 'x = 5 & 3' in result['example']['code']
+        assert "x = 5 & 3" in result["example"]["code"]
 
     def test_deeply_nested_xml_with_code_blocks(self):
         """Test deeply nested XML structure with code blocks."""
-        xml = '''
+        xml = """
         <course>
             <module>
                 <lesson>
@@ -312,15 +312,15 @@ y = 10 < 20
                 </lesson>
             </module>
         </course>
-        '''
+        """
         result = xml_to_dict(xml, code_block_restore_group=-1)
-        code = result['course']['module']['lesson']['topic']['example']
-        assert 'x = 5 & 3' in code
-        assert 'y = 10 < 20' in code
+        code = result["course"]["module"]["lesson"]["topic"]["example"]
+        assert "x = 5 & 3" in code
+        assert "y = 10 < 20" in code
 
     def test_mixed_content_with_and_without_code_blocks(self):
         """Test XML with some elements having code blocks and others not."""
-        xml = '''
+        xml = """
         <documentation>
             <description>This is a tutorial</description>
             <code_example>```python
@@ -331,12 +331,12 @@ x = 5 & 3
 const y = a && b;
 ```</another_code>
         </documentation>
-        '''
+        """
         result = xml_to_dict(xml, code_block_restore_group=-1)
-        assert result['documentation']['description'] == 'This is a tutorial'
-        assert '&' in result['documentation']['code_example']
-        assert result['documentation']['note'] == 'Remember to test your code'
-        assert '&&' in result['documentation']['another_code']
+        assert result["documentation"]["description"] == "This is a tutorial"
+        assert "&" in result["documentation"]["code_example"]
+        assert result["documentation"]["note"] == "Remember to test your code"
+        assert "&&" in result["documentation"]["another_code"]
 
 
 class TestCodeBlockEdgeCases:
@@ -344,36 +344,36 @@ class TestCodeBlockEdgeCases:
 
     def test_code_block_with_quotes(self):
         """Test code blocks containing various quote types."""
-        xml = '''
+        xml = """
         <example>
             <code>```python
 s = "Hello & 'world'"
 t = '<tag attr="value">text</tag>'
 ```</code>
         </example>
-        '''
+        """
         result = xml_to_dict(xml, code_block_restore_group=-1)
-        assert '&' in result['example']['code']
-        assert '<tag' in result['example']['code']
-        assert '"' in result['example']['code']
+        assert "&" in result["example"]["code"]
+        assert "<tag" in result["example"]["code"]
+        assert '"' in result["example"]["code"]
 
     def test_code_block_with_cdata_like_content(self):
         """Test code blocks containing CDATA-like content."""
-        xml = '''
+        xml = """
         <example>
             <code>```javascript
 const xml = "<![CDATA[some & data < here]]>";
 if (x < 10 && y > 5) { }
 ```</code>
         </example>
-        '''
+        """
         result = xml_to_dict(xml, code_block_restore_group=-1)
-        assert 'CDATA' in result['example']['code']
-        assert '&' in result['example']['code']
+        assert "CDATA" in result["example"]["code"]
+        assert "&" in result["example"]["code"]
 
     def test_code_block_with_xml_declaration(self):
         """Test code blocks containing XML declarations."""
-        xml = '''
+        xml = """
         <example>
             <code>```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -382,10 +382,10 @@ if (x < 10 && y > 5) { }
 </root>
 ```</code>
         </example>
-        '''
+        """
         result = xml_to_dict(xml, code_block_restore_group=-1)
-        assert '<?xml' in result['example']['code']
-        assert '&' in result['example']['code']
+        assert "<?xml" in result["example"]["code"]
+        assert "&" in result["example"]["code"]
 
 
 if __name__ == "__main__":

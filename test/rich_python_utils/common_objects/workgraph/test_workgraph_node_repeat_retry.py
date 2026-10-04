@@ -4,8 +4,8 @@ Test repeat and retry functionality in WorkGraphNode.
 This test suite verifies the repeat/retry attributes in WorkGraphNode:
 max_repeat, repeat_condition, output_validator, fallback_result, etc.
 """
-import pytest
 
+import pytest
 from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode
 
 
@@ -26,6 +26,7 @@ class TestWorkGraphNodeRepeatRetryAttributes:
 
     def test_custom_values(self):
         """Test that custom repeat/retry values can be set."""
+
         def my_condition():
             return True
 
@@ -40,7 +41,7 @@ class TestWorkGraphNodeRepeatRetryAttributes:
             min_repeat_wait=0.1,
             max_repeat_wait=0.5,
             retry_on_exceptions=[ValueError],
-            output_validator=my_validator
+            output_validator=my_validator,
         )
 
         assert node.max_repeat == 5
@@ -73,9 +74,7 @@ class TestWorkGraphNodeRepeatRetryExecution:
             return r >= 10
 
         node = WorkGraphNode(
-            increment_func,
-            max_repeat=10,
-            output_validator=valid_when_ge_10
+            increment_func, max_repeat=10, output_validator=valid_when_ge_10
         )
 
         result = node.run(5)
@@ -93,8 +92,9 @@ class TestWorkGraphNodeRepeatRetryExecution:
 
         node = WorkGraphNode(
             my_func,
-            repeat_condition=lambda *args, **kwargs: False,  # Never execute (must accept func args)
-            fallback_result="skipped"
+            repeat_condition=lambda *args,
+            **kwargs: False,  # Never execute (must accept func args)
+            fallback_result="skipped",
         )
 
         result = node.run(5)
@@ -120,7 +120,7 @@ class TestWorkGraphNodeRepeatRetryExecution:
             always_fail_validation,
             max_repeat=3,
             output_validator=never_valid,
-            fallback_result="max_reached"
+            fallback_result="max_reached",
         )
 
         result = node.run(5)
@@ -143,9 +143,7 @@ class TestWorkGraphNodeRetryOnException:
             return x + 10
 
         node = WorkGraphNode(
-            fail_twice_then_succeed,
-            max_repeat=5,
-            retry_on_exceptions=[ValueError]
+            fail_twice_then_succeed, max_repeat=5, retry_on_exceptions=[ValueError]
         )
 
         result = node.run(5)
@@ -154,18 +152,19 @@ class TestWorkGraphNodeRetryOnException:
 
     def test_non_matching_exception_not_retried(self):
         """Test that non-matching exceptions are not retried."""
+
         def raise_type_error(x):
             raise TypeError("Not retryable")
 
         node = WorkGraphNode(
             raise_type_error,
             max_repeat=5,
-            retry_on_exceptions=[ValueError]  # Only retry ValueError
+            retry_on_exceptions=[ValueError],  # Only retry ValueError
         )
 
         with pytest.raises(TypeError):
             node.run(5)
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v', '--tb=short'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v", "--tb=short"])

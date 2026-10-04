@@ -1,21 +1,27 @@
 import glob
 import os
-import shutil
-from os import path
-from typing import Union, List, Optional, Sequence
-from rich_python_utils.console_utils import hprint_pairs, hprint
-from rich_python_utils.path_utils.messages import msg_skip_non_local_dir, msg_create_dir, msg_arg_not_a_dir, msg_clear_dir
-from rich_python_utils.path_utils.path_listing import iter_files_by_pattern
-from rich_python_utils.path_utils.path_string_operations import abspath_
 import platform
 import re
+import shutil
+from os import path
+from typing import List, Optional, Sequence, Union
+
+from rich_python_utils.console_utils import hprint, hprint_pairs
+from rich_python_utils.path_utils.messages import (
+    msg_arg_not_a_dir,
+    msg_clear_dir,
+    msg_create_dir,
+    msg_skip_non_local_dir,
+)
+from rich_python_utils.path_utils.path_listing import iter_files_by_pattern
+from rich_python_utils.path_utils.path_string_operations import abspath_
 
 
 def resolve_path_(
-        path_str: str,
-        try_glob: bool = True,
-        always_return_abs_path: bool = True,
-        unpack_single_result: bool = True
+    path_str: str,
+    try_glob: bool = True,
+    always_return_abs_path: bool = True,
+    unpack_single_result: bool = True,
 ) -> Optional[Union[List[str], str]]:
     """
     Resolves a given path string, attempting to match the path directly or using glob patterns.
@@ -78,11 +84,11 @@ def resolve_path_(
 
 
 def resolve_path(
-        path_str: str,
-        path_name: str = None,
-        __file__: str = None,
-        always_return_abs_path: bool = True,
-        unpack_single_result: bool = True
+    path_str: str,
+    path_name: str = None,
+    __file__: str = None,
+    always_return_abs_path: bool = True,
+    unpack_single_result: bool = True,
 ) -> Optional[Union[List[str], str]]:
     """
     Resolves the given path string to an existing path.
@@ -123,7 +129,7 @@ def resolve_path(
     resolved_path = resolve_path_(
         path_str=path_str,
         always_return_abs_path=always_return_abs_path,
-        unpack_single_result=unpack_single_result
+        unpack_single_result=unpack_single_result,
     )
 
     if resolved_path:
@@ -143,9 +149,17 @@ def resolve_path(
 def print_basic_path_info(*path_or_paths):
     for item in path_or_paths:
         if isinstance(item, str):
-            hprint_pairs(("path", item), ("is file", path.isfile(item)), ("exists_path", path.exists(item)))
+            hprint_pairs(
+                ("path", item),
+                ("is file", path.isfile(item)),
+                ("exists_path", path.exists(item)),
+            )
         else:
-            hprint_pairs((item[0], item[1]), ("is file", path.isfile(item[1])), ("exists_path", path.exists(item[1])))
+            hprint_pairs(
+                (item[0], item[1]),
+                ("is file", path.isfile(item[1])),
+                ("exists_path", path.exists(item[1])),
+            )
 
 
 def paths_in_same_directory(paths: Sequence[str]) -> bool:
@@ -222,52 +236,54 @@ def get_directory_if_paths_in_same_directory(paths: Sequence[str]) -> bool:
 
 
 def ensure_parent_dir_existence(*dir_path_or_paths, clear_dir=False, verbose=__debug__):
-    ensure_dir_existence(*(path.dirname(p) for p in dir_path_or_paths), clear_dir=clear_dir, verbose=verbose)
+    ensure_dir_existence(
+        *(path.dirname(p) for p in dir_path_or_paths),
+        clear_dir=clear_dir,
+        verbose=verbose,
+    )
     return dir_path_or_paths[0] if len(dir_path_or_paths) == 1 else dir_path_or_paths
 
 
 def ensure_dir_existence(
-        *dir_path_or_paths,
-        clear_dir=False,
-        verbose=__debug__
+    *dir_path_or_paths, clear_dir=False, verbose=__debug__
 ) -> Union[str, List[str]]:
     """
-    Creates a directory if the path does not exist. Optionally, set `clear_dir` to `True` to clear an existing directory.
+        Creates a directory if the path does not exist. Optionally, set `clear_dir` to `True` to clear an existing directory.
 
-import rich_python_utils.path_utils.common    >>> import utix.pathex as pathx
-    >>> import os
-    >>> from rich_python_utils.path_utils.common import print_basic_path_info
-    >>> path1, path2 = 'test/_dir1', 'test/_dir2'
-    >>> print_basic_path_info(path1)
-    >>> print_basic_path_info(path2)
+    import rich_python_utils.path_utils.common    >>> import utix.pathex as pathx
+        >>> import os
+        >>> from rich_python_utils.path_utils.common import print_basic_path_info
+        >>> path1, path2 = 'test/_dir1', 'test/_dir2'
+        >>> print_basic_path_info(path1)
+        >>> print_basic_path_info(path2)
 
-    Pass in a single path.
-    ----------------------
-    >>> ensure_dir_existence(path1)
-    >>> os.remove(path1)
+        Pass in a single path.
+        ----------------------
+        >>> ensure_dir_existence(path1)
+        >>> os.remove(path1)
 
-    Pass in multiple paths.
-    -----------------------
-    >>> ensure_dir_existence(path1, path2)
-    >>> os.remove(path1)
-    >>> os.remove(path2)
+        Pass in multiple paths.
+        -----------------------
+        >>> ensure_dir_existence(path1, path2)
+        >>> os.remove(path1)
+        >>> os.remove(path2)
 
-    Pass in multiple paths as a tuple.
-    ----------------------------------
-    >>> # this is useful when this method is composed with another function that returns multiple paths.
-    >>> def foo():
-    >>>     return path1, path2
-    >>> ensure_dir_existence(foo())
+        Pass in multiple paths as a tuple.
+        ----------------------------------
+        >>> # this is useful when this method is composed with another function that returns multiple paths.
+        >>> def foo():
+        >>>     return path1, path2
+        >>> ensure_dir_existence(foo())
 
-    :param dir_path_or_paths: one or more paths to check.
-    :param clear_dir: clear the directory if they exist.
-    :return: the input directory paths; this function has guaranteed their existence.
+        :param dir_path_or_paths: one or more paths to check.
+        :param clear_dir: clear the directory if they exist.
+        :return: the input directory paths; this function has guaranteed their existence.
     """
     if len(dir_path_or_paths) == 1 and not isinstance(dir_path_or_paths[0], str):
         dir_path_or_paths = dir_path_or_paths[0]
 
     for dir_path in dir_path_or_paths:
-        if '://' in dir_path:
+        if "://" in dir_path:
             msg_skip_non_local_dir(dir_path)
             continue
         if not path.exists(dir_path):
@@ -276,7 +292,9 @@ import rich_python_utils.path_utils.common    >>> import utix.pathex as pathx
             os.umask(0)
             os.makedirs(dir_path, mode=0o777, exist_ok=True)
         elif not path.isdir(dir_path):
-            raise ValueError(msg_arg_not_a_dir(path_str=dir_path, arg_name='dir_path_or_paths'))
+            raise ValueError(
+                msg_arg_not_a_dir(path_str=dir_path, arg_name="dir_path_or_paths")
+            )
         elif clear_dir is True:
             if verbose:
                 hprint(msg_clear_dir(dir_path))
@@ -284,7 +302,9 @@ import rich_python_utils.path_utils.common    >>> import utix.pathex as pathx
             os.umask(0)
             os.makedirs(dir_path, mode=0o777, exist_ok=True)
         elif isinstance(clear_dir, str) and bool(clear_dir):
-            for file in iter_files_by_pattern(dir_or_dirs=dir_path, pattern=clear_dir, recursive=False):
+            for file in iter_files_by_pattern(
+                dir_or_dirs=dir_path, pattern=clear_dir, recursive=False
+            ):
                 os.remove(file)
 
         if verbose:
@@ -294,13 +314,13 @@ import rich_python_utils.path_utils.common    >>> import utix.pathex as pathx
 
 
 def sanitize_filename(
-        filename: str,
-        invalid_character_replacement: str = '_',
-        lstrip: bool = True,
-        rstrip: bool = True,
-        rstrip_dots: bool = False,
-        max_filename_size: int = 254,
-        for_url: bool = False
+    filename: str,
+    invalid_character_replacement: str = "_",
+    lstrip: bool = True,
+    rstrip: bool = True,
+    rstrip_dots: bool = False,
+    max_filename_size: int = 254,
+    for_url: bool = False,
 ) -> str:
     """Sanitizes a filename for cross-platform compatibility by replacing
     or removing invalid characters, trimming spaces, and optionally removing
@@ -332,17 +352,17 @@ def sanitize_filename(
         'File_with_spaces'
     """
     # Define invalid characters for both Windows and UNIX-based systems
-    invalid_chars = r'[<>:"/\\|?*\s]' if platform.system() == "Windows" else r'[/:]'
+    invalid_chars = r'[<>:"/\\|?*\s]' if platform.system() == "Windows" else r"[/:]"
     # Additional restrictions for URL-safe filenames
     if for_url:
-        invalid_chars = r'[^a-zA-Z0-9._-]'
+        invalid_chars = r"[^a-zA-Z0-9._-]"
 
     if lstrip:
         filename = filename.lstrip()
     if rstrip:
         filename = filename.rstrip()
     if rstrip_dots:
-        filename = filename.rstrip('.')
+        filename = filename.rstrip(".")
 
     # Replace invalid characters with the specified replacement character
     sanitized_name = re.sub(invalid_chars, invalid_character_replacement, filename)
@@ -355,7 +375,7 @@ def sanitize_filename(
     )
 
 
-def resolve_ext(ext: str, sep='.') -> str:
+def resolve_ext(ext: str, sep=".") -> str:
     """Normalize a file extension to include the leading dot.
 
     Returns the input unchanged if it already starts with ``'.'``,

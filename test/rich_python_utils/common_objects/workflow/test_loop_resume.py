@@ -15,30 +15,35 @@ Covers:
 - Backward scan glob fallback for ___seqN files
 - Async mirrors for all tests
 """
+
 import asyncio
 import os
 import shutil
 import tempfile
 
 import pytest
-from attr import attrs, attrib
-
+from attr import attrib, attrs
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
+)
+from rich_python_utils.common_objects.workflow.common.step_result_save_options import (
+    StepResultSaveOptions,
+)
 from rich_python_utils.common_objects.workflow.workflow import Workflow
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
-from rich_python_utils.common_objects.workflow.common.step_result_save_options import StepResultSaveOptions
 
 
 # ---------------------------------------------------------------------------
 # _StepWrapper — allows attaching arbitrary attributes to a callable
 # ---------------------------------------------------------------------------
 
+
 class _StepWrapper:
     """Wraps a callable so per-step attributes can be attached."""
 
     def __init__(self, fn, **kwargs):
         self._fn = fn
-        self.__name__ = getattr(fn, '__name__', str(fn))
-        self.__module__ = getattr(fn, '__module__', None)
+        self.__name__ = getattr(fn, "__name__", str(fn))
+        self.__module__ = getattr(fn, "__module__", None)
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -50,9 +55,11 @@ class _StepWrapper:
 # Concrete Workflow subclass with real save/load for testing
 # ---------------------------------------------------------------------------
 
+
 @attrs(slots=False)
 class ResumableWorkflow(Workflow):
     """Workflow subclass that saves results to a temp directory."""
+
     _save_dir: str = attrib(default=None)
 
     def __attrs_post_init__(self):
@@ -73,6 +80,7 @@ class ResumableWorkflow(Workflow):
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def save_dir():
     d = tempfile.mkdtemp(prefix="wf_test_")
@@ -83,6 +91,7 @@ def save_dir():
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_call_tracker():
     """Return (calls_list, step_fn) where step_fn records calls and returns input+1."""
@@ -111,6 +120,7 @@ def _make_failing_step(fail_on_call_n):
 # ===========================================================================
 # SYNC TESTS
 # ===========================================================================
+
 
 class TestLoopSaveCreatesUniquePaths:
     """Test 1: Each loop iteration saves to unique ___seqN paths."""
@@ -145,7 +155,7 @@ class TestLoopSaveCreatesUniquePaths:
 
         # Check that ___seq files were created
         files = sorted(os.listdir(save_dir))
-        seq_files = [f for f in files if '___seq' in f]
+        seq_files = [f for f in files if "___seq" in f]
         assert len(seq_files) >= 3, f"Expected at least 3 seq files, got: {seq_files}"
 
         # Ensure no overwrites — all files should be unique
@@ -159,14 +169,14 @@ class TestCrashAndResumeInLoop:
         call_log = []
 
         def step_a(x):
-            call_log.append(('a', x))
+            call_log.append(("a", x))
             return x + 1
 
         fail_count = [0]
 
         def step_b(x):
             fail_count[0] += 1
-            call_log.append(('b', x))
+            call_log.append(("b", x))
             if fail_count[0] == 2:
                 raise RuntimeError("crash on second b call")
             return x * 10
@@ -199,8 +209,12 @@ class TestCrashAndResumeInLoop:
 
         # Check checkpoint was saved (new parts mode: directory with main.pkl inside)
         checkpoint_dir = os.path.join(save_dir, "step___wf_checkpoint__")
-        assert os.path.isdir(checkpoint_dir), "Checkpoint directory should exist after first loop iteration"
-        assert os.path.exists(os.path.join(checkpoint_dir, "main.pkl")), "main.pkl should exist in checkpoint dir"
+        assert os.path.isdir(checkpoint_dir), (
+            "Checkpoint directory should exist after first loop iteration"
+        )
+        assert os.path.exists(os.path.join(checkpoint_dir, "main.pkl")), (
+            "main.pkl should exist in checkpoint dir"
+        )
 
         # Resume — should not re-execute completed iterations
         call_log.clear()
@@ -240,7 +254,7 @@ class TestStateRestoredOnResume:
             return loop_count[0] <= 3
 
         def update_state(state, result):
-            state['iterations'] = state.get('iterations', 0) + 1
+            state["iterations"] = state.get("iterations", 0) + 1
             return state
 
         steps = [
@@ -277,7 +291,7 @@ class TestStateRestoredOnResume:
         wf2._run(1)
         # State should have been restored from checkpoint (iterations > 0)
         assert wf2._state is not None
-        assert wf2._state.get('iterations', 0) > 0
+        assert wf2._state.get("iterations", 0) > 0
 
 
 class TestLoopCountsRestoredOnResume:
@@ -345,11 +359,11 @@ class TestBackwardCompatNoLoops:
         calls = []
 
         def step_a(x):
-            calls.append('a')
+            calls.append("a")
             return x + 1
 
         def step_b(x):
-            calls.append('b')
+            calls.append("b")
             return x * 2
 
         steps = [step_a, _StepWrapper(step_b, name="step_b")]
@@ -376,7 +390,7 @@ class TestBackwardCompatNoLoops:
         result2 = wf2._run(5)
         assert result2 == 12
         # step_b should not be re-executed since its result was saved
-        assert 'b' not in calls
+        assert "b" not in calls
 
 
 class TestCheckpointFileDeletedFallback:
@@ -472,7 +486,7 @@ class TestCheckpointResultFileDeletedFallback:
 
         # Delete all seq result files/dirs but keep checkpoint
         for f in os.listdir(save_dir):
-            if '___seq' in f:
+            if "___seq" in f:
                 full_path = os.path.join(save_dir, f)
                 if os.path.isdir(full_path):
                     shutil.rmtree(full_path)
@@ -555,7 +569,7 @@ class TestNonPicklableStateRaises:
 
         def update_state(state, result):
             # Add a lambda — not picklable
-            state['callback'] = lambda: None
+            state["callback"] = lambda: None
             return state
 
         steps = [
@@ -587,18 +601,22 @@ class TestResumeWithExplicitIntIndex:
         calls = []
 
         def step_a(x):
-            calls.append('a')
+            calls.append("a")
             return x + 1
 
         def step_b(x):
-            calls.append('b')
+            calls.append("b")
             return x * 2
 
         def step_c(x):
-            calls.append('c')
+            calls.append("c")
             return x - 1
 
-        steps = [step_a, _StepWrapper(step_b, name="step_b"), _StepWrapper(step_c, name="step_c")]
+        steps = [
+            step_a,
+            _StepWrapper(step_b, name="step_b"),
+            _StepWrapper(step_c, name="step_c"),
+        ]
 
         # First run
         wf = ResumableWorkflow(
@@ -621,7 +639,7 @@ class TestResumeWithExplicitIntIndex:
         result = wf2._run(5)
         assert result is not None
         # step_a and step_b should not be re-executed (found at index 1)
-        assert 'a' not in calls
+        assert "a" not in calls
 
 
 class TestNextStepIndexCorrectForLoopBack:
@@ -783,7 +801,7 @@ class TestReceivesStateWithCheckpoint:
             return loop_count[0] <= 3
 
         def update_state(state, result):
-            state['count'] = state.get('count', 0) + 1
+            state["count"] = state.get("count", 0) + 1
             return state
 
         steps = [
@@ -822,7 +840,7 @@ class TestReceivesStateWithCheckpoint:
         wf2._run(1)
         # State should have been restored with count > 0
         assert wf2._state is not None
-        assert wf2._state.get('count', 0) > 0
+        assert wf2._state.get("count", 0) > 0
 
 
 class TestResultPassDownModeWithLoopResume:
@@ -933,7 +951,7 @@ class TestBackwardScanFallbackFindsSeqFiles:
             os.remove(ckpt_file)
 
         # Verify seq results exist (may be directories in parts mode)
-        seq_entries = [f for f in os.listdir(save_dir) if '___seq' in f]
+        seq_entries = [f for f in os.listdir(save_dir) if "___seq" in f]
         assert len(seq_entries) > 0, "Should have ___seqN entries"
 
         # Resume — glob fallback should find them and skip re-execution
@@ -966,6 +984,7 @@ class TestBackwardScanFallbackFindsSeqFiles:
 # ASYNC TESTS — mirrors of all sync tests above
 # ===========================================================================
 
+
 @pytest.mark.asyncio
 class TestAsyncLoopSaveCreatesUniquePaths:
     async def test_unique_seq_paths(self, save_dir):
@@ -979,16 +998,19 @@ class TestAsyncLoopSaveCreatesUniquePaths:
 
         steps = [
             collect_fn,
-            _StepWrapper(review_fn, name="review", loop_back_to=0, loop_condition=loop_cond),
+            _StepWrapper(
+                review_fn, name="review", loop_back_to=0, loop_condition=loop_cond
+            ),
         ]
         wf = ResumableWorkflow(
-            steps=steps, save_dir=save_dir,
+            steps=steps,
+            save_dir=save_dir,
             result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
             enable_result_save=True,
         )
         await wf._arun(10)
         files = sorted(os.listdir(save_dir))
-        seq_files = [f for f in files if '___seq' in f]
+        seq_files = [f for f in files if "___seq" in f]
         assert len(seq_files) >= 3
 
 
@@ -1014,11 +1036,14 @@ class TestAsyncCrashAndResumeInLoop:
 
         steps = [
             step_a,
-            _StepWrapper(step_b, name="step_b", loop_back_to=0, loop_condition=loop_cond),
+            _StepWrapper(
+                step_b, name="step_b", loop_back_to=0, loop_condition=loop_cond
+            ),
         ]
 
         wf = ResumableWorkflow(
-            steps=steps, save_dir=save_dir,
+            steps=steps,
+            save_dir=save_dir,
             result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
             enable_result_save=True,
         )
@@ -1029,7 +1054,8 @@ class TestAsyncCrashAndResumeInLoop:
         loop_count[0] = 0
 
         wf2 = ResumableWorkflow(
-            steps=steps, save_dir=save_dir,
+            steps=steps,
+            save_dir=save_dir,
             result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
             enable_result_save=True,
             resume_with_saved_results=True,
@@ -1044,17 +1070,18 @@ class TestAsyncBackwardCompatNoLoops:
         calls = []
 
         def step_a(x):
-            calls.append('a')
+            calls.append("a")
             return x + 1
 
         def step_b(x):
-            calls.append('b')
+            calls.append("b")
             return x * 2
 
         steps = [step_a, _StepWrapper(step_b, name="step_b")]
 
         wf = ResumableWorkflow(
-            steps=steps, save_dir=save_dir,
+            steps=steps,
+            save_dir=save_dir,
             result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
             enable_result_save=True,
         )
@@ -1063,14 +1090,15 @@ class TestAsyncBackwardCompatNoLoops:
 
         calls.clear()
         wf2 = ResumableWorkflow(
-            steps=steps, save_dir=save_dir,
+            steps=steps,
+            save_dir=save_dir,
             result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
             enable_result_save=True,
             resume_with_saved_results=True,
         )
         result2 = await wf2._arun(5)
         assert result2 == 12
-        assert 'b' not in calls
+        assert "b" not in calls
 
 
 @pytest.mark.asyncio
@@ -1086,18 +1114,23 @@ class TestAsyncNonPicklableStateRaises:
             return True
 
         def update_state(state, result):
-            state['callback'] = lambda: None
+            state["callback"] = lambda: None
             return state
 
         steps = [
             _StepWrapper(step_a, update_state=update_state),
             _StepWrapper(
-                step_b, name="step_b", update_state=update_state,
-                loop_back_to=0, loop_condition=loop_cond, max_loop_iterations=3,
+                step_b,
+                name="step_b",
+                update_state=update_state,
+                loop_back_to=0,
+                loop_condition=loop_cond,
+                max_loop_iterations=3,
             ),
         ]
         wf = ResumableWorkflow(
-            steps=steps, save_dir=save_dir,
+            steps=steps,
+            save_dir=save_dir,
             result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
             enable_result_save=True,
         )
@@ -1125,10 +1158,13 @@ class TestAsyncGlobFallback:
 
         steps = [
             _StepWrapper(step_a, name="step_a"),
-            _StepWrapper(step_b, name="step_b", loop_back_to=0, loop_condition=loop_cond),
+            _StepWrapper(
+                step_b, name="step_b", loop_back_to=0, loop_condition=loop_cond
+            ),
         ]
         wf = ResumableWorkflow(
-            steps=steps, save_dir=save_dir,
+            steps=steps,
+            save_dir=save_dir,
             result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
             enable_result_save=True,
         )
@@ -1146,7 +1182,8 @@ class TestAsyncGlobFallback:
         step_b_calls[0] = 0
 
         wf2 = ResumableWorkflow(
-            steps=steps, save_dir=save_dir,
+            steps=steps,
+            save_dir=save_dir,
             result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
             enable_result_save=True,
             resume_with_saved_results=True,

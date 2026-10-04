@@ -2,16 +2,15 @@ import uuid
 from multiprocessing import Queue
 from os import path
 from time import sleep
-from typing import Union, Callable, Any, Iterator, Sequence, List
+from typing import Any, Callable, Iterator, List, Sequence, Union
 
-from attr import attrs, attrib
-from tqdm import tqdm
-
+from attr import attrib, attrs
 from rich_python_utils.console_utils import hprint_message
 from rich_python_utils.io_utils.pickle_io import pickle_save
 from rich_python_utils.io_utils.text_io import iter_all_lines_from_all_files
 from rich_python_utils.path_utils.common import ensure_dir_existence
 from rich_python_utils.path_utils.path_string_operations import append_timestamp
+from tqdm import tqdm
 
 
 class MPResultTuple(tuple):
@@ -30,6 +29,7 @@ class MPActiveQueueFlag:
             - If set to 0 or False, it indicates that the queue is no longer active and processing should stop.
             - If set to any other value (non-zero or True), it indicates that the queue is still active and processing should continue.
     """
+
     flag = attrib(type=Union[int, bool])
 
 
@@ -113,10 +113,7 @@ class MPTarget:
         return self.name or str(self._target)
 
     def _has_data_iter(self):
-        return (
-                self.data_item_iter is not None and
-                self.data_item_iter is not False
-        )
+        return self.data_item_iter is not None and self.data_item_iter is not False
 
     def _process_input_data(self, data):
         return (
@@ -133,16 +130,18 @@ class MPTarget:
         )
 
     def _process_result(self, result):
-        return result[0] if (
-                self.unpack_single_result and
-                (
-                        isinstance(result, Sequence) or
-                        (
-                                hasattr(result, '__len__') and
-                                hasattr(result, '__getitem__')
-                        )
-                ) and len(result) == 1
-        ) else self._process_result_no_unpack(result)
+        return (
+            result[0]
+            if (
+                self.unpack_single_result
+                and (
+                    isinstance(result, Sequence)
+                    or (hasattr(result, "__len__") and hasattr(result, "__getitem__"))
+                )
+                and len(result) == 1
+            )
+            else self._process_result_no_unpack(result)
+        )
 
     @staticmethod
     def _check_active_queue_flag(queue_completion_flag) -> bool:
@@ -171,10 +170,7 @@ class MPTarget:
         """
         self._validate_parameters()
 
-        hprint_message(
-            'initialized',
-            f'{self.name}{pid}'
-        )
+        hprint_message("initialized", f"{self.name}{pid}")
         no_job_cnt = 0
         if self.pass_each_data_item_to_target:
             # If `pass_each_data_item_to_target` is True,
@@ -190,15 +186,22 @@ class MPTarget:
                         data = input_queue.get()
                         if self._has_data_iter():
                             output_queue.put(
-                                self._process_result_no_unpack((
-                                    self.target(pid, dataitem, *args[2:])
-                                    for dataitem in self._process_input_data(data)
-                                ))
+                                self._process_result_no_unpack(
+                                    (
+                                        self.target(pid, dataitem, *args[2:])
+                                        for dataitem in self._process_input_data(data)
+                                    )
+                                )
                             )
                         else:
-                            output_queue.put(self._process_result(tuple(
-                                self.target(pid, dataitem, *args[2:]) for dataitem in data
-                            )))
+                            output_queue.put(
+                                self._process_result(
+                                    tuple(
+                                        self.target(pid, dataitem, *args[2:])
+                                        for dataitem in data
+                                    )
+                                )
+                            )
 
                     if not self._check_active_queue_flag(queue_completion_flag):
                         return
@@ -206,22 +209,26 @@ class MPTarget:
                     no_job_cnt += 1
                     if no_job_cnt % 10 == 0:
                         hprint_message(
-                            'job', f'{self._get_name()}: {pid}',
-                            'wait for', self.queue_refill_wait_time
+                            "job",
+                            f"{self._get_name()}: {pid}",
+                            "wait for",
+                            self.queue_refill_wait_time,
                         )
                     sleep(self.queue_refill_wait_time)
             else:
                 # Process input data and output results without queue
                 if self._has_data_iter():
-                    output = self._process_result_no_unpack((
-                        self.target(pid, dataitem, *args)
-                        for dataitem in self._process_input_data(data)
-                    ))
+                    output = self._process_result_no_unpack(
+                        (
+                            self.target(pid, dataitem, *args)
+                            for dataitem in self._process_input_data(data)
+                        )
+                    )
                 else:
-                    data = tqdm(data, desc=f'{self._get_name()}: {pid}')
-                    output = self._process_result(tuple(
-                        (self.target(pid, dataitem, *args) for dataitem in data)
-                    ))
+                    data = tqdm(data, desc=f"{self._get_name()}: {pid}")
+                    output = self._process_result(
+                        tuple((self.target(pid, dataitem, *args) for dataitem in data))
+                    )
         else:
             # If `pass_each_data_item_to_target` is False,
             # then `data` is processed by the target callable as a whole.
@@ -244,8 +251,10 @@ class MPTarget:
                     no_job_cnt += 1
                     if no_job_cnt % 10 == 0:
                         hprint_message(
-                            'job', f'{self._get_name()}: {pid}',
-                            'wait for', self.queue_refill_wait_time
+                            "job",
+                            f"{self._get_name()}: {pid}",
+                            "wait for",
+                            self.queue_refill_wait_time,
                         )
                     sleep(self.queue_refill_wait_time)
             else:
@@ -259,12 +268,13 @@ class MPTarget:
             dump_path = path.join(
                 self.result_dump_path,
                 (
-                    f'{pid:05}-{append_timestamp(str(uuid.uuid4()))}.mpb'
+                    f"{pid:05}-{append_timestamp(str(uuid.uuid4()))}.mpb"
                     if self.result_dump_file_pattern is None
-                    else self.result_dump_file_pattern.format(pid))
+                    else self.result_dump_file_pattern.format(pid)
+                ),
             )
 
-            hprint_message('dumping results to', dump_path)
+            hprint_message("dumping results to", dump_path)
             self.result_dump_method(output, dump_path)
             if self.return_output:
                 return output

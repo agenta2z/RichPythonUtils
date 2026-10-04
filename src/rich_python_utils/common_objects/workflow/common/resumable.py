@@ -3,27 +3,27 @@ import os
 from abc import ABC
 from enum import Enum
 from os import path
-from typing import Union, Any
+from typing import Any, Union
 
-from attr import attrs, attrib
+from attr import attrib, attrs
 from attr.validators import in_
-
-from rich_python_utils.common_objects.workflow.common.step_result_save_options import \
-    StepResultSaveOptions
-from rich_python_utils.io_utils.pickle_io import pickle_save, pickle_load
+from rich_python_utils.common_objects.workflow.common.step_result_save_options import (
+    StepResultSaveOptions,
+)
+from rich_python_utils.io_utils.pickle_io import pickle_load, pickle_save
 
 logger = logging.getLogger(__name__)
 
 
 class CheckpointMode(str, Enum):
-    PICKLE = 'pickle'
-    JSONFY = 'jsonfy'
+    PICKLE = "pickle"
+    JSONFY = "jsonfy"
 
 
 def _ensure_parts_dir(file_path):
     """Strip .pkl/.json extension to get the directory path for parts mode."""
     base, ext = os.path.splitext(file_path)
-    if ext in ('.pkl', '.json'):
+    if ext in (".pkl", ".json"):
         return base
     return file_path
 
@@ -31,8 +31,8 @@ def _ensure_parts_dir(file_path):
 def _ensure_json_extension(file_path):
     """Ensure the path has a .json extension."""
     base, ext = os.path.splitext(file_path)
-    if ext != '.json':
-        return file_path + '.json'
+    if ext != ".json":
+        return file_path + ".json"
     return file_path
 
 
@@ -52,15 +52,13 @@ class Resumable(ABC):
         resume_with_saved_results (bool): If True, resumes the workflow using saved results.
         checkpoint_mode (str): Checkpoint serialization mode ('pickle' or 'jsonfy').
     """
+
     enable_result_save = attrib(
-        type=Union[StepResultSaveOptions, bool, str],
-        default=False
+        type=Union[StepResultSaveOptions, bool, str], default=False
     )
     resume_with_saved_results = attrib(type=bool, default=False)
     checkpoint_mode = attrib(
-        type=str,
-        default='pickle',
-        validator=in_(['pickle', 'jsonfy'])
+        type=str, default="pickle", validator=in_(["pickle", "jsonfy"])
     )
     _result_root_override = attrib(default=None, init=False, repr=False)
 
@@ -72,7 +70,9 @@ class Resumable(ABC):
         """
         original_path = self._get_result_path(result_id, *args, **kwargs)
         if self._result_root_override is not None:
-            return os.path.join(self._result_root_override, os.path.basename(original_path))
+            return os.path.join(
+                self._result_root_override, os.path.basename(original_path)
+            )
         return original_path
 
     def _save_result(self, result, output_path: str):
@@ -83,18 +83,22 @@ class Resumable(ABC):
             result (Any): The result object to save.
             output_path (str): The path where the result will be saved.
         """
-        if self.checkpoint_mode == 'jsonfy':
+        if self.checkpoint_mode == "jsonfy":
             self._save_result_jsonfy(result, output_path)
         else:
             dir_path = _ensure_parts_dir(output_path)
-            artifact_types = getattr(type(self), '__artifact_types__', None)
+            artifact_types = getattr(type(self), "__artifact_types__", None)
             pickle_save(
-                result, dir_path, enable_parts=True,
+                result,
+                dir_path,
+                enable_parts=True,
                 artifact_types=artifact_types,
-                verbose=getattr(self, 'verbose', False)
+                verbose=getattr(self, "verbose", False),
             )
 
-    def _load_result(self, result_id: Any, result_path_or_preloaded_result: Union[str, Any]):
+    def _load_result(
+        self, result_id: Any, result_path_or_preloaded_result: Union[str, Any]
+    ):
         """
         Loads a previously saved step result from a path, or can also pass in a preloaded result object.
 
@@ -106,11 +110,13 @@ class Resumable(ABC):
             Any: The loaded result.
         """
         if isinstance(result_path_or_preloaded_result, str):
-            if self.checkpoint_mode == 'jsonfy':
+            if self.checkpoint_mode == "jsonfy":
                 return self._load_result_jsonfy(result_path_or_preloaded_result)
             dir_path = _ensure_parts_dir(result_path_or_preloaded_result)
             # Try parts directory first
-            if os.path.isdir(dir_path) and os.path.exists(os.path.join(dir_path, "main.pkl")):
+            if os.path.isdir(dir_path) and os.path.exists(
+                os.path.join(dir_path, "main.pkl")
+            ):
                 return pickle_load(dir_path, enable_parts=True)
             # Backward compat: try loading as plain pickle file
             return pickle_load(result_path_or_preloaded_result)
@@ -129,10 +135,12 @@ class Resumable(ABC):
             Union[bool, Any]: Returns True if the result exists, False otherwise.
                 Subclasses can override this to implement custom existence checks or return preloaded results.
         """
-        if self.checkpoint_mode == 'jsonfy':
+        if self.checkpoint_mode == "jsonfy":
             return os.path.exists(_ensure_json_extension(result_path))
         dir_path = _ensure_parts_dir(result_path)
-        if os.path.isdir(dir_path) and os.path.exists(os.path.join(dir_path, "main.pkl")):
+        if os.path.isdir(dir_path) and os.path.exists(
+            os.path.join(dir_path, "main.pkl")
+        ):
             return True
         return path.exists(result_path)  # backward compat
 
@@ -155,12 +163,18 @@ class Resumable(ABC):
     def _save_result_jsonfy(self, result, output_path: str):
         """Save result via jsonfy serialization (write_json calls jsonfy internally)."""
         from rich_python_utils.io_utils.json_io import write_json
+
         json_path = _ensure_json_extension(output_path)
-        write_json(result, json_path, save_type='separate')
+        write_json(result, json_path, save_type="separate")
 
     def _load_result_jsonfy(self, result_path: str):
         """Load result from jsonfy-serialized checkpoint."""
-        from rich_python_utils.io_utils.json_io import read_json, resolve_json_parts, dejsonfy
+        from rich_python_utils.io_utils.json_io import (
+            dejsonfy,
+            read_json,
+            resolve_json_parts,
+        )
+
         json_path = _ensure_json_extension(result_path)
         data = read_json(json_path)
 
@@ -168,7 +182,7 @@ class Resumable(ABC):
         data = resolve_json_parts(data, json_path)
 
         # Try type-aware reconstruction via .types.json
-        types_file = json_path + '.types.json'
+        types_file = json_path + ".types.json"
         if os.path.exists(types_file):
             try:
                 return dejsonfy(data, type_file=types_file)
@@ -179,7 +193,5 @@ class Resumable(ABC):
                 )
                 return data
         else:
-            logger.warning(
-                f"No .types.json found at {types_file}. Returning raw dict."
-            )
+            logger.warning(f"No .types.json found at {types_file}. Returning raw dict.")
             return data

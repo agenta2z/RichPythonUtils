@@ -35,9 +35,9 @@ Usage:
 """
 
 import threading
-from typing import Any, Optional, List, Dict
+from typing import Any, Dict, List, Optional
 
-from attr import attrs, attrib
+from attr import attrib, attrs
 
 from .keyvalue_service_base import KeyValueServiceBase
 
@@ -245,9 +245,7 @@ class MemoryKeyValueService(KeyValueServiceBase):
                     "backend": "memory",
                     "namespace_count": len(self._store),
                     "total_keys": total_keys,
-                    "namespaces": {
-                        ns: len(store) for ns, store in self._store.items()
-                    },
+                    "namespaces": {ns: len(store) for ns, store in self._store.items()},
                 }
 
     def ping(self) -> bool:

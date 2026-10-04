@@ -9,9 +9,9 @@ import json
 import os
 
 from rich_python_utils.service_utils.keyvalue_service.file_keyvalue_service import (
-    FileKeyValueService,
-    _encode_key,
     _decode_key,
+    _encode_key,
+    FileKeyValueService,
 )
 
 

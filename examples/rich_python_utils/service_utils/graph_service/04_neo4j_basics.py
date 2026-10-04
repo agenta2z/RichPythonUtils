@@ -36,12 +36,16 @@ except ImportError:
     sys.exit(0)
 
 from resolve_path import resolve_path
+
 resolve_path()
 
+from rich_python_utils.service_utils.graph_service.graph_node import (
+    GraphEdge,
+    GraphNode,
+)
 from rich_python_utils.service_utils.graph_service.neo4j_graph_service import (
     Neo4jGraphService,
 )
-from rich_python_utils.service_utils.graph_service.graph_node import GraphNode, GraphEdge
 
 
 def main():
@@ -71,19 +75,25 @@ def main():
         # 2. Add researchers
         researcher_data = [
             ("alice", "Dr. Alice Chen", {"institution": "MIT", "h_index": 42}),
-            ("bob",   "Dr. Bob Patel",  {"institution": "Stanford", "h_index": 35}),
-            ("carol", "Dr. Carol Kim",  {"institution": "MIT", "h_index": 28}),
-            ("diana", "Dr. Diana Lee",  {"institution": "Harvard", "h_index": 51}),
+            ("bob", "Dr. Bob Patel", {"institution": "Stanford", "h_index": 35}),
+            ("carol", "Dr. Carol Kim", {"institution": "MIT", "h_index": 28}),
+            ("diana", "Dr. Diana Lee", {"institution": "Harvard", "h_index": 51}),
         ]
         for nid, label, props in researcher_data:
-            svc.add_node(GraphNode(node_id=nid, node_type="researcher",
-                                   label=label, properties=props))
+            svc.add_node(
+                GraphNode(
+                    node_id=nid, node_type="researcher", label=label, properties=props
+                )
+            )
 
         # 3. Add institution nodes
         institution_data = [("mit", "MIT"), ("stanford", "Stanford")]
         for nid, label in institution_data:
-            svc.add_node(GraphNode(node_id=nid, node_type="institution",
-                                   label=label, properties={}))
+            svc.add_node(
+                GraphNode(
+                    node_id=nid, node_type="institution", label=label, properties={}
+                )
+            )
 
         # 4. Add edges
         edge_data = [
@@ -95,16 +105,23 @@ def main():
             ("bob", "stanford", "affiliated_with", {}),
         ]
         for src, tgt, etype, props in edge_data:
-            svc.add_edge(GraphEdge(source_id=src, target_id=tgt,
-                                   edge_type=etype, properties=props))
+            svc.add_edge(
+                GraphEdge(
+                    source_id=src, target_id=tgt, edge_type=etype, properties=props
+                )
+            )
 
         # 5. Neighbors (Cypher variable-length paths)
         n1 = svc.get_neighbors("alice", depth=1)
         n2 = svc.get_neighbors("alice", edge_type="co_authored", depth=2)
 
         # 6. Namespaces
-        svc.add_node(GraphNode(node_id="alice", node_type="researcher",
-                               label="Alice (Project X)"), namespace="project_x")
+        svc.add_node(
+            GraphNode(
+                node_id="alice", node_type="researcher", label="Alice (Project X)"
+            ),
+            namespace="project_x",
+        )
         default_size = svc.size()
         project_x_size = svc.size(namespace="project_x")
         ns_list = svc.namespaces()
@@ -186,4 +203,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n[X] Error: {e}")
         import traceback
+
         traceback.print_exc()

@@ -1,8 +1,10 @@
 from collections import deque
-from typing import Sequence, List, Callable, Iterator, Iterable
+from typing import Callable, Iterable, Iterator, List, Sequence
 
 
-def next_larger_in_time_series(time_series: Sequence, return_num_steps_forward: bool = False) -> List[int]:
+def next_larger_in_time_series(
+    time_series: Sequence, return_num_steps_forward: bool = False
+) -> List[int]:
     """
     Finds the next larger value in a time series and optionally calculates the steps to it.
 
@@ -62,7 +64,9 @@ def next_larger_in_time_series(time_series: Sequence, return_num_steps_forward: 
         - Space Complexity: O(n), for the stack used to store indices.
     """
     n = len(time_series)
-    result = [-1] * n  # Initialize result array with -1 for indices or 0 for step counts
+    result = [
+        -1
+    ] * n  # Initialize result array with -1 for indices or 0 for step counts
     stack = []  # Monotonic stack to store indices
 
     for i, value in enumerate(time_series):
@@ -78,7 +82,9 @@ def next_larger_in_time_series(time_series: Sequence, return_num_steps_forward: 
     return result
 
 
-def find_all_historical_larger(arr: List[int], compare: Callable[[int, int], bool], reverse: bool = True) -> List[int]:
+def find_all_historical_larger(
+    arr: List[int], compare: Callable[[int, int], bool], reverse: bool = True
+) -> List[int]:
     """
     Finds indices of elements in `arr` that are 'historically larger' based on a comparison function.
 
@@ -109,7 +115,7 @@ def find_all_historical_larger(arr: List[int], compare: Callable[[int, int], boo
     """
     n = len(arr)
     result = []
-    max_seen = float('-inf')  # Track max value seen so far
+    max_seen = float("-inf")  # Track max value seen so far
 
     # Determine iteration order
     indices = range(n - 1, -1, -1) if reverse else range(n)

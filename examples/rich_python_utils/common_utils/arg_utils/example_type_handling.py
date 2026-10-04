@@ -16,6 +16,7 @@ import subprocess
 import sys
 
 from resolve_path import resolve_path
+
 resolve_path()  # Add project src to sys.path
 
 from rich_python_utils.common_utils.arg_utils.arg_parse import get_parsed_args
@@ -363,7 +364,7 @@ Now let's run REAL command-line examples with different types!
         project_root = os.path.dirname(project_root)
 
     # Create a mini demo script
-    demo_script = '''
+    demo_script = """
 import sys
 sys.path.insert(0, "src")
 from rich_python_utils.common_utils.arg_utils.arg_parse import get_parsed_args
@@ -381,38 +382,38 @@ print(f"  verbose = {args.verbose} (type: {type(args.verbose).__name__})")
 print(f"  layers  = {args.layers} (type: {type(args.layers).__name__})")
 print(f"  config  = {args.config} (type: {type(args.config).__name__})")
 print(f"  shape   = {args.shape} (type: {type(args.shape).__name__})")
-'''
+"""
 
     demos = [
         {
             "title": "Demo 1: No arguments (defaults)",
             "args": [],
-            "expected": "debug=False, verbose=True, layers=[128,256], etc."
+            "expected": "debug=False, verbose=True, layers=[128,256], etc.",
         },
         {
             "title": "Demo 2: Boolean flag --debug",
             "args": ["--debug"],
-            "expected": "debug becomes True (just include the flag, no value)"
+            "expected": "debug becomes True (just include the flag, no value)",
         },
         {
             "title": "Demo 3: Boolean value --verbose false",
             "args": ["--verbose", "false"],
-            "expected": "verbose becomes False (must provide explicit value)"
+            "expected": "verbose becomes False (must provide explicit value)",
         },
         {
-            "title": "Demo 4: List --layers \"[64, 128, 256, 512]\"",
+            "title": 'Demo 4: List --layers "[64, 128, 256, 512]"',
             "args": ["--layers", "[64, 128, 256, 512]"],
-            "expected": "layers becomes [64, 128, 256, 512] (parsed as list of ints)"
+            "expected": "layers becomes [64, 128, 256, 512] (parsed as list of ints)",
         },
         {
             "title": "Demo 5: Dict --config \"{'lr': 0.01, 'momentum': 0.9}\"",
             "args": ["--config", "{'lr': 0.01, 'momentum': 0.9}"],
-            "expected": "config becomes {'lr': 0.01, 'momentum': 0.9}"
+            "expected": "config becomes {'lr': 0.01, 'momentum': 0.9}",
         },
         {
-            "title": "Demo 6: Tuple --shape \"(128, 128, 3)\"",
+            "title": 'Demo 6: Tuple --shape "(128, 128, 3)"',
             "args": ["--shape", "(128, 128, 3)"],
-            "expected": "shape becomes (128, 128, 3) (stays as tuple)"
+            "expected": "shape becomes (128, 128, 3) (stays as tuple)",
         },
     ]
 
@@ -510,4 +511,3 @@ KEY TAKEAWAYS:
 
     pause()
     run_cli_demos()
-

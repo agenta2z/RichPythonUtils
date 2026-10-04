@@ -9,7 +9,10 @@ This test verifies that:
 """
 
 import sys
-sys.path.insert(0, r'C:\Users\yxinl\OneDrive\Projects\PythonProjects\SciencePythonUtils\src')
+
+sys.path.insert(
+    0, r"C:\Users\yxinl\OneDrive\Projects\PythonProjects\SciencePythonUtils\src"
+)
 
 print("=" * 80)
 print("Testing Console Utils Fallback Mechanism")
@@ -29,29 +32,29 @@ print()
 print("2. Testing core functions (available in both backends):")
 print("-" * 80)
 from rich_python_utils.console_utils import (
-    hprint_message,
     eprint_message,
-    wprint_message,
-    hprint_pairs,
     eprint_pairs,
-    wprint_pairs,
-    hprint_section_title,
-    hprint_section_separator,
     eprint_section_separator,
+    hprint_message,
+    hprint_pairs,
+    hprint_section_separator,
+    hprint_section_title,
+    wprint_message,
+    wprint_pairs,
     wprint_section_separator,
 )
 
 print("Testing hprint_message:")
-hprint_message('Test', 'hprint_message works!')
+hprint_message("Test", "hprint_message works!")
 
 print("\nTesting eprint_message:")
-eprint_message('Error', 'eprint_message works!')
+eprint_message("Error", "eprint_message works!")
 
 print("\nTesting wprint_message:")
-wprint_message('Warning', 'wprint_message works!')
+wprint_message("Warning", "wprint_message works!")
 
 print("\nTesting hprint_pairs:")
-hprint_pairs('metric1', 100, 'metric2', 200, title='Test Pairs')
+hprint_pairs("metric1", 100, "metric2", 200, title="Test Pairs")
 
 print("Testing separator functions:")
 hprint_section_separator()
@@ -63,33 +66,33 @@ print()
 print("3. Checking Rich-specific features:")
 print("-" * 80)
 from rich_python_utils.console_utils import (
-    print_table,
-    print_syntax,
-    print_markdown,
-    print_json,
-    progress_bar,
-    get_rich_logger,
-    cprint_panel,
-    hprint_panel,
-    eprint_panel,
-    wprint_panel,
     console,
+    cprint_panel,
     cprint_section_separator,
+    eprint_panel,
+    get_rich_logger,
+    hprint_panel,
+    print_json,
+    print_markdown,
+    print_syntax,
+    print_table,
+    progress_bar,
+    wprint_panel,
 )
 
 rich_features = {
-    'print_table': print_table,
-    'print_syntax': print_syntax,
-    'print_markdown': print_markdown,
-    'print_json': print_json,
-    'progress_bar': progress_bar,
-    'get_rich_logger': get_rich_logger,
-    'cprint_panel': cprint_panel,
-    'hprint_panel': hprint_panel,
-    'eprint_panel': eprint_panel,
-    'wprint_panel': wprint_panel,
-    'console': console,
-    'cprint_section_separator': cprint_section_separator,
+    "print_table": print_table,
+    "print_syntax": print_syntax,
+    "print_markdown": print_markdown,
+    "print_json": print_json,
+    "progress_bar": progress_bar,
+    "get_rich_logger": get_rich_logger,
+    "cprint_panel": cprint_panel,
+    "hprint_panel": hprint_panel,
+    "eprint_panel": eprint_panel,
+    "wprint_panel": wprint_panel,
+    "console": console,
+    "cprint_section_separator": cprint_section_separator,
 }
 
 for name, func in rich_features.items():
@@ -115,29 +118,29 @@ print()
 print("4. Checking Textual features:")
 print("-" * 80)
 from rich_python_utils.console_utils import (
-    prompt_confirm,
-    prompt_choice,
-    prompt_input,
-    display_table,
     display_help,
-    show_notification,
-    ProgressDashboard,
+    display_table,
     InteractiveTable,
-    LogViewer,
     LiveMetrics,
+    LogViewer,
+    ProgressDashboard,
+    prompt_choice,
+    prompt_confirm,
+    prompt_input,
+    show_notification,
 )
 
 textual_features = {
-    'prompt_confirm': prompt_confirm,
-    'prompt_choice': prompt_choice,
-    'prompt_input': prompt_input,
-    'display_table': display_table,
-    'display_help': display_help,
-    'show_notification': show_notification,
-    'ProgressDashboard': ProgressDashboard,
-    'InteractiveTable': InteractiveTable,
-    'LogViewer': LogViewer,
-    'LiveMetrics': LiveMetrics,
+    "prompt_confirm": prompt_confirm,
+    "prompt_choice": prompt_choice,
+    "prompt_input": prompt_input,
+    "display_table": display_table,
+    "display_help": display_help,
+    "show_notification": show_notification,
+    "ProgressDashboard": ProgressDashboard,
+    "InteractiveTable": InteractiveTable,
+    "LogViewer": LogViewer,
+    "LiveMetrics": LiveMetrics,
 }
 
 for name, func in textual_features.items():

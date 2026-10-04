@@ -39,7 +39,9 @@ from collections import deque
 from typing import Optional
 
 from rich_python_utils.service_utils.graph_service.graph_node import GraphNode
-from rich_python_utils.service_utils.graph_service.graph_service_base import GraphServiceBase
+from rich_python_utils.service_utils.graph_service.graph_service_base import (
+    GraphServiceBase,
+)
 
 
 def materialize_subgraph(

@@ -2,26 +2,29 @@
 
 Validates: Requirements 28.1, 28.2, 28.3, 28.4
 """
+
 import os
 import shutil
 import tempfile
 
 import pytest
-from attr import attrs, attrib
-
-from rich_python_utils.common_objects.workflow.workflow import Workflow
-from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode
+from attr import attrib, attrs
 from rich_python_utils.common_objects.workflow.common.expansion import (
     GraphExpansionResult,
     SubgraphSpec,
 )
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
+)
 from rich_python_utils.common_objects.workflow.common.step_wrapper import StepWrapper
+from rich_python_utils.common_objects.workflow.workflow import Workflow
+from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode
 
 
 # ---------------------------------------------------------------------------
 # Concrete test helpers
 # ---------------------------------------------------------------------------
+
 
 @attrs(slots=False)
 class _TestWorkflow(Workflow):
@@ -74,7 +77,9 @@ class TestSelfLoopExpansion:
         def self_loop_fn(x):
             expansion_count[0] += 1
             val = x if isinstance(x, (int, float)) else 0
-            sub_node = _make_node(f"sub_{expansion_count[0]}", lambda v: v + 100, save_dir)
+            sub_node = _make_node(
+                f"sub_{expansion_count[0]}", lambda v: v + 100, save_dir
+            )
             return GraphExpansionResult(
                 result=val + 1,
                 subgraph=SubgraphSpec(nodes=[sub_node], entry_nodes=[sub_node]),

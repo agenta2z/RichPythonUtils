@@ -1,17 +1,21 @@
-from enum import Enum
-from typing import Iterable, Optional, Union, Tuple, List
 import random
 import string
+from enum import Enum
+from typing import Iterable, List, Optional, Tuple, Union
 
-from rich_python_utils.common_objects.search_fallback_options import SearchFallbackOptions
+from rich_python_utils.common_objects.search_fallback_options import (
+    SearchFallbackOptions,
+)
 from rich_python_utils.common_utils.iter_helper import iter_, iter__
-from rich_python_utils.common_utils.typing_helper import solve_nested_singleton_tuple_list
+from rich_python_utils.common_utils.typing_helper import (
+    solve_nested_singleton_tuple_list,
+)
 
 
 class OccurrenceOptions(str, Enum):
-    First = 'first'
-    Last = 'last'
-    All = 'all'
+    First = "first"
+    Last = "last"
+    All = "all"
 
 
 def random_string(length: int = 8, characters: Optional[str] = None) -> str:
@@ -38,7 +42,7 @@ def random_string(length: int = 8, characters: Optional[str] = None) -> str:
     if characters is None:
         characters = string.ascii_letters + string.digits
 
-    return ''.join(random.choices(characters, k=length))
+    return "".join(random.choices(characters, k=length))
 
 
 def startswith_any(s: str, targets: Union[str, Iterable[str]]):
@@ -122,9 +126,7 @@ def contains_any_all(s: str, targets: Iterable[Union[Iterable[str], str]]):
         >>> contains_any_all("hello world", [["foo", "bar"], ["baz", "qux"]])
         False
     """
-    return any(
-        (contains_all(s, target)) for target in iter__(targets) if target
-    )
+    return any((contains_all(s, target)) for target in iter__(targets) if target)
 
 
 def find_all(s: str, substr: str) -> Iterable[int]:
@@ -152,7 +154,7 @@ def find_all(s: str, substr: str) -> Iterable[int]:
         i = s.find(substr, i + 1)
 
 
-def join_(*strs, sep: str = '', last_sep: str = None, ignore_none_or_empty=True) -> str:
+def join_(*strs, sep: str = "", last_sep: str = None, ignore_none_or_empty=True) -> str:
     """
     Join multiple strings with a specified separator and an optional last separator.
 
@@ -189,13 +191,13 @@ def join_(*strs, sep: str = '', last_sep: str = None, ignore_none_or_empty=True)
     """
     strs = solve_nested_singleton_tuple_list(strs)
     if not strs:
-        return ''
+        return ""
 
     if len(strs) == 1:
         if strs[0] is not None:
-            return f'{strs[0]}'
+            return f"{strs[0]}"
         else:
-            return ''
+            return ""
     else:
         if last_sep is not None and last_sep != sep:
             last_str = strs[-1]
@@ -204,19 +206,11 @@ def join_(*strs, sep: str = '', last_sep: str = None, ignore_none_or_empty=True)
             last_str = None
 
         if ignore_none_or_empty:
-            joint_str = sep.join((
-                f'{x}' for x in strs
-                if x is not None and x != ''
-            ))
+            joint_str = sep.join((f"{x}" for x in strs if x is not None and x != ""))
         else:
-            joint_str = sep.join((
-                ('' if x is None else f'{x}') for x in strs
-            ))
+            joint_str = sep.join((("" if x is None else f"{x}") for x in strs))
 
-        if (
-                (last_str is not None) and
-                (not ignore_none_or_empty or last_str)
-        ):
+        if (last_str is not None) and (not ignore_none_or_empty or last_str):
             return joint_str + last_sep + last_str
         else:
             return joint_str
@@ -253,11 +247,11 @@ def count_lowercase(s):
 
 
 def cut_before_first(
-        text: str,
-        target: str,
-        keep_target: bool,
-        lstrip: Union[str, bool] = True,
-        return_empty_if_target_not_found: bool = False
+    text: str,
+    target: str,
+    keep_target: bool,
+    lstrip: Union[str, bool] = True,
+    return_empty_if_target_not_found: bool = False,
 ) -> str:
     """
     Cuts the text before the first occurrence of a target string.
@@ -309,20 +303,20 @@ def cut_before_first(
     # If the target is not found, return the original text
     if position != -1:
         # Cut text starting from the target position (keeping or excluding target)
-        text = text[position if keep_target else position + len(target):]
+        text = text[position if keep_target else position + len(target) :]
     elif return_empty_if_target_not_found:
-        return ''
+        return ""
 
     # Apply lstrip as specified
     return strip_(text, lstrip=lstrip, rstrip=False)
 
 
 def cut_after_last(
-        text: str,
-        target: str,
-        keep_target: bool = False,
-        rstrip: Union[str, bool] = True,
-        return_empty_if_target_not_found: bool = False
+    text: str,
+    target: str,
+    keep_target: bool = False,
+    rstrip: Union[str, bool] = True,
+    return_empty_if_target_not_found: bool = False,
 ) -> str:
     """
     Cuts the text after the last occurrence of a target string.
@@ -369,18 +363,18 @@ def cut_after_last(
     # If the target is not found, return the original text
     if position != -1:
         # Cut text up to the target position (keeping or excluding target)
-        text = text[:position + (len(target) if keep_target else 0)]
+        text = text[: position + (len(target) if keep_target else 0)]
     elif return_empty_if_target_not_found:
-        return ''
+        return ""
 
     # Apply rstrip as specified
     return strip_(text, lstrip=False, rstrip=rstrip)
 
 
 def remove_first_line(
-        text: str,
-        lstrip: Union[str, bool] = True,
-        return_empty_for_single_line: bool = True
+    text: str,
+    lstrip: Union[str, bool] = True,
+    return_empty_for_single_line: bool = True,
 ) -> str:
     """
     Removes the first line from a multi-line string using cut_before_first.
@@ -412,17 +406,18 @@ def remove_first_line(
         'Single line'
     """
     return cut_before_first(
-        text, "\n",
+        text,
+        "\n",
         keep_target=False,
         lstrip=lstrip,
-        return_empty_if_target_not_found=return_empty_for_single_line
+        return_empty_if_target_not_found=return_empty_for_single_line,
     )
 
 
 def remove_last_line(
-        text: str,
-        rstrip: Union[str, bool] = True,
-        return_empty_for_single_line: bool = True
+    text: str,
+    rstrip: Union[str, bool] = True,
+    return_empty_for_single_line: bool = True,
 ) -> str:
     """
     Removes the last line from a multi-line string using cut_after_last.
@@ -454,21 +449,22 @@ def remove_last_line(
         'Single line'
     """
     return cut_after_last(
-        text, "\n",
+        text,
+        "\n",
         keep_target=False,
         rstrip=rstrip,
-        return_empty_if_target_not_found=return_empty_for_single_line
+        return_empty_if_target_not_found=return_empty_for_single_line,
     )
 
 
 def cut(
-        s: str,
-        cut_before_first: str = None,
-        cut_before_last: str = None,
-        cut_after_first: str = None,
-        cut_after_last: str = None,
-        keep_cut_before: bool = False,
-        keep_cut_after: bool = False
+    s: str,
+    cut_before_first: str = None,
+    cut_before_last: str = None,
+    cut_after_first: str = None,
+    cut_after_last: str = None,
+    keep_cut_before: bool = False,
+    keep_cut_after: bool = False,
 ) -> str:
     """
     Cuts parts of a string based on specified substrings, with options to retain or exclude
@@ -508,27 +504,29 @@ def cut(
     if cut_before_first is not None:
         pos = s.find(cut_before_first)
         if pos != -1:
-            s = s[(pos + (0 if keep_cut_before else len(cut_before_first))):]
+            s = s[(pos + (0 if keep_cut_before else len(cut_before_first))) :]
 
     if cut_before_last is not None:
         pos = s.rfind(cut_before_last)
         if pos != -1:
-            s = s[(pos + (0 if keep_cut_before else len(cut_before_last))):]
+            s = s[(pos + (0 if keep_cut_before else len(cut_before_last))) :]
 
     if cut_after_first is not None:
         pos = s.find(cut_after_first)
         if pos != -1:
-            s = s[:(pos + (len(cut_after_first) if keep_cut_after else 0))]
+            s = s[: (pos + (len(cut_after_first) if keep_cut_after else 0))]
 
     if cut_after_last is not None:
         pos = s.rfind(cut_after_last)
         if pos != -1:
-            s = s[:(pos + (len(cut_after_last) if keep_cut_after else 0))]
+            s = s[: (pos + (len(cut_after_last) if keep_cut_after else 0))]
 
     return s
 
 
-def strip_(s: str, lstrip: Union[str, bool] = True, rstrip: Union[str, bool] = True) -> str:
+def strip_(
+    s: str, lstrip: Union[str, bool] = True, rstrip: Union[str, bool] = True
+) -> str:
     """
     This function `strip_` is a flexible string manipulation function that allows selective removal of leading (left) and/or
     trailing (right) characters from a given string `s`. The user can specify which sides to strip and which characters to remove.
@@ -571,13 +569,15 @@ def strip_(s: str, lstrip: Union[str, bool] = True, rstrip: Union[str, bool] = T
 
 
 def index__(
-        s: str,
-        search: Union[str, Iterable[str]],
-        start: int = 0,
-        end: int = None,
-        return_at_first_match: bool = True,
-        return_end: bool = False,
-        search_fallback_option: Union[str, SearchFallbackOptions] = SearchFallbackOptions.RaiseError
+    s: str,
+    search: Union[str, Iterable[str]],
+    start: int = 0,
+    end: int = None,
+    return_at_first_match: bool = True,
+    return_end: bool = False,
+    search_fallback_option: Union[
+        str, SearchFallbackOptions
+    ] = SearchFallbackOptions.RaiseError,
 ) -> Union[int, List[int]]:
     """
     Find the index or indices of a substring or an ordered sequence of substrings within a string.
@@ -755,11 +755,13 @@ def index__(
 
 
 def index_pair(
-        s: str,
-        search1: str,
-        search2: str,
-        start: int = 0,
-        search_fallback_option: Union[str, SearchFallbackOptions] = SearchFallbackOptions.RaiseError
+    s: str,
+    search1: str,
+    search2: str,
+    start: int = 0,
+    search_fallback_option: Union[
+        str, SearchFallbackOptions
+    ] = SearchFallbackOptions.RaiseError,
 ) -> Tuple[int, int]:
     """
     Finds the indices in the string `s` marking the end of the first occurrence of `search1` and the start of the
@@ -826,16 +828,16 @@ def index_pair(
 
 
 def extract_between(
-        s: str,
-        search1: Union[str, List[str], Tuple[str, ...]],
-        search2: Union[str, List[str], Tuple[str, ...]],
-        allow_search1_not_found: bool = False,
-        allow_search2_not_found: bool = False,
-        keep_search1: bool = False,
-        keep_search2: bool = False,
-        return_matching_search1_index: bool = False,
-        search1_use_last_occurrence: bool = False,
-        search2_use_last_occurrence: bool = False
+    s: str,
+    search1: Union[str, List[str], Tuple[str, ...]],
+    search2: Union[str, List[str], Tuple[str, ...]],
+    allow_search1_not_found: bool = False,
+    allow_search2_not_found: bool = False,
+    keep_search1: bool = False,
+    keep_search2: bool = False,
+    return_matching_search1_index: bool = False,
+    search1_use_last_occurrence: bool = False,
+    search2_use_last_occurrence: bool = False,
 ) -> Union[Optional[str], Tuple[Optional[str], int]]:
     """
     Extracts a substring from the string `s`, located between one or more possible
@@ -966,7 +968,9 @@ def extract_between(
     # region STEP1: find search1
     start_index = matched_search1_index = -1
     if search1:
-        for matched_search1_index, _search1 in enumerate(iter_(search1, non_atom_types=(List, Tuple))):
+        for matched_search1_index, _search1 in enumerate(
+            iter_(search1, non_atom_types=(List, Tuple))
+        ):
             if _search1:
                 if search1_use_last_occurrence:
                     sep_start_index = s.rfind(_search1)
@@ -997,7 +1001,11 @@ def extract_between(
     # region STEP2: find search2
 
     # If we matched search1 at a certain index, and search2 is a list/tuple, pick the parallel search2
-    if matched_search1_index != -1 and isinstance(search2, (List, Tuple)) and len(search2) > matched_search1_index:
+    if (
+        matched_search1_index != -1
+        and isinstance(search2, (List, Tuple))
+        and len(search2) > matched_search1_index
+    ):
         search2 = search2[matched_search1_index]
 
     if search2:
@@ -1010,9 +1018,7 @@ def extract_between(
                     sep_end_index = s.find(_search2, start_index)
                 if sep_end_index != -1:
                     end_index = (
-                        sep_end_index + len(_search2)
-                        if keep_search2
-                        else sep_end_index
+                        sep_end_index + len(_search2) if keep_search2 else sep_end_index
                     )
                     break
 
@@ -1062,17 +1068,19 @@ def extract_multiple_between(s: str, start_tag: str, end_tag: str) -> List[str]:
         end_index = s.find(end_tag, start_index)
         if end_index == -1:
             break
-        substrings.append(s[(start_index + len(start_tag)): end_index])
+        substrings.append(s[(start_index + len(start_tag)) : end_index])
         start_index = end_index + len(end_tag)
     return substrings
 
 
 def extract_between_(
-        s: str,
-        search1,
-        search2,
-        start: int = 0,
-        search_fallback_option: Union[str, SearchFallbackOptions] = SearchFallbackOptions.RaiseError
+    s: str,
+    search1,
+    search2,
+    start: int = 0,
+    search_fallback_option: Union[
+        str, SearchFallbackOptions
+    ] = SearchFallbackOptions.RaiseError,
 ) -> str:
     """
     Extracts a substring from a given string, located between two specified substrings.
@@ -1118,5 +1126,7 @@ def extract_between_(
         >>> extract_between_(s, "This is", "not found", search_fallback_option='empty')
         ''
     """
-    start_index, end_index = index_pair(s, search1, search2, start, search_fallback_option)
+    start_index, end_index = index_pair(
+        s, search1, search2, start, search_fallback_option
+    )
     return s[start_index:end_index]

@@ -2,7 +2,7 @@ class NamedTuple:
     """
     Allows retrieving a value from a Namedtuple class by index,
     and use `len` to get the number of slots.
-    
+
     Examples:
         >>> class Example(NamedTuple):
         ...     __slots__ = ('full_name', 'short_name')

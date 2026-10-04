@@ -1,10 +1,15 @@
+import glob
 from functools import partial
 from os import path
-from typing import Tuple, Union, Callable, Any
-import glob
-from rich_python_utils.string_utils.comparison import string_check
-from rich_python_utils.string_utils.prefix_suffix import add_suffix, get_next_numbered_string, add_prefix
+from typing import Any, Callable, Tuple, Union
+
 from rich_python_utils.datetime_utils.common import timestamp
+from rich_python_utils.string_utils.comparison import string_check
+from rich_python_utils.string_utils.prefix_suffix import (
+    add_prefix,
+    add_suffix,
+    get_next_numbered_string,
+)
 
 
 def path_endswith_sep(pathstr: str) -> bool:
@@ -66,7 +71,7 @@ def abspath_(pathstr: str) -> str:
         >>> print(abspath_('~/documents'))
         >>> print(abspath_('./documents'))
     """
-    return path.expanduser(pathstr) if pathstr[0] == '~' else path.abspath(pathstr)
+    return path.expanduser(pathstr) if pathstr[0] == "~" else path.abspath(pathstr)
 
 
 def get_main_name(pathstr: str) -> str:
@@ -103,7 +108,9 @@ def get_ext_name(pathstr: str, includes_dot: bool = True) -> str:
     return ext_name if includes_dot else ext_name[1:]
 
 
-def get_main_name_ext_name(pathstr: str, ext_name_includes_dot: bool = True) -> Tuple[str, str]:
+def get_main_name_ext_name(
+    pathstr: str, ext_name_includes_dot: bool = True
+) -> Tuple[str, str]:
     """
     Gets both the main & extension file name from the path string at the same time.
 
@@ -132,10 +139,10 @@ def make_ext_name(ext_name: str):
         '.csv'
     """
     if ext_name:
-        return '.' + ext_name if ext_name[0] != '.' else ext_name
+        return "." + ext_name if ext_name[0] != "." else ext_name
 
 
-def add_to_main_name(path_str: str, prefix: str = '', suffix: str = '') -> str:
+def add_to_main_name(path_str: str, prefix: str = "", suffix: str = "") -> str:
     """
     Add prefix and/or suffix to the main part of a file path.
 
@@ -160,7 +167,9 @@ def add_to_main_name(path_str: str, prefix: str = '', suffix: str = '') -> str:
     dir_name = path.dirname(path_str)
     base_name = path.basename(path_str)
     path_splits = path.splitext(base_name)
-    return path.join(dir_name, str(prefix) + path_splits[0] + str(suffix) + path_splits[1])
+    return path.join(
+        dir_name, str(prefix) + path_splits[0] + str(suffix) + path_splits[1]
+    )
 
 
 def replace_ext_name(pathstr: str, ext_name_replacement):
@@ -181,25 +190,25 @@ def replace_ext_name(pathstr: str, ext_name_replacement):
 
 
 def path_or_name_with_timestamp(
-        path_or_name: str,
-        extname: str = None,
-        timestamp_scale=100,
-        timestamp_sep='_',
-        extname_sep='.'
+    path_or_name: str,
+    extname: str = None,
+    timestamp_scale=100,
+    timestamp_sep="_",
+    extname_sep=".",
 ):
     """
     Appends a timestamp to the end of a path or name.
-    
+
     Args:
         path_or_name: the path or name to attach the timestamp;
-            if this ends with either `path.sep` or `path.altsep` (i.e. usually '/' or '\'), 
-            then it will be treated as you want to get a name under a directory, 
+            if this ends with either `path.sep` or `path.altsep` (i.e. usually '/' or '\'),
+            then it will be treated as you want to get a name under a directory,
             and an underscore `timestampe_sep` will be placed in the front of the timestamp.
         extname: the extension name, if necessary.
         timestamp_scale: a timestamp is `time() * timestamp_scale`.
         timestamp_sep: the separator between the name and the timestamp.
         extname_sep: the separator for the extension name.
-    
+
     Returns:
          the name or path with timestamp attached.
 
@@ -213,15 +222,17 @@ def path_or_name_with_timestamp(
         if extname[0] == extname_sep:
             extname = extname[1:]
         if path_or_name[-1] in (path.sep, path.altsep):
-            return f'{path_or_name}{timestamp(scale=timestamp_scale)}{extname_sep}{extname}'
+            return f"{path_or_name}{timestamp(scale=timestamp_scale)}{extname_sep}{extname}"
         else:
-            return f'{path_or_name}{timestamp_sep}' \
-                   f'{timestamp(scale=timestamp_scale)}{extname_sep}{extname}'
+            return (
+                f"{path_or_name}{timestamp_sep}"
+                f"{timestamp(scale=timestamp_scale)}{extname_sep}{extname}"
+            )
     else:
         if path_or_name[-1] in (path.sep, path.altsep):
-            return f'{path_or_name}{timestamp(scale=timestamp_scale)}'
+            return f"{path_or_name}{timestamp(scale=timestamp_scale)}"
         else:
-            return f'{path_or_name}{timestamp_sep}{timestamp(scale=timestamp_scale)}'
+            return f"{path_or_name}{timestamp_sep}{timestamp(scale=timestamp_scale)}"
 
 
 def get_shortest_prefix(pathstr: str, cond: Union[str, Callable]):
@@ -252,10 +263,10 @@ def get_shortest_prefix(pathstr: str, cond: Union[str, Callable]):
     return pathstr
 
 
-def add_path_suffix(pathstr: str, suffix: Any, sep: str = '-') -> str:
+def add_path_suffix(pathstr: str, suffix: Any, sep: str = "-") -> str:
     if path_endswith_sep(pathstr):
         ends_with_path_sep = True
-        pathstr = pathstr[:-len(path.sep)]
+        pathstr = pathstr[: -len(path.sep)]
     else:
         ends_with_path_sep = False
     pathstr = add_suffix(pathstr, suffix=suffix, sep=sep)
@@ -269,7 +280,7 @@ def add_ending_path_sep(pathstr: str):
 
 
 def remove_ending_path_sep(pathstr: str):
-    return pathstr[:-len(path.sep)] if path_endswith_sep(pathstr) else pathstr
+    return pathstr[: -len(path.sep)] if path_endswith_sep(pathstr) else pathstr
 
 
 def has_ending_path_sep(pathstr: str) -> bool:
@@ -287,7 +298,7 @@ def solve_root_path(pathstr, default_basename):
 
 def path_ends_with(pathstr: str, s: str):
     if path_endswith_sep(pathstr):
-        pathstr = pathstr[:-len(path.sep)]
+        pathstr = pathstr[: -len(path.sep)]
     return pathstr.endswith(s)
 
 
@@ -304,10 +315,12 @@ def append_to_main_name(path_str: str, main_name_suffix: str):
 
 
 def append_timestamp(path_str: str, timestamp_scale=100):
-    return append_to_main_name(path_str, '_' + timestamp(scale=timestamp_scale))
+    return append_to_main_name(path_str, "_" + timestamp(scale=timestamp_scale))
 
 
-def get_next_numbered_path(root_path, prefix: str = 'part_', default:str='0000') -> str:
+def get_next_numbered_path(
+    root_path, prefix: str = "part_", default: str = "0000"
+) -> str:
     """
     Generates the next path in a sequence by finding the existing parts in a directory
     and determining the next numbered part. Raises an error if the output path does not exist.
@@ -345,12 +358,18 @@ def get_next_numbered_path(root_path, prefix: str = 'part_', default:str='0000')
         True
     """
     if not path.exists(root_path):
-        raise ValueError(f"Path {root_path} does not exist for resuming the evaluation.")
+        raise ValueError(
+            f"Path {root_path} does not exist for resuming the evaluation."
+        )
 
-    existing_parts = [get_main_name(x) for x in glob.glob(path.join(root_path, f'{prefix}*'))]
+    existing_parts = [
+        get_main_name(x) for x in glob.glob(path.join(root_path, f"{prefix}*"))
+    ]
 
     if not existing_parts:
-        return path.join(root_path, add_prefix(default, prefix=prefix, sep='', avoid_repeat=True))
+        return path.join(
+            root_path, add_prefix(default, prefix=prefix, sep="", avoid_repeat=True)
+        )
 
     next_part = get_next_numbered_string(existing_parts)
 

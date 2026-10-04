@@ -1,8 +1,8 @@
 """Tests for VariableLoader and related classes."""
 
-import pytest
 from pathlib import Path
 
+import pytest
 from rich_python_utils.string_utils.formatting.template_manager import (
     AmbiguousVariableError,
     CircularReferenceError,
@@ -215,7 +215,10 @@ class TestVersionResolution:
         """Test resolving with enterprise version."""
         template = "{{notes_mindset}}"
         variables = loader.resolve_from_template(
-            template, template_root_space="unknown_agent", template_type="main", version="enterprise"
+            template,
+            template_root_space="unknown_agent",
+            template_type="main",
+            version="enterprise",
         )
         assert "notes_mindset" in variables
         assert "ENTERPRISE version" in variables["notes_mindset"]
@@ -378,7 +381,9 @@ class TestCache:
         """Test clearing the content cache."""
         # Resolve something to populate cache
         loader.resolve_from_template(
-            "{{notes_mindset}}", template_root_space="action_agent", template_type="main"
+            "{{notes_mindset}}",
+            template_root_space="action_agent",
+            template_type="main",
         )
         assert len(loader._content_cache) > 0
 
@@ -390,7 +395,9 @@ class TestCache:
         """Test reload clears cache."""
         # Populate cache
         loader.resolve_from_template(
-            "{{notes_mindset}}", template_root_space="action_agent", template_type="main"
+            "{{notes_mindset}}",
+            template_root_space="action_agent",
+            template_type="main",
         )
         assert len(loader._content_cache) > 0
 

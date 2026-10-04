@@ -1,19 +1,18 @@
 import re
 from re import *
-from typing import Iterator, Union, Iterable
+from typing import Iterable, Iterator, Union
 
-from attr import attrs, attrib
-
+from attr import attrib, attrs
 from rich_python_utils.common_utils.iter_helper import product_
 from rich_python_utils.common_utils.typing_helper import all_str
 
 
 def iter_matches(
-        pattern,
-        string: str,
-        start_pos: int = 0,
-        strip: bool = True,
-        return_match_obj: bool = False
+    pattern,
+    string: str,
+    start_pos: int = 0,
+    strip: bool = True,
+    return_match_obj: bool = False,
 ) -> Iterator[Union[str, Match]]:
     """
     Iterates through regex matches in the input string.
@@ -61,7 +60,9 @@ def iter_matches(
             # the build-in `re.finditer` method also first compile the pattern string
             pattern = compile(pattern)
 
-        match = pattern.search(string, pos=start_pos)  # ! supports search start position
+        match = pattern.search(
+            string, pos=start_pos
+        )  # ! supports search start position
         while match:
             match_end = match.end()
             yield _process_match(match)
@@ -70,11 +71,10 @@ def iter_matches(
 
 def get_tail_match_pattern(pattern: Union[str, Pattern]):
     if isinstance(pattern, str):
-        return fr'{pattern}(?!.*{pattern})'
+        return rf"{pattern}(?!.*{pattern})"
     elif isinstance(pattern, Pattern):
         return compile(
-            fr'{pattern.pattern}(?!.*{pattern.pattern})',
-            flags=pattern.flags
+            rf"{pattern.pattern}(?!.*{pattern.pattern})", flags=pattern.flags
         )
     else:
         raise ValueError(f"unexpected regular expression pattern type {type(pattern)}")
@@ -85,29 +85,20 @@ def search_last(pattern, string: str, flags=0):
 
 
 def sub_first(pattern, repl, string, flags=0):
-    return sub(
-        pattern=pattern,
-        repl=repl,
-        string=string,
-        count=1,
-        flags=flags
-    )
+    return sub(pattern=pattern, repl=repl, string=string, count=1, flags=flags)
 
 
 def sub_last(pattern, repl, string, flags=0):
     return sub(
-        pattern=get_tail_match_pattern(pattern),
-        repl=repl,
-        string=string,
-        flags=flags
+        pattern=get_tail_match_pattern(pattern), repl=repl, string=string, flags=flags
     )
 
 
 def regex_extract_all_groups(
-        s: str,
-        pattern: Union[str, Pattern],
-        ignore_empty_matches: bool = True,
-        flags: int = 0
+    s: str,
+    pattern: Union[str, Pattern],
+    ignore_empty_matches: bool = True,
+    flags: int = 0,
 ):
     """
     Extracts all groups matching the given regular expression pattern from the input string.
@@ -177,15 +168,15 @@ def regexp_remove_many(s: str, *removals: Union[str, Pattern], flags: int = 0) -
         'thang you'
     """
     for pattern in removals:
-        s = sub(pattern, '', s, flags=flags)
+        s = sub(pattern, "", s, flags=flags)
     return s
 
 
 def get_regex_match_group_indexes(
-        pattern: Union[str, Pattern],
-        string: str,
-        start_group_index: int = 0,
-        start_pos: int = 0
+    pattern: Union[str, Pattern],
+    string: str,
+    start_group_index: int = 0,
+    start_pos: int = 0,
 ) -> set:
     """
     Returns a set of group indexes of the regex matches in the `string`.
@@ -235,15 +226,14 @@ def get_regex_match_group_indexes(
     return set(
         _get_match_idx(m)
         for m in iter_matches(
-            pattern=pattern,
-            string=string,
-            start_pos=start_pos,
-            return_match_obj=True
+            pattern=pattern, string=string, start_pos=start_pos, return_match_obj=True
         )
     )
 
 
-def get_contains_whole_word_regex(word: Union[str, Iterable[str]], escape: bool = True, additional_seps: str = '_') -> str:
+def get_contains_whole_word_regex(
+    word: Union[str, Iterable[str]], escape: bool = True, additional_seps: str = "_"
+) -> str:
     """
     Generate a regular expression to match a given word or any word from a sequence
     as a whole word in a string. This function constructs a regex pattern that matches
@@ -274,37 +264,61 @@ def get_contains_whole_word_regex(word: Union[str, Iterable[str]], escape: bool 
         \\b(foo|bar)\\b
     """
     if additional_seps:
-        whole_word_prefix_suffix_with_additional_seps = '|'.join(re.escape(x) for x in additional_seps)
-        whole_word_prefix = rf'(?:(?<={whole_word_prefix_suffix_with_additional_seps})|\b)'
-        whole_word_suffix = rf'(?:(?={whole_word_prefix_suffix_with_additional_seps})|\b)'
+        whole_word_prefix_suffix_with_additional_seps = "|".join(
+            re.escape(x) for x in additional_seps
+        )
+        whole_word_prefix = (
+            rf"(?:(?<={whole_word_prefix_suffix_with_additional_seps})|\b)"
+        )
+        whole_word_suffix = (
+            rf"(?:(?={whole_word_prefix_suffix_with_additional_seps})|\b)"
+        )
     else:
-        whole_word_prefix = whole_word_suffix = r'\b'
+        whole_word_prefix = whole_word_suffix = r"\b"
     if not word:
-        raise ValueError(f"`word` must be a non-empty string, or a list of non-empty strings; got '{word}'")
+        raise ValueError(
+            f"`word` must be a non-empty string, or a list of non-empty strings; got '{word}'"
+        )
     if isinstance(word, str):
-        return whole_word_prefix + (re.escape(word) if escape else word) + whole_word_suffix
+        return (
+            whole_word_prefix
+            + (re.escape(word) if escape else word)
+            + whole_word_suffix
+        )
     else:
         non_empty_words = []
         for _word in word:
             if not _word:
-                raise ValueError(f"`word` must be a non-empty string, or a list of non-empty strings; got '{word}'")
+                raise ValueError(
+                    f"`word` must be a non-empty string, or a list of non-empty strings; got '{word}'"
+                )
             else:
                 non_empty_words.append(_word)
         try:
             if escape:
-                return rf"{whole_word_prefix}(" + '|'.join(re.escape(_word) for _word in non_empty_words) + rf"){whole_word_suffix}"
+                return (
+                    rf"{whole_word_prefix}("
+                    + "|".join(re.escape(_word) for _word in non_empty_words)
+                    + rf"){whole_word_suffix}"
+                )
             else:
-                return rf"{whole_word_prefix}(" + '|'.join(non_empty_words) + rf"){whole_word_suffix}"
+                return (
+                    rf"{whole_word_prefix}("
+                    + "|".join(non_empty_words)
+                    + rf"){whole_word_suffix}"
+                )
         except:
-            raise ValueError(f"{word} is neither a string, nor a sequence of strings to search as a whole word")
+            raise ValueError(
+                f"{word} is neither a string, nor a sequence of strings to search as a whole word"
+            )
 
 
 def contains_whole_word(
-        s: str,
-        word: Union[str, Iterable[str]],
-        ignore_case: bool = False,
-        escape: bool = True,
-        additional_whole_word_seps: str = '_'
+    s: str,
+    word: Union[str, Iterable[str]],
+    ignore_case: bool = False,
+    escape: bool = True,
+    additional_whole_word_seps: str = "_",
 ) -> bool:
     """
     Check if a given word or any word from a sequence is present as a whole word in a string.
@@ -360,7 +374,9 @@ def contains_whole_word(
         True
     """
     flags = re.IGNORECASE if ignore_case else 0
-    pattern = get_contains_whole_word_regex(word, escape=escape, additional_seps=additional_whole_word_seps)
+    pattern = get_contains_whole_word_regex(
+        word, escape=escape, additional_seps=additional_whole_word_seps
+    )
     if re.search(pattern, s, flags) is not None:
         return True
     return False
@@ -375,9 +391,7 @@ class RegexFactoryItem:
     def __str__(self):
         out = []
         for _pattern_prefix, _pattern, _pattern_suffix in product_(
-                self.pattern_prefix,
-                self.main_pattern,
-                self.pattern_suffix
+            self.pattern_prefix, self.main_pattern, self.pattern_suffix
         ):
             if not _pattern:
                 raise ValueError("the main pattern cannot be empty")
@@ -385,26 +399,25 @@ class RegexFactoryItem:
             if _pattern not in out:
                 out.append(_pattern)
 
-        return '|'.join(out)
+        return "|".join(out)
 
 
 @attrs(slots=True)
 class RegexFactory:
-    patterns = attrib(type=Union[str, RegexFactoryItem, Iterable[Union[str, RegexFactoryItem]]])
+    patterns = attrib(
+        type=Union[str, RegexFactoryItem, Iterable[Union[str, RegexFactoryItem]]]
+    )
 
     def __attrs_post_init__(self):
         patterns = []
         for _pattern in self.patterns:
             if isinstance(_pattern, (list, tuple)):
                 if all_str(_pattern):
-                    patterns.append(
-                        RegexFactoryItem(main_pattern=_pattern)
-                    )
+                    patterns.append(RegexFactoryItem(main_pattern=_pattern))
                 elif len(_pattern) == 2:
                     patterns.append(
                         RegexFactoryItem(
-                            pattern_prefix=_pattern[0],
-                            main_pattern=_pattern[1]
+                            pattern_prefix=_pattern[0], main_pattern=_pattern[1]
                         )
                     )
                 elif len(_pattern) == 3:
@@ -412,7 +425,7 @@ class RegexFactory:
                         RegexFactoryItem(
                             pattern_prefix=_pattern[0],
                             main_pattern=_pattern[1],
-                            pattern_suffix=_pattern[2]
+                            pattern_suffix=_pattern[2],
                         )
                     )
             elif isinstance(_pattern, (str, RegexFactoryItem)):
@@ -422,33 +435,33 @@ class RegexFactory:
         self.patterns = patterns
 
     def __str__(self):
-        return '|'.join((
-            f'(?:{_pattern})'
-            for _pattern in self.patterns
-        ))
+        return "|".join((f"(?:{_pattern})" for _pattern in self.patterns))
 
 
 def _get_whole_word_pattern(
-        pattern, use_space_as_word_boundary, include_space_after=False, include_space_before=False
+    pattern,
+    use_space_as_word_boundary,
+    include_space_after=False,
+    include_space_before=False,
 ):
     if use_space_as_word_boundary:
         if include_space_before and include_space_after:
-            return fr'(?:^|\s)(?:{pattern})(?:$|\s)'
+            return rf"(?:^|\s)(?:{pattern})(?:$|\s)"
         elif include_space_before:
-            return fr'(?:^|\s)(?:{pattern})(?=$|\s)'
+            return rf"(?:^|\s)(?:{pattern})(?=$|\s)"
         elif include_space_after:
-            return fr'(^|(?<=\s))(?:{pattern})(?:$|\s)'
+            return rf"(^|(?<=\s))(?:{pattern})(?:$|\s)"
         else:
-            return fr'(^|(?<=\s))(?:{pattern})(?=$|\s)'
+            return rf"(^|(?<=\s))(?:{pattern})(?=$|\s)"
     else:
         if include_space_before and include_space_after:
-            return fr'(?:^|\s)\b(?:{pattern})\b(?:$|\s)'
+            return rf"(?:^|\s)\b(?:{pattern})\b(?:$|\s)"
         elif include_space_before:
-            return fr'(?:^|\s)\b(?:{pattern})\b'
+            return rf"(?:^|\s)\b(?:{pattern})\b"
         elif include_space_before:
-            return fr'\b(?:{pattern})\b(?:$|\s)'
+            return rf"\b(?:{pattern})\b(?:$|\s)"
         else:
-            return fr'\b(?:{pattern})\b'
+            return rf"\b(?:{pattern})\b"
 
 
 def contains_as_whole_word(s: str, target: str, use_space_as_word_boundary=True):
@@ -462,13 +475,13 @@ def contains_as_whole_word(s: str, target: str, use_space_as_word_boundary=True)
 
 
 def replace_by_whole_word(
-        s: str,
-        old: str,
-        new: str,
-        use_space_as_word_boundary=True,
-        additional_whole_word_seps: str = '_"\'',
-        include_space_after=False,
-        include_space_before=False,
+    s: str,
+    old: str,
+    new: str,
+    use_space_as_word_boundary=True,
+    additional_whole_word_seps: str = "_\"'",
+    include_space_after=False,
+    include_space_before=False,
 ):
     """
 
@@ -497,9 +510,7 @@ def replace_by_whole_word(
     """
     return re.sub(
         get_contains_whole_word_regex(
-            old,
-            use_space_as_word_boundary,
-            additional_seps=additional_whole_word_seps
+            old, use_space_as_word_boundary, additional_seps=additional_whole_word_seps
         ),
         new,
         s,
@@ -507,11 +518,11 @@ def replace_by_whole_word(
 
 
 def remove_by_whole_word(
-        s: str,
-        substr: str,
-        use_space_as_word_boundary: bool = True,
-        include_space_after: bool = False,
-        include_space_before: bool = False,
+    s: str,
+    substr: str,
+    use_space_as_word_boundary: bool = True,
+    include_space_after: bool = False,
+    include_space_before: bool = False,
 ) -> str:
     """
     Removes substring `substr` from the input string if it is a "whole word" in the input string
@@ -537,12 +548,12 @@ def remove_by_whole_word(
             (
                 re.escape(substr)
                 if isinstance(substr, str)
-                else '|'.join(re.escape(_old) for _old in substr)
+                else "|".join(re.escape(_old) for _old in substr)
             ),
             use_space_as_word_boundary=use_space_as_word_boundary,
             include_space_before=include_space_before,
             include_space_after=include_space_after,
         ),
-        '',
+        "",
         s,
     )

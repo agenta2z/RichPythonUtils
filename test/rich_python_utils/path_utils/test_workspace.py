@@ -10,9 +10,7 @@ from pathlib import Path
 from typing import List
 
 import pytest
-from hypothesis import given, settings, assume, HealthCheck
-from hypothesis import strategies as st
-
+from hypothesis import assume, given, HealthCheck, settings, strategies as st
 from rich_python_utils.path_utils.workspace import MergedSpace
 
 
@@ -168,7 +166,11 @@ class TestProperty3DeduplicationIdempotence:
 class TestProperty4FindResult:
     """**Validates: Requirements 2.1**"""
 
-    @given(num_roots=_NUM_ROOTS, rel=_REL_PATHS, place_in=st.integers(min_value=0, max_value=100))
+    @given(
+        num_roots=_NUM_ROOTS,
+        rel=_REL_PATHS,
+        place_in=st.integers(min_value=0, max_value=100),
+    )
     @_PBT_SETTINGS
     def test_find_result_valid(self, num_roots, rel, place_in):
         """find result is absolute, exists, and equals root/rel for some root."""
@@ -396,7 +398,11 @@ class TestProperty10SubspaceRoots:
 class TestProperty11RelativeToRoundTrip:
     """**Validates: Requirements 8.1**"""
 
-    @given(num_roots=_NUM_ROOTS, rel=_REL_PATHS, place_in=st.integers(min_value=0, max_value=100))
+    @given(
+        num_roots=_NUM_ROOTS,
+        rel=_REL_PATHS,
+        place_in=st.integers(min_value=0, max_value=100),
+    )
     @_PBT_SETTINGS
     def test_relative_to_round_trip(self, num_roots, rel, place_in):
         """relative_to round-trip — some root / relative_to(abs) == abs."""

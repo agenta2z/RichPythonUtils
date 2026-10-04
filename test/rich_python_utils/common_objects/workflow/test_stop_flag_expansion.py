@@ -2,26 +2,29 @@
 
 Validates: Requirements 29.1, 29.2
 """
+
 import os
 import shutil
 import tempfile
 
 import pytest
-
-from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode
 from rich_python_utils.common_objects.workflow.common.expansion import (
     GraphExpansionResult,
     SubgraphSpec,
 )
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
+)
 from rich_python_utils.common_objects.workflow.common.worknode_base import (
     WorkGraphStopFlags,
 )
+from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode
 
 
 # ---------------------------------------------------------------------------
 # Concrete test helpers
 # ---------------------------------------------------------------------------
+
 
 class _TestNode(WorkGraphNode):
     def __init__(self, save_dir=None, **kwargs):

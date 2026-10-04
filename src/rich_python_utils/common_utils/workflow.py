@@ -1,5 +1,5 @@
-from typing import Callable, Union, Sequence
 from enum import StrEnum
+from typing import Callable, Sequence, Union
 
 
 class CommonWorkflowControls(StrEnum):
@@ -14,9 +14,11 @@ class CommonWorkflowControls(StrEnum):
         Pause: Signal to pause execution (can be resumed)
         Continue: Signal to continue or resume execution
     """
-    Stop = 'Stop'
-    Pause = 'Pause'
-    Continue = 'Continue'
+
+    Stop = "Stop"
+    Pause = "Pause"
+    Continue = "Continue"
+
 
 class CommonWorkflowStatus(StrEnum):
     """
@@ -31,9 +33,11 @@ class CommonWorkflowStatus(StrEnum):
         Paused: Execution is temporarily paused and can be resumed
         Running: Execution is actively running
     """
-    Stopped = 'Stopped'
-    Paused = 'Paused'
-    Running = 'Running'
+
+    Stopped = "Stopped"
+    Paused = "Paused"
+    Running = "Running"
+
 
 class Repeat:
     """
@@ -93,7 +97,12 @@ class Repeat:
         [False, False]
     """
 
-    def __init__(self, repeat: int = 0, repeat_cond: Callable[[], bool] = None, init_cond: Union[bool, Callable[[], bool]] = None):
+    def __init__(
+        self,
+        repeat: int = 0,
+        repeat_cond: Callable[[], bool] = None,
+        init_cond: Union[bool, Callable[[], bool]] = None,
+    ):
         """
         Initializes the Repeat class.
 
@@ -123,10 +132,7 @@ class Repeat:
                     return False
             else:
                 if self._repeat > 0:
-                    if not (
-                            (self.index < self._repeat)
-                            and self._repeat_cond()
-                    ):
+                    if not ((self.index < self._repeat) and self._repeat_cond()):
                         return False
                 else:
                     if not self._repeat_cond():
@@ -136,7 +142,11 @@ class Repeat:
         return True
 
 
-def cleanup_obj(obj, cleanup_methods:Sequence[str]=('quit', 'close', 'exit', '__del__'), raise_on_failure: bool=False):
+def cleanup_obj(
+    obj,
+    cleanup_methods: Sequence[str] = ("quit", "close", "exit", "__del__"),
+    raise_on_failure: bool = False,
+):
     """
     Helper function to cleanup an object by trying various cleanup methods.
 

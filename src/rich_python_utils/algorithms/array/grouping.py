@@ -44,8 +44,7 @@ def group_by_anagram(iterables: Iterable[Iterable]):
 
     for iterable in iterables:
         sorted_iterable = sorted(iterable)
-        sorted_iterable_str = join_(*sorted_iterable, sep='\n')
+        sorted_iterable_str = join_(*sorted_iterable, sep="\n")
         anagram_map[sorted_iterable_str].append(iterable)
 
     return tuple(anagram_map.values())
-

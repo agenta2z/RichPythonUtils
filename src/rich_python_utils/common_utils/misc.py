@@ -1,5 +1,5 @@
-from typing import List, Union, Any, Tuple
 from os import environ
+from typing import Any, List, Tuple, Union
 
 
 def resolve_environ(varname: str) -> str:
@@ -39,13 +39,14 @@ def resolve_environ(varname: str) -> str:
         >>> del environ['TEST_VAR']
     """
     if not varname:
-        return  ''
-    _varname = varname[1:] if varname[0] == '$' else varname
+        return ""
+    _varname = varname[1:] if varname[0] == "$" else varname
     return environ.get(_varname, varname)
 
 
-def split_int(_int, num_parts: int, partial: int, return_range: bool = False) -> Union[
-    int, Tuple[int, Tuple[float, float]]]:
+def split_int(
+    _int, num_parts: int, partial: int, return_range: bool = False
+) -> Union[int, Tuple[int, Tuple[float, float]]]:
     """
     Splits an integer into approximately equal parts and returns the specified partial value. Optionally returns the range of the split.
 
@@ -89,8 +90,9 @@ def split_int(_int, num_parts: int, partial: int, return_range: bool = False) ->
         return _split
 
 
-def split_float(_float: float, num_parts: int, partial: int, return_range: bool = False) -> Union[
-    float, Tuple[float, Tuple[float, float]]]:
+def split_float(
+    _float: float, num_parts: int, partial: int, return_range: bool = False
+) -> Union[float, Tuple[float, Tuple[float, float]]]:
     """
     Splits a float into approximately equal parts and returns the specified partial value. Optionally returns the range of the split.
 
@@ -166,9 +168,9 @@ def divide_(x, y, default: Any = 0):
 
 
 def distribute_by_weights(
-        total: Union[int, float],
-        weights: List[Union[int, float]],
-        incremental: bool = False
+    total: Union[int, float],
+    weights: List[Union[int, float]],
+    incremental: bool = False,
 ) -> List[float]:
     """
     Distributes a total number based on given weights, with an option for incremental distribution.

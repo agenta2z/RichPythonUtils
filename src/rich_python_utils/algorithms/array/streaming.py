@@ -1,7 +1,7 @@
 import random
-from typing import Iterable, TypeVar, List
+from typing import Iterable, List, TypeVar
 
-T = TypeVar('T')  # Generic type
+T = TypeVar("T")  # Generic type
 
 
 def reservoir_sample(stream: Iterable[T], k: int) -> List[T]:

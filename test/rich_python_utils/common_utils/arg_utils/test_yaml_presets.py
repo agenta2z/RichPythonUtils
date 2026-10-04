@@ -5,10 +5,11 @@ Test YAML preset loading functionality.
 import os
 import sys
 import tempfile
+
 import pytest
 
 # Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../../src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../../src"))
 
 from rich_python_utils.common_utils.arg_utils.arg_parse import get_parsed_args
 
@@ -23,7 +24,7 @@ learning_rate: 0.01
 batch_size: 64
 model_name: resnet50
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(yaml_content)
             yaml_file = f.name
 
@@ -50,7 +51,7 @@ model_name: resnet50
 learning_rate: 0.005
 batch_size: 128
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
             f.write(yaml_content)
             yaml_file = f.name
 
@@ -79,7 +80,7 @@ training:
   learning_rate: 0.01
   batch_size: 64
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(yaml_content)
             yaml_file = f.name
 
@@ -92,12 +93,12 @@ training:
             )
 
             # Nested dicts should become Namespace objects or remain as dicts
-            assert hasattr(args, 'model')
-            assert hasattr(args, 'training')
+            assert hasattr(args, "model")
+            assert hasattr(args, "training")
             # Access as dict (YAML loader returns dicts, not Namespace by default)
-            assert args.model['hidden_size'] == 256
-            assert args.model['num_layers'] == 4
-            assert args.training['learning_rate'] == 0.01
+            assert args.model["hidden_size"] == 256
+            assert args.model["num_layers"] == 4
+            assert args.training["learning_rate"] == 0.01
         finally:
             os.unlink(yaml_file)
 
@@ -114,7 +115,7 @@ large:
   hidden_size: 512
   num_layers: 8
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(yaml_content)
             yaml_file = f.name
 
@@ -128,8 +129,8 @@ large:
 
             assert args.hidden_size == 256
             assert args.num_layers == 4
-            assert not hasattr(args, 'small')
-            assert not hasattr(args, 'large')
+            assert not hasattr(args, "small")
+            assert not hasattr(args, "large")
         finally:
             os.unlink(yaml_file)
 
@@ -145,7 +146,7 @@ config:
 enabled: true
 debug: false
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(yaml_content)
             yaml_file = f.name
 
@@ -158,10 +159,10 @@ debug: false
 
             assert args.layers == [64, 128, 256, 512]
             assert args.dropout_rates == [0.1, 0.2, 0.3]
-            assert args.names == ['train', 'val', 'test']
+            assert args.names == ["train", "val", "test"]
             # Access nested dict values
-            assert args.config['lr'] == 0.001
-            assert args.config['momentum'] == 0.9
+            assert args.config["lr"] == 0.001
+            assert args.config["momentum"] == 0.9
             assert args.enabled is True
             assert args.debug is False
         finally:
@@ -173,7 +174,7 @@ debug: false
 learning_rate: 0.01
 batch_size: 64
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(yaml_content)
             yaml_file = f.name
 
@@ -206,13 +207,13 @@ batch_size: 64
 learning_rate: 0.01
 batch_size: 64
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(yaml_content)
             yaml_file = f.name
 
         try:
             # Remove extension from path
-            base_path = yaml_file[:-5] if yaml_file.endswith('.yaml') else yaml_file
+            base_path = yaml_file[:-5] if yaml_file.endswith(".yaml") else yaml_file
 
             args = get_parsed_args(
                 ("learning_rate", 0.001),
@@ -229,4 +230,5 @@ batch_size: 64
 if __name__ == "__main__":
     # Run tests
     import subprocess
+
     subprocess.run([sys.executable, "-m", "pytest", __file__, "-v"])

@@ -9,7 +9,6 @@ Validates: Requirements 5.1
 """
 
 import pytest
-
 from rich_python_utils.service_utils.retrieval_service.document import Document
 from rich_python_utils.service_utils.retrieval_service.memory_retrieval_service import (
     MemoryRetrievalService,
@@ -206,24 +205,34 @@ class TestMemoryRetrievalServiceSearch:
 
     def test_search_with_metadata_filters(self):
         svc = MemoryRetrievalService()
-        svc.add(Document(doc_id="d1", content="python tutorial", metadata={"type": "article"}))
-        svc.add(Document(doc_id="d2", content="python guide", metadata={"type": "blog"}))
+        svc.add(
+            Document(
+                doc_id="d1", content="python tutorial", metadata={"type": "article"}
+            )
+        )
+        svc.add(
+            Document(doc_id="d2", content="python guide", metadata={"type": "blog"})
+        )
         results = svc.search("python", filters={"type": "article"})
         assert len(results) == 1
         assert results[0][0].doc_id == "d1"
 
     def test_search_with_list_filter(self):
         svc = MemoryRetrievalService()
-        svc.add(Document(
-            doc_id="d1",
-            content="python tutorial",
-            metadata={"tags": ["python", "beginner"]},
-        ))
-        svc.add(Document(
-            doc_id="d2",
-            content="python advanced",
-            metadata={"tags": ["python", "advanced"]},
-        ))
+        svc.add(
+            Document(
+                doc_id="d1",
+                content="python tutorial",
+                metadata={"tags": ["python", "beginner"]},
+            )
+        )
+        svc.add(
+            Document(
+                doc_id="d2",
+                content="python advanced",
+                metadata={"tags": ["python", "advanced"]},
+            )
+        )
         results = svc.search("python", filters={"tags": ["python", "beginner"]})
         assert len(results) == 1
         assert results[0][0].doc_id == "d1"

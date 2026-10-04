@@ -3,7 +3,7 @@ from datetime import datetime
 from time import time
 from uuid import uuid4
 
-DEFAULT_TOC_MSG = 'Done!'
+DEFAULT_TOC_MSG = "Done!"
 _tic_toc_dict = defaultdict(list)
 _last_key = None
 
@@ -21,7 +21,17 @@ def tic(msg: str = None, key=None, newline=False, verbose=True):
     time_stack.append([cur_time, newline, msg, False])
 
     if msg and verbose:
-        print("{} ({}).".format((msg[:-1] if msg[-1] == '.' and (len(msg) == 1 or msg[-2] != '.') else msg), datetime.now().strftime("%I:%M %p on %B %d, %Y")), end='\n' if newline else ' ')
+        print(
+            "{} ({}).".format(
+                (
+                    msg[:-1]
+                    if msg[-1] == "." and (len(msg) == 1 or msg[-2] != ".")
+                    else msg
+                ),
+                datetime.now().strftime("%I:%M %p on %B %d, %Y"),
+            ),
+            end="\n" if newline else " ",
+        )
     return key
 
 

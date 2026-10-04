@@ -1,21 +1,20 @@
 from datetime import datetime
 from os import path
-from typing import List, Mapping, Tuple, Union, Callable, Optional
+from typing import Callable, List, Mapping, Optional, Tuple, Union
 
 import rich_python_utils.datetime_utils
 from rich_python_utils.console_utils import hprint_message
-
-from rich_python_utils.datetime_utils.iter_dates import iter_dates
 from rich_python_utils.datetime_utils.common import solve_datetime
+from rich_python_utils.datetime_utils.iter_dates import iter_dates
 
 
 def add_date_time_to_path(
-        original_path: str,
-        date: Optional[datetime] = None,
-        date_format: str = '%Y%m%d',
-        time_format: str = '',
-        unix_timestamp: bool = False,
-        sep: str = '_'
+    original_path: str,
+    date: Optional[datetime] = None,
+    date_format: str = "%Y%m%d",
+    time_format: str = "",
+    unix_timestamp: bool = False,
+    sep: str = "_",
 ) -> str:
     """
     Appends a date and optional time or Unix timestamp to a file or directory path.
@@ -53,7 +52,7 @@ def add_date_time_to_path(
         date_str = date.strftime(date_format)
         if time_format:
             time_str = date.strftime(time_format)
-            date_str += f'{sep}{time_str}'
+            date_str += f"{sep}{time_str}"
 
     dir_name, base_name = path.split(original_path)
     base_name_main, ext = path.splitext(base_name)
@@ -69,13 +68,13 @@ def add_date_time_to_path(
 
 
 def get_path_with_year_month_day(
-        path_pattern: str,
-        date: Union[datetime, str, Mapping, List, Tuple],
-        end_date: Union[datetime, str, Mapping, List, Tuple] = None,
-        date_str_format: str = "%m/%d/%Y",
-        num_days_forward: int = None,
-        num_days_backward: int = None,
-        **kwargs,
+    path_pattern: str,
+    date: Union[datetime, str, Mapping, List, Tuple],
+    end_date: Union[datetime, str, Mapping, List, Tuple] = None,
+    date_str_format: str = "%m/%d/%Y",
+    num_days_forward: int = None,
+    num_days_backward: int = None,
+    **kwargs,
 ) -> Union[str, List[str]]:
     """
     Gets one or more paths according to a string format pattern `path_pattern`
@@ -115,7 +114,9 @@ def get_path_with_year_month_day(
     days_delta = None
     if num_days_forward is not None:
         if num_days_backward is not None:
-            raise ValueError("cannot specify both 'num_days_forward' or 'num_days_backward'")
+            raise ValueError(
+                "cannot specify both 'num_days_forward' or 'num_days_backward'"
+            )
         if isinstance(num_days_forward, int) and num_days_forward > 0:
             days_delta = num_days_forward
         else:
@@ -129,55 +130,61 @@ def get_path_with_year_month_day(
     if end_date is not None or days_delta is not None:
         out = []
         for dt_obj in iter_dates(
-                start_date=date, end_date_inclusive=end_date, days_delta=days_delta
+            start_date=date, end_date_inclusive=end_date, days_delta=days_delta
         ):
             out.append(
                 path_pattern.format(
-                    year=dt_obj.year, month=f"{dt_obj.month:02}", day=f"{dt_obj.day:02}", **kwargs
+                    year=dt_obj.year,
+                    month=f"{dt_obj.month:02}",
+                    day=f"{dt_obj.day:02}",
+                    **kwargs,
                 )
             )
         return out
     else:
         dt_obj = solve_datetime(date, datetime_str_format=date_str_format)
         return path_pattern.format(
-            year=dt_obj.year, month=f"{dt_obj.month:02}", day=f"{dt_obj.day:02}", **kwargs
+            year=dt_obj.year,
+            month=f"{dt_obj.month:02}",
+            day=f"{dt_obj.day:02}",
+            **kwargs,
         )
 
 
 def next_available_path_with_year_month_day(
-        path_pattern: str,
-        start_date: Union[datetime, str, Mapping, List, Tuple],
-        end_date: Union[datetime, str, Mapping, List, Tuple] = None,
-        days_delta=None,
-        date_str_format: str = '%m/%d/%Y',
-        path_exists: Callable = path.exists,
-        return_hit_date: bool = False,
-        verbose: bool = False,
-        **path_pattern_kwargs
+    path_pattern: str,
+    start_date: Union[datetime, str, Mapping, List, Tuple],
+    end_date: Union[datetime, str, Mapping, List, Tuple] = None,
+    days_delta=None,
+    date_str_format: str = "%m/%d/%Y",
+    path_exists: Callable = path.exists,
+    return_hit_date: bool = False,
+    verbose: bool = False,
+    **path_pattern_kwargs,
 ):
     for date in rich_python_utils.datetime_utils.iter_dates.iter_dates(
-            start_date=start_date,
-            end_date_inclusive=end_date,
-            days_delta=days_delta,
-            date_str_format=date_str_format,
-            always_forward_iter_if_possible=False
+        start_date=start_date,
+        end_date_inclusive=end_date,
+        days_delta=days_delta,
+        date_str_format=date_str_format,
+        always_forward_iter_if_possible=False,
     ):
         _path = path_pattern.format(
             year=date.year,
-            month=f'{date.month:02}',
-            day=f'{date.day:02}',
-            **path_pattern_kwargs
+            month=f"{date.month:02}",
+            day=f"{date.day:02}",
+            **path_pattern_kwargs,
         )
         if path_exists(_path):
             if verbose:
-                hprint_message('path exists', _path)
+                hprint_message("path exists", _path)
             if return_hit_date:
                 return _path, date
             else:
                 return _path
         else:
             if verbose:
-                hprint_message('path not exist', _path)
+                hprint_message("path not exist", _path)
     if return_hit_date:
         return None, None
     else:

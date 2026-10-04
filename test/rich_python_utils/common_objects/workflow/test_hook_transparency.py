@@ -6,28 +6,33 @@ Covers:
 - _on_step_complete receives unwrapped result
 - WorkGraphNode _post_process receives unwrapped result
 """
+
 import os
 import shutil
 import tempfile
 
 import pytest
-from attr import attrs, attrib
-
-from rich_python_utils.common_objects.workflow.workflow import Workflow
-from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode
+from attr import attrib, attrs
 from rich_python_utils.common_objects.workflow.common.expansion import (
     ExpansionResult,
     GraphExpansionResult,
     SubgraphSpec,
 )
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
+)
+from rich_python_utils.common_objects.workflow.common.step_result_save_options import (
+    StepResultSaveOptions,
+)
 from rich_python_utils.common_objects.workflow.common.step_wrapper import StepWrapper
-from rich_python_utils.common_objects.workflow.common.step_result_save_options import StepResultSaveOptions
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
+from rich_python_utils.common_objects.workflow.workflow import Workflow
+from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode
 
 
 # ---------------------------------------------------------------------------
 # Workflow hook transparency
 # ---------------------------------------------------------------------------
+
 
 @attrs(slots=False)
 class _HookTrackingWorkflow(Workflow):
@@ -92,7 +97,9 @@ class TestWorkflowHookTransparency:
 
     def test_update_state_receives_unwrapped_result(self):
         """_update_state receives the actual result, not ExpansionResult."""
-        expanded_step = StepWrapper(lambda x: x + 100, name="expanded", receives_state=True)
+        expanded_step = StepWrapper(
+            lambda x: x + 100, name="expanded", receives_state=True
+        )
 
         def emitter(x):
             return ExpansionResult(
@@ -143,6 +150,7 @@ class TestWorkflowHookTransparency:
 # WorkGraphNode hook transparency
 # ---------------------------------------------------------------------------
 
+
 class _HookTrackingNode(WorkGraphNode):
     """WorkGraphNode that records what _post_process receives."""
 
@@ -167,7 +175,8 @@ class TestWorkGraphNodeHookTransparency:
         save_dir = tempfile.mkdtemp(prefix="hook_node_test_")
         try:
             sub_a = WorkGraphNode(
-                name="sub_a", value=lambda x: x + 10,
+                name="sub_a",
+                value=lambda x: x + 10,
                 result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
             )
 

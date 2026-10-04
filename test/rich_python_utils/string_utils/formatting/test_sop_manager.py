@@ -5,9 +5,7 @@ Evaluation tests use StateGraphTracker from stategraph.py."""
 
 import unittest
 
-from rich_python_utils.common_objects.workflow.stategraph import (
-    StateGraphTracker,
-)
+from rich_python_utils.common_objects.workflow.stategraph import StateGraphTracker
 from rich_python_utils.string_utils.formatting.template_manager.sop_manager import (
     SOP,
     SOPManager,
@@ -20,11 +18,11 @@ SAMPLE_SOP_MD = """\
 
 User specifies the target code path and strategy.
 
-**Tools** [__must__]:
+**Tools** [__required__]:
 - /set-target-path <path>
 - /set-strategy <name>
 
-**Rules** [__must__]:
+**Rules** [__required__]:
 - If path points to a file, suggest parent directory
 - Always present commands in code blocks
 
@@ -58,14 +56,24 @@ Run efficiency-focused analysis.
 SAMPLE_SOP_YAML = {
     "phases": [
         {
-            "id": "0", "name": "Setup", "directives": ["initial"],
+            "id": "0",
+            "name": "Setup",
+            "directives": ["initial"],
             "outputs": ["target_path", "strategy"],
             "description": "User specifies the target code path.",
-            "subsections": [{"name": "Tools", "directive": "must", "content": "- /set-target-path"}],
+            "subsections": [
+                {
+                    "name": "Tools",
+                    "directive": "required",
+                    "content": "- /set-target-path",
+                }
+            ],
         },
         {
-            "id": "1", "name": "Codebase Investigation",
-            "depends_on": ["0"], "outputs": ["codebase_understanding"],
+            "id": "1",
+            "name": "Codebase Investigation",
+            "depends_on": ["0"],
+            "outputs": ["codebase_understanding"],
             "description": "Analyze the target codebase.",
         },
     ],
@@ -73,7 +81,6 @@ SAMPLE_SOP_YAML = {
 
 
 class TestMarkdownParser(unittest.TestCase):
-
     def setUp(self):
         self.sop = SOPManager.parse_markdown(SAMPLE_SOP_MD)
 
@@ -113,7 +120,7 @@ class TestMarkdownParser(unittest.TestCase):
         p = self.sop.get_phase("0")
         self.assertEqual(len(p.subsections), 2)
         self.assertEqual(p.subsections[0].name, "Tools")
-        self.assertEqual(p.subsections[0].directive, "must")
+        self.assertEqual(p.subsections[0].directive, "required")
 
     def test_description_before_subsections(self):
         p = self.sop.get_phase("0")
@@ -128,14 +135,13 @@ class TestMarkdownParser(unittest.TestCase):
 
 
 class TestYAMLParser(unittest.TestCase):
-
     def test_phase_count(self):
         sop = SOPManager.parse_yaml(SAMPLE_SOP_YAML)
         self.assertEqual(len(sop.phases), 2)
 
     def test_subsections(self):
         sop = SOPManager.parse_yaml(SAMPLE_SOP_YAML)
-        self.assertEqual(sop.get_phase("0").subsections[0].directive, "must")
+        self.assertEqual(sop.get_phase("0").subsections[0].directive, "required")
 
 
 class TestEvaluationViaTracker(unittest.TestCase):
@@ -157,26 +163,36 @@ class TestEvaluationViaTracker(unittest.TestCase):
         self.assertIn("0", t.get_missing_outputs())
 
     def test_phase_complete_with_outputs(self):
-        t = self._tracker(completed_states=["0"],
-                          state_outputs={"target_path": "/fbcode", "strategy": "default"})
+        t = self._tracker(
+            completed_states=["0"],
+            state_outputs={"target_path": "/fbcode", "strategy": "default"},
+        )
         ids = [n.id for n in t.get_available_next()]
         self.assertIn("1", ids)
         self.assertNotIn("0", ids)
 
     def test_gate_allows(self):
-        t = self._tracker(completed_states=["0"],
-                          state_outputs={"target_path": "/fbcode", "strategy": "efficiency"})
+        t = self._tracker(
+            completed_states=["0"],
+            state_outputs={"target_path": "/fbcode", "strategy": "efficiency"},
+        )
         self.assertIn("2a", [n.id for n in t.get_available_next()])
 
     def test_gate_blocks(self):
-        t = self._tracker(completed_states=["0"],
-                          state_outputs={"target_path": "/fbcode", "strategy": "exploratory"})
+        t = self._tracker(
+            completed_states=["0"],
+            state_outputs={"target_path": "/fbcode", "strategy": "exploratory"},
+        )
         self.assertNotIn("2a", [n.id for n in t.get_available_next()])
 
     def test_foreach_needs_collection(self):
         t = self._tracker(
             completed_states=["0", "1", "2"],
-            state_outputs={"target_path": "/fbcode", "strategy": "default", "codebase_understanding": "done"},
+            state_outputs={
+                "target_path": "/fbcode",
+                "strategy": "default",
+                "codebase_understanding": "done",
+            },
         )
         self.assertNotIn("3", [n.id for n in t.get_available_next()])
 
@@ -184,8 +200,10 @@ class TestEvaluationViaTracker(unittest.TestCase):
         t = self._tracker(
             completed_states=["0", "1", "2"],
             state_outputs={
-                "target_path": "/fbcode", "strategy": "default",
-                "codebase_understanding": "done", "research_proposals": ["a", "b"],
+                "target_path": "/fbcode",
+                "strategy": "default",
+                "codebase_understanding": "done",
+                "research_proposals": ["a", "b"],
             },
         )
         self.assertIn("3", [n.id for n in t.get_available_next()])
@@ -194,9 +212,12 @@ class TestEvaluationViaTracker(unittest.TestCase):
         t = self._tracker(
             completed_states=["0", "1", "2", "3", "4"],
             state_outputs={
-                "target_path": "/fbcode", "strategy": "default",
-                "codebase_understanding": "done", "research_proposals": ["a"],
-                "experiment_result": "done", "continue": True,
+                "target_path": "/fbcode",
+                "strategy": "default",
+                "codebase_understanding": "done",
+                "research_proposals": ["a"],
+                "experiment_result": "done",
+                "continue": True,
             },
         )
         self.assertIn("2", [n.id for n in t.get_available_next()])
@@ -205,35 +226,46 @@ class TestEvaluationViaTracker(unittest.TestCase):
         t = self._tracker(
             completed_states=["0", "1", "2", "3", "4"],
             state_outputs={
-                "target_path": "/fbcode", "strategy": "default",
-                "codebase_understanding": "done", "research_proposals": ["a"],
-                "experiment_result": "done", "continue": False,
+                "target_path": "/fbcode",
+                "strategy": "default",
+                "codebase_understanding": "done",
+                "research_proposals": ["a"],
+                "experiment_result": "done",
+                "continue": False,
             },
         )
         self.assertNotIn("2", [n.id for n in t.get_available_next()])
 
     def test_running_status(self):
-        t = self._tracker(completed_states=["0"],
-                          state_outputs={"target_path": "/fbcode", "strategy": "default"})
+        t = self._tracker(
+            completed_states=["0"],
+            state_outputs={"target_path": "/fbcode", "strategy": "default"},
+        )
         t.start("1")
         self.assertEqual(t.status, "running")
 
     def test_error_status(self):
-        t = self._tracker(completed_states=["0", "1"],
-                          state_outputs={"target_path": "/fbcode", "strategy": "default",
-                                         "codebase_understanding": "done"})
+        t = self._tracker(
+            completed_states=["0", "1"],
+            state_outputs={
+                "target_path": "/fbcode",
+                "strategy": "default",
+                "codebase_understanding": "done",
+            },
+        )
         t.start("2")
         t.fail("2", "some error")
         self.assertEqual(t.status, "error")
 
 
 class TestGuidanceRenderer(unittest.TestCase):
-
     def setUp(self):
         self.sop = SOPManager.parse_markdown(SAMPLE_SOP_MD)
         self.config = {
             "subsections": {
-                "Tools": {"directives": {"__must__": "You MUST use the following tools:"}},
+                "Tools": {
+                    "directives": {"__required__": "You MUST use the following tools:"}
+                },
             }
         }
 
@@ -244,8 +276,11 @@ class TestGuidanceRenderer(unittest.TestCase):
         self.assertIn("Setup", text)
 
     def test_running_guidance(self):
-        t = StateGraphTracker(graph=self.sop, completed_states=["0"],
-                              state_outputs={"target_path": "/fbcode", "strategy": "default"})
+        t = StateGraphTracker(
+            graph=self.sop,
+            completed_states=["0"],
+            state_outputs={"target_path": "/fbcode", "strategy": "default"},
+        )
         t.start("1")
         text = SOPManager.render_guidance(t, self.sop)
         self.assertIn("In progress", text)
@@ -268,7 +303,6 @@ class TestGuidanceRenderer(unittest.TestCase):
 
 
 class TestForEachSequential(unittest.TestCase):
-
     def test_sequential_flag(self):
         md = "## Phase 0 [initial]: Start `items`\nStart.\n## Phase 1 [__depends on__ Phase 0; __for each__ `item` __in__ `items` __sequentially__]: Process\nWork.\n"
         sop = SOPManager.parse_markdown(md)
@@ -286,7 +320,7 @@ class TestDashNameHeadingFormat(unittest.TestCase):
 
 User specifies the target code path and strategy.
 
-**Tools** [__must__]:
+**Tools** [__required__]:
 - /set-target-path <path>
 
 ## Phase 1 -- Codebase Investigation [__depends on__ Phase 0; __requires confirmation__]: `codebase_understanding`

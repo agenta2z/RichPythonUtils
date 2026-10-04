@@ -5,11 +5,12 @@ This module tests the apply_with_pattern_protection function which protects
 specified patterns (like code blocks) during string operations.
 """
 
-import pytest
 import re
+
+import pytest
 from rich_python_utils.string_utils.string_sanitization import (
+    _get_restore_content,
     apply_with_pattern_protection,
-    _get_restore_content
 )
 
 
@@ -18,73 +19,49 @@ class TestGetRestoreContent:
 
     def test_restore_full_match_with_none(self):
         """Test restoring full match when restore_group is None."""
-        entry = {
-            "full_match": "```python\ncode```",
-            "groups": ("python", "code")
-        }
+        entry = {"full_match": "```python\ncode```", "groups": ("python", "code")}
         result = _get_restore_content(entry, None)
         assert result == "```python\ncode```"
 
     def test_restore_full_match_with_zero(self):
         """Test restoring full match when restore_group is 0."""
-        entry = {
-            "full_match": "```python\ncode```",
-            "groups": ("python", "code")
-        }
+        entry = {"full_match": "```python\ncode```", "groups": ("python", "code")}
         result = _get_restore_content(entry, 0)
         assert result == "```python\ncode```"
 
     def test_restore_first_group(self):
         """Test restoring first capture group."""
-        entry = {
-            "full_match": "```python\ncode```",
-            "groups": ("python", "code")
-        }
+        entry = {"full_match": "```python\ncode```", "groups": ("python", "code")}
         result = _get_restore_content(entry, 1)
         assert result == "python"
 
     def test_restore_last_group_with_negative_index(self):
         """Test restoring last group using -1."""
-        entry = {
-            "full_match": "```python\ncode```",
-            "groups": ("python", "code")
-        }
+        entry = {"full_match": "```python\ncode```", "groups": ("python", "code")}
         result = _get_restore_content(entry, -1)
         assert result == "code"
 
     def test_restore_multiple_groups(self):
         """Test joining multiple groups."""
-        entry = {
-            "full_match": "```python\ncode```",
-            "groups": ("python", "code")
-        }
+        entry = {"full_match": "```python\ncode```", "groups": ("python", "code")}
         result = _get_restore_content(entry, [1, 2])
         assert result == "pythoncode"
 
     def test_restore_invalid_index_fallback(self):
         """Test that invalid indices fall back to full match."""
-        entry = {
-            "full_match": "```python\ncode```",
-            "groups": ("python", "code")
-        }
+        entry = {"full_match": "```python\ncode```", "groups": ("python", "code")}
         result = _get_restore_content(entry, 10)
         assert result == "```python\ncode```"
 
     def test_restore_no_groups(self):
         """Test handling entries with no capture groups."""
-        entry = {
-            "full_match": "```code```",
-            "groups": ()
-        }
+        entry = {"full_match": "```code```", "groups": ()}
         result = _get_restore_content(entry, 1)
         assert result == "```code```"
 
     def test_restore_optional_group_none(self):
         """Test handling None values in groups (optional groups)."""
-        entry = {
-            "full_match": "```\ncode```",
-            "groups": (None, "code")
-        }
+        entry = {"full_match": "```\ncode```", "groups": (None, "code")}
         result = _get_restore_content(entry, 1)
         assert result == ""
         result = _get_restore_content(entry, 2)
@@ -101,10 +78,10 @@ class TestApplyWithPatternProtection:
         result = apply_with_pattern_protection(
             text=text,
             operation=operation,
-            protection_patterns=r'```([a-z]+)\n(.*?)```',
-            restore_group=None
+            protection_patterns=r"```([a-z]+)\n(.*?)```",
+            restore_group=None,
         )
-        assert result == {'data': 'Value is ```python\nx=5```'}
+        assert result == {"data": "Value is ```python\nx=5```"}
 
     def test_protection_extract_code_only(self):
         """Test extracting only code content (last group)."""
@@ -113,10 +90,10 @@ class TestApplyWithPatternProtection:
         result = apply_with_pattern_protection(
             text=text,
             operation=operation,
-            protection_patterns=r'```([a-z]+)\n(.*?)```',
-            restore_group=-1
+            protection_patterns=r"```([a-z]+)\n(.*?)```",
+            restore_group=-1,
         )
-        assert result == {'data': 'Value is x=5'}
+        assert result == {"data": "Value is x=5"}
 
     def test_protection_extract_language_only(self):
         """Test extracting only language identifier (first group)."""
@@ -125,10 +102,10 @@ class TestApplyWithPatternProtection:
         result = apply_with_pattern_protection(
             text=text,
             operation=operation,
-            protection_patterns=r'```([a-z]+)\n(.*?)```',
-            restore_group=1
+            protection_patterns=r"```([a-z]+)\n(.*?)```",
+            restore_group=1,
         )
-        assert result == {'data': 'Value is python'}
+        assert result == {"data": "Value is python"}
 
     def test_html_code_block_with_special_chars(self):
         """Test protecting HTML code blocks with XML-breaking characters."""
@@ -138,12 +115,12 @@ class TestApplyWithPatternProtection:
         result = apply_with_pattern_protection(
             text=text,
             operation=operation,
-            protection_patterns=r'```([a-z]+)\n(.*?)```',
-            restore_group=-1
+            protection_patterns=r"```([a-z]+)\n(.*?)```",
+            restore_group=-1,
         )
-        assert result == {'content': f'Example: {html_code}'}
-        assert '&' in result['content']
-        assert '<div' in result['content']
+        assert result == {"content": f"Example: {html_code}"}
+        assert "&" in result["content"]
+        assert "<div" in result["content"]
 
     def test_markdown_code_block(self):
         """Test protecting markdown code blocks."""
@@ -153,10 +130,10 @@ class TestApplyWithPatternProtection:
         result = apply_with_pattern_protection(
             text=text,
             operation=operation,
-            protection_patterns=r'```([a-z]+)\n(.*?)```',
-            restore_group=-1
+            protection_patterns=r"```([a-z]+)\n(.*?)```",
+            restore_group=-1,
         )
-        assert result == {'doc': f'Doc: {md_code}'}
+        assert result == {"doc": f"Doc: {md_code}"}
 
     def test_python_code_with_operators(self):
         """Test protecting Python code with XML-breaking operators."""
@@ -166,11 +143,11 @@ class TestApplyWithPatternProtection:
         result = apply_with_pattern_protection(
             text=text,
             operation=operation,
-            protection_patterns=r'```([a-z]+)\n(.*?)```',
-            restore_group=-1
+            protection_patterns=r"```([a-z]+)\n(.*?)```",
+            restore_group=-1,
         )
-        assert '&' in result['code']
-        assert '<' in result['code']
+        assert "&" in result["code"]
+        assert "<" in result["code"]
 
     def test_multiple_code_blocks(self):
         """Test protecting multiple code blocks in the same text."""
@@ -179,10 +156,10 @@ class TestApplyWithPatternProtection:
         result = apply_with_pattern_protection(
             text=text,
             operation=operation,
-            protection_patterns=r'```([a-z]+)\n(.*?)```',
-            restore_group=-1
+            protection_patterns=r"```([a-z]+)\n(.*?)```",
+            restore_group=-1,
         )
-        assert result == {'data': 'First: a=1 and second: b=2'}
+        assert result == {"data": "First: a=1 and second: b=2"}
 
     def test_multiple_patterns(self):
         """Test using multiple protection patterns."""
@@ -192,15 +169,16 @@ class TestApplyWithPatternProtection:
             text=text,
             operation=operation,
             protection_patterns=[
-                r'```([a-z]+)\n(.*?)```',  # Code blocks
-                r'\$\$(.*?)\$\$'            # LaTeX
+                r"```([a-z]+)\n(.*?)```",  # Code blocks
+                r"\$\$(.*?)\$\$",  # LaTeX
             ],
-            restore_group=-1
+            restore_group=-1,
         )
-        assert result == {'content': 'Code: x=1 and math: E=mc^2'}
+        assert result == {"content": "Code: x=1 and math: E=mc^2"}
 
     def test_nested_structures(self):
         """Test restoration in nested data structures."""
+
         def parse_to_nested(s):
             return {"outer": {"inner": [s, s.upper()]}}
 
@@ -208,11 +186,11 @@ class TestApplyWithPatternProtection:
         result = apply_with_pattern_protection(
             text=text,
             operation=parse_to_nested,
-            protection_patterns=r'```([a-z]+)\n(.*?)```',
-            restore_group=-1
+            protection_patterns=r"```([a-z]+)\n(.*?)```",
+            restore_group=-1,
         )
         # After upper(), 'code' becomes 'CODE', and 'Value:' part is already uppercase in second element
-        assert result == {'outer': {'inner': ['Value: code', 'VALUE: code']}}
+        assert result == {"outer": {"inner": ["Value: code", "VALUE: code"]}}
 
     def test_custom_placeholders(self):
         """Test using custom placeholder prefix and suffix."""
@@ -221,12 +199,12 @@ class TestApplyWithPatternProtection:
         result = apply_with_pattern_protection(
             text=text,
             operation=operation,
-            protection_patterns=r'```([a-z]+)\n(.*?)```',
+            protection_patterns=r"```([a-z]+)\n(.*?)```",
             placeholder_prefix="<<<SAFE_",
             placeholder_suffix="_SAFE>>>",
-            restore_group=-1
+            restore_group=-1,
         )
-        assert result == {'data': 'Code: test'}
+        assert result == {"data": "Code: test"}
 
     def test_no_restoration(self):
         """Test keeping placeholders without restoration."""
@@ -235,11 +213,11 @@ class TestApplyWithPatternProtection:
         result = apply_with_pattern_protection(
             text=text,
             operation=operation,
-            protection_patterns=r'```([a-z]+)\n(.*?)```',
-            restore_in_result=False
+            protection_patterns=r"```([a-z]+)\n(.*?)```",
+            restore_in_result=False,
         )
-        assert 'PROTECTED' in result['data']
-        assert '```' not in result['data']
+        assert "PROTECTED" in result["data"]
+        assert "```" not in result["data"]
 
     def test_join_multiple_groups(self):
         """Test joining multiple capture groups."""
@@ -248,10 +226,10 @@ class TestApplyWithPatternProtection:
         result = apply_with_pattern_protection(
             text=text,
             operation=operation,
-            protection_patterns=r'```([a-z]+)\n(.*?)```',
-            restore_group=[1, 2]  # Join language + code
+            protection_patterns=r"```([a-z]+)\n(.*?)```",
+            restore_group=[1, 2],  # Join language + code
         )
-        assert result == {'data': 'First: pya=1 and second: jsb=2'}
+        assert result == {"data": "First: pya=1 and second: jsb=2"}
 
     def test_javascript_code_block(self):
         """Test protecting JavaScript code blocks."""
@@ -261,11 +239,11 @@ class TestApplyWithPatternProtection:
         result = apply_with_pattern_protection(
             text=text,
             operation=operation,
-            protection_patterns=r'```([a-z]+)\n(.*?)```',
-            restore_group=-1
+            protection_patterns=r"```([a-z]+)\n(.*?)```",
+            restore_group=-1,
         )
-        assert '&&' in result['script']
-        assert '<' in result['script']
+        assert "&&" in result["script"]
+        assert "<" in result["script"]
 
     def test_xml_code_block(self):
         """Test protecting XML code blocks."""
@@ -275,11 +253,11 @@ class TestApplyWithPatternProtection:
         result = apply_with_pattern_protection(
             text=text,
             operation=operation,
-            protection_patterns=r'```([a-z]+)\n(.*?)```',
-            restore_group=-1
+            protection_patterns=r"```([a-z]+)\n(.*?)```",
+            restore_group=-1,
         )
-        assert '<?xml' in result['example']
-        assert '&' in result['example']
+        assert "<?xml" in result["example"]
+        assert "&" in result["example"]
 
     def test_sql_code_block(self):
         """Test protecting SQL code blocks."""
@@ -289,11 +267,11 @@ class TestApplyWithPatternProtection:
         result = apply_with_pattern_protection(
             text=text,
             operation=operation,
-            protection_patterns=r'```([a-z]+)\n(.*?)```',
-            restore_group=-1
+            protection_patterns=r"```([a-z]+)\n(.*?)```",
+            restore_group=-1,
         )
-        assert '<>' in result['query']
-        assert '>' in result['query']
+        assert "<>" in result["query"]
+        assert ">" in result["query"]
 
     def test_empty_code_block(self):
         """Test handling empty code blocks."""
@@ -302,10 +280,10 @@ class TestApplyWithPatternProtection:
         result = apply_with_pattern_protection(
             text=text,
             operation=operation,
-            protection_patterns=r'```([a-z]+)\n(.*?)```',
-            restore_group=-1
+            protection_patterns=r"```([a-z]+)\n(.*?)```",
+            restore_group=-1,
         )
-        assert result == {'data': 'Empty: '}
+        assert result == {"data": "Empty: "}
 
     def test_code_block_without_language(self):
         """Test code blocks without language specifier."""
@@ -315,11 +293,11 @@ class TestApplyWithPatternProtection:
         result = apply_with_pattern_protection(
             text=text,
             operation=operation,
-            protection_patterns=r'```([a-z]*)\n(.*?)```',
-            restore_group=-1
+            protection_patterns=r"```([a-z]*)\n(.*?)```",
+            restore_group=-1,
         )
         # The pattern captures the trailing newline before ```
-        assert result == {'data': 'Code: some code\n'}
+        assert result == {"data": "Code: some code\n"}
 
     def test_multiline_code_block(self):
         """Test code blocks with multiple lines."""
@@ -329,24 +307,24 @@ class TestApplyWithPatternProtection:
         result = apply_with_pattern_protection(
             text=text,
             operation=operation,
-            protection_patterns=r'```([a-z]+)\n(.*?)```',
-            restore_group=-1
+            protection_patterns=r"```([a-z]+)\n(.*?)```",
+            restore_group=-1,
         )
-        assert result['func'] == f'Function: {code}'
-        assert 'def hello' in result['func']
+        assert result["func"] == f"Function: {code}"
+        assert "def hello" in result["func"]
 
     def test_compiled_pattern(self):
         """Test using pre-compiled regex patterns."""
         text = "Code: ```py\ntest```"
         operation = lambda s: {"data": s}
-        compiled_pattern = re.compile(r'```([a-z]+)\n(.*?)```', re.DOTALL)
+        compiled_pattern = re.compile(r"```([a-z]+)\n(.*?)```", re.DOTALL)
         result = apply_with_pattern_protection(
             text=text,
             operation=operation,
             protection_patterns=compiled_pattern,
-            restore_group=-1
+            restore_group=-1,
         )
-        assert result == {'data': 'Code: test'}
+        assert result == {"data": "Code: test"}
 
     def test_mixed_string_and_compiled_patterns(self):
         """Test using both string and compiled patterns."""
@@ -356,12 +334,12 @@ class TestApplyWithPatternProtection:
             text=text,
             operation=operation,
             protection_patterns=[
-                r'```([a-z]+)\n(.*?)```',
-                re.compile(r'\$\$(.*?)\$\$')
+                r"```([a-z]+)\n(.*?)```",
+                re.compile(r"\$\$(.*?)\$\$"),
             ],
-            restore_group=-1
+            restore_group=-1,
         )
-        assert result == {'data': 'Code: x=1 and math'}
+        assert result == {"data": "Code: x=1 and math"}
 
 
 class TestRealWorldScenarios:
@@ -375,12 +353,13 @@ class TestRealWorldScenarios:
     def test_json_parsing_with_latex(self):
         """Test JSON parsing with LaTeX equations."""
         import json
+
         json_text = '{"equation": "Solve $$E=mc^2$$ for m"}'
         result = apply_with_pattern_protection(
             text=json_text,
             operation=json.loads,
-            protection_patterns=r'\$\$(.*?)\$\$',
-            restore_group=-1
+            protection_patterns=r"\$\$(.*?)\$\$",
+            restore_group=-1,
         )
         assert result == {"equation": "Solve E=mc^2 for m"}
 
@@ -405,15 +384,15 @@ const y = arr || [];
         result = apply_with_pattern_protection(
             text=text,
             operation=operation,
-            protection_patterns=r'```([a-z]+)\n(.*?)```',
-            restore_group=None  # Keep full markdown
+            protection_patterns=r"```([a-z]+)\n(.*?)```",
+            restore_group=None,  # Keep full markdown
         )
         # Check all code blocks are preserved
-        assert '```python' in result['content']
-        assert '```javascript' in result['content']
-        assert '```html' in result['content']
-        assert '&' in result['content']
-        assert '||' in result['content']
+        assert "```python" in result["content"]
+        assert "```javascript" in result["content"]
+        assert "```html" in result["content"]
+        assert "&" in result["content"]
+        assert "||" in result["content"]
 
 
 if __name__ == "__main__":

@@ -5,10 +5,10 @@ from rich_python_utils.nlp_utils.common import Languages
 
 
 def get_token_inflection_regex(
-        token: str,
-        optional_space=True,
-        augmentation=True,
-        language: Union[str, Languages] = Languages.English,
+    token: str,
+    optional_space=True,
+    augmentation=True,
+    language: Union[str, Languages] = Languages.English,
 ) -> str:
     """
     Generate a regex pattern that matches the input token and its inflections.
@@ -42,53 +42,57 @@ def get_token_inflection_regex(
 
     token = re.escape(token)
     if optional_space:
-        token = token.replace(' ', r's?')  # `re.escape` already adds a '\' before space
+        token = token.replace(" ", r"s?")  # `re.escape` already adds a '\' before space
     if augmentation:
         group = []
         if language == Languages.English:  # TODO support other languages
-            if token[-1] == 's':
-                group.append(f'(?:{token})')
+            if token[-1] == "s":
+                group.append(f"(?:{token})")
                 group.append(f"(?:{token}'?)")  # Xs'
             else:
                 group.append(f"(?:{token}(?:'s)?)")  # X's
                 group.append(f"(?:{token}s'?)")  # Xs'
 
-            if 'a' <= token[-1] <= 'z':
-                if token[-1] in ('s', 'h'):
+            if "a" <= token[-1] <= "z":
+                if token[-1] in ("s", "h"):
                     group.append(f"(?:{token}es'?)")  # Xses, Xhes, Xses', Xhes'
-                if token[-1] == 'y':
+                if token[-1] == "y":
                     group.append(f"(?:{token[:-1]}ies'?)")  # Xies, Xies'
-                if len(token) > 2 and token not in ('off',):
-                    if not token.endswith('est'):
-                        group.append(f'(?:{token}{token[-1]}?est)')  # Xest
-                        if token[-1] == 'y':
-                            group.append(f'(?:{token[:-1]}iest)')  # Xiest
-                    if not token.endswith('er'):
-                        group.append(f"(?:{token}{token[-1]}?er'?s?)")  # Xer, Xers, Xer's
-                        if token[-1] == 'y':
+                if len(token) > 2 and token not in ("off",):
+                    if not token.endswith("est"):
+                        group.append(f"(?:{token}{token[-1]}?est)")  # Xest
+                        if token[-1] == "y":
+                            group.append(f"(?:{token[:-1]}iest)")  # Xiest
+                    if not token.endswith("er"):
+                        group.append(
+                            f"(?:{token}{token[-1]}?er'?s?)"
+                        )  # Xer, Xers, Xer's
+                        if token[-1] == "y":
                             group.append(f"(?:{token[:-1]}ier'?s?)")  # Xiers, Xier's
-                    if not token.endswith('or'):
-                        group.append(f"(?:{token}{token[-1]}?or(?:'?s?)?)")  # Xor, Xors, Xor's
-                    if not token.endswith('ing'):
-                        group.append(f'(?:{token}{token[-1]}?ing)')  # Xing
-                    if not token.endswith('ness'):
-                        group.append(f'(?:{token}ness)')  # Xness
-                        if token[-1] == 'y':
-                            group.append(f'(?:{token[:-1]}iness)')  # Xiness
+                    if not token.endswith("or"):
+                        group.append(
+                            f"(?:{token}{token[-1]}?or(?:'?s?)?)"
+                        )  # Xor, Xors, Xor's
+                    if not token.endswith("ing"):
+                        group.append(f"(?:{token}{token[-1]}?ing)")  # Xing
+                    if not token.endswith("ness"):
+                        group.append(f"(?:{token}ness)")  # Xness
+                        if token[-1] == "y":
+                            group.append(f"(?:{token[:-1]}iness)")  # Xiness
         else:
             raise ValueError(f"language '{language}' is not supported")
 
-        return '|'.join(group)
+        return "|".join(group)
     else:
         return token
 
 
 def _construct_regex_from_token_tup(
-        tokens,
-        add_word_boundary=True,
-        optional_space=True,
-        token_augmentation=True,
-        language='en'
+    tokens,
+    add_word_boundary=True,
+    optional_space=True,
+    token_augmentation=True,
+    language="en",
 ):
     """
     Construct a regex pattern from a tuple of tokens.
@@ -123,9 +127,9 @@ def _construct_regex_from_token_tup(
                 token,
                 optional_space=optional_space,
                 augmentation=token_augmentation,
-                language='en'
+                language="en",
             )
-            regex.append(f'({token_regex})')
+            regex.append(f"({token_regex})")
         else:
             group = []
             for _token in token:
@@ -133,13 +137,13 @@ def _construct_regex_from_token_tup(
                     _token,
                     optional_space=optional_space,
                     augmentation=token_augmentation,
-                    language='en'
+                    language="en",
                 )
-                group.append(f'(?:{token_regex})')
+                group.append(f"(?:{token_regex})")
             regex.append(f"({'|'.join(group)})")
 
-    regex = '|'.join(regex)
+    regex = "|".join(regex)
     if add_word_boundary:
-        return fr'(?:\b|^)({regex})(?:\b|\s|$)'
+        return rf"(?:\b|^)({regex})(?:\b|\s|$)"
     else:
         return regex

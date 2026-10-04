@@ -12,7 +12,6 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 
 from attr import attrs
-
 from rich_python_utils.service_utils.retrieval_service.document import Document
 
 
@@ -78,7 +77,9 @@ class RetrievalServiceBase(ABC):
         pass
 
     @abstractmethod
-    def get_by_id(self, doc_id: str, namespace: Optional[str] = None) -> Optional[Document]:
+    def get_by_id(
+        self, doc_id: str, namespace: Optional[str] = None
+    ) -> Optional[Document]:
         """
         Retrieve a document by its ID.
 

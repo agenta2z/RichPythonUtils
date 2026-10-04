@@ -18,6 +18,7 @@ Usage:
 """
 
 from resolve_path import resolve_path
+
 resolve_path()
 
 from rich_python_utils.service_utils.keyvalue_service.memory_keyvalue_service import (
@@ -37,9 +38,24 @@ def main():
 
     # 2. Store researcher profiles
     researchers = {
-        "alice": {"name": "Alice Chen", "field": "quantum_physics", "h_index": 42, "institution": "MIT"},
-        "bob":   {"name": "Bob Patel", "field": "bioinformatics", "h_index": 35, "institution": "Stanford"},
-        "carol": {"name": "Carol Kim", "field": "quantum_physics", "h_index": 28, "institution": "MIT"},
+        "alice": {
+            "name": "Alice Chen",
+            "field": "quantum_physics",
+            "h_index": 42,
+            "institution": "MIT",
+        },
+        "bob": {
+            "name": "Bob Patel",
+            "field": "bioinformatics",
+            "h_index": 35,
+            "institution": "Stanford",
+        },
+        "carol": {
+            "name": "Carol Kim",
+            "field": "quantum_physics",
+            "h_index": 28,
+            "institution": "MIT",
+        },
     }
     for key, profile in researchers.items():
         svc.put(key, profile)
@@ -62,10 +78,14 @@ def main():
     size = svc.size()
 
     # 7. Namespace isolation
-    svc.put("config", {"max_iterations": 1000, "tolerance": 1e-6}, namespace="project_alpha")
-    svc.put("config", {"max_iterations": 500,  "tolerance": 1e-3}, namespace="project_beta")
+    svc.put(
+        "config", {"max_iterations": 1000, "tolerance": 1e-6}, namespace="project_alpha"
+    )
+    svc.put(
+        "config", {"max_iterations": 500, "tolerance": 1e-3}, namespace="project_beta"
+    )
     alpha_config = svc.get("config", namespace="project_alpha")
-    beta_config  = svc.get("config", namespace="project_beta")
+    beta_config = svc.get("config", namespace="project_beta")
 
     # 8. Delete operations
     deleted = svc.delete("carol")
@@ -74,15 +94,17 @@ def main():
 
     # 9. Batch operations
     instruments = {
-        "nmr_600":  {"instrument": "NMR Spectrometer", "model": "Bruker 600MHz"},
-        "xrd_d8":   {"instrument": "X-Ray Diffractometer", "model": "Bruker D8"},
+        "nmr_600": {"instrument": "NMR Spectrometer", "model": "Bruker 600MHz"},
+        "xrd_d8": {"instrument": "X-Ray Diffractometer", "model": "Bruker D8"},
         "sem_zeiss": {"instrument": "SEM", "model": "Zeiss Sigma"},
     }
     svc.put_many(instruments, namespace="lab_equipment")
-    retrieved = svc.get_many(["nmr_600", "xrd_d8", "missing_key"], namespace="lab_equipment")
+    retrieved = svc.get_many(
+        ["nmr_600", "xrd_d8", "missing_key"], namespace="lab_equipment"
+    )
     batch_results = {}
     for k, v in retrieved.items():
-        batch_results[k] = v['model'] if v else "not found"
+        batch_results[k] = v["model"] if v else "not found"
 
     # 10. Statistics
     stats = svc.get_stats()
@@ -188,4 +210,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n[X] Error: {e}")
         import traceback
+
         traceback.print_exc()

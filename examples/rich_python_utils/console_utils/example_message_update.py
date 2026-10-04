@@ -7,11 +7,12 @@ printing repeated lines.
 Use Case: Polling loops, progress updates, status checks
 """
 
-import time
-import sys
 import os
+import sys
+import time
 
 from resolve_path import resolve_path
+
 resolve_path()
 
 # Let user choose backend BEFORE importing console_utils
@@ -22,6 +23,7 @@ print("=" * 70)
 # Check what's available (try importing rich)
 try:
     import rich
+
     has_rich = True
     print("\n[+] Rich library is installed")
 except ImportError:
@@ -38,7 +40,7 @@ print("  2. Colorama (basic colors, always available)")
 if has_rich:
     choice = input("\nChoose backend (1/2) or press Enter for Rich: ").strip()
     if choice == "2":
-        os.environ['CONSOLE_UTILS_BACKEND'] = 'colorama'
+        os.environ["CONSOLE_UTILS_BACKEND"] = "colorama"
         print("-> Using Colorama backend")
     else:
         print("-> Using Rich backend")
@@ -48,12 +50,17 @@ else:
 print("=" * 70 + "\n")
 
 # NOW import console_utils (will use the selected backend)
-from rich_python_utils.console_utils import hprint_message, clear_message, get_current_backend
+from rich_python_utils.console_utils import (
+    clear_message,
+    get_current_backend,
+    hprint_message,
+)
 
 # Enable ANSI escape codes on Windows for cursor control
-if sys.platform == 'win32':
+if sys.platform == "win32":
     try:
         import ctypes
+
         kernel32 = ctypes.windll.kernel32
         kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
     except Exception:
@@ -71,7 +78,7 @@ def example_1_simple_progress():
             title="Progress",
             content=f"{progress}%",
             message_id="progress",
-            update_previous=True
+            update_previous=True,
         )
         time.sleep(0.3)
 
@@ -90,7 +97,7 @@ def example_2_status_polling():
             title="Service Check",
             content=f"Waiting for service... (attempt {attempt})",
             message_id="service_status",
-            update_previous=True
+            update_previous=True,
         )
         time.sleep(0.5)
 
@@ -99,7 +106,7 @@ def example_2_status_polling():
         title="Service Check",
         content="Service is ready!",
         message_id="service_status",
-        update_previous=True
+        update_previous=True,
     )
 
     print("\n[+] Service connected!\n")
@@ -115,7 +122,7 @@ def example_3_multiple_tasks():
     tasks = {
         "download": ["Preparing...", "Downloading...", "Extracting...", "Complete!"],
         "processing": ["Loading...", "Processing...", "Finalizing...", "Done!"],
-        "upload": ["Connecting...", "Uploading...", "Verifying...", "Success!"]
+        "upload": ["Connecting...", "Uploading...", "Verifying...", "Success!"],
     }
 
     # Simulate tasks progressing at different rates
@@ -128,7 +135,7 @@ def example_3_multiple_tasks():
                     title=task_name.capitalize(),
                     content=steps[step],
                     message_id=f"task_{task_name}",
-                    update_previous=(step > 0)  # Update after first message
+                    update_previous=(step > 0),  # Update after first message
                 )
         time.sleep(0.5)
 
@@ -145,7 +152,7 @@ def example_4_temporary_message():
     hprint_message(
         title="Notice",
         content="Processing large file, this may take a while...",
-        message_id="temp_notice"
+        message_id="temp_notice",
     )
     time.sleep(2)
 
@@ -177,7 +184,7 @@ def example_5_real_world_polling():
             title="Queue Check",
             content=f"No queue storage found. Waiting... (attempt {attempt}/{max_attempts})",
             message_id="queue_monitor",
-            update_previous=(attempt > 1)  # Update after first message
+            update_previous=(attempt > 1),  # Update after first message
         )
 
         time.sleep(0.5)
@@ -191,7 +198,7 @@ def example_5_real_world_polling():
             title="Queue Check",
             content="Queue storage found! Connecting...",
             message_id="queue_monitor",
-            update_previous=True
+            update_previous=True,
         )
         time.sleep(0.5)
 
@@ -199,7 +206,7 @@ def example_5_real_world_polling():
             title="Queue Check",
             content="Connected successfully!",
             message_id="queue_monitor",
-            update_previous=True
+            update_previous=True,
         )
 
     print("\n[+] Queue monitoring demonstration complete!\n")

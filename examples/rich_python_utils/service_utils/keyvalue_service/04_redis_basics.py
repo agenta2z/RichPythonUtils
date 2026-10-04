@@ -36,6 +36,7 @@ except ImportError:
     sys.exit(0)
 
 from resolve_path import resolve_path
+
 resolve_path()
 
 from rich_python_utils.service_utils.keyvalue_service.redis_keyvalue_service import (
@@ -49,7 +50,9 @@ def main():
 
     if not svc.ping():
         print("Cannot connect to Redis. Is the server running?")
-        print("Start it with: docker run -d --name redis-test -p 6379:6379 redis:latest")
+        print(
+            "Start it with: docker run -d --name redis-test -p 6379:6379 redis:latest"
+        )
         svc.close()
         return
 
@@ -64,9 +67,24 @@ def main():
 
         # 2. Store sensor readings
         sensors = {
-            "sensor:temp_lab1":     {"location": "Lab 1", "type": "temperature", "value": 22.5, "unit": "C"},
-            "sensor:humidity_lab1": {"location": "Lab 1", "type": "humidity", "value": 45.2, "unit": "%"},
-            "sensor:temp_lab2":     {"location": "Lab 2", "type": "temperature", "value": 20.1, "unit": "C"},
+            "sensor:temp_lab1": {
+                "location": "Lab 1",
+                "type": "temperature",
+                "value": 22.5,
+                "unit": "C",
+            },
+            "sensor:humidity_lab1": {
+                "location": "Lab 1",
+                "type": "humidity",
+                "value": 45.2,
+                "unit": "%",
+            },
+            "sensor:temp_lab2": {
+                "location": "Lab 2",
+                "type": "temperature",
+                "value": 20.1,
+                "unit": "C",
+            },
         }
         for key, reading in sensors.items():
             svc.put(key, reading)
@@ -83,9 +101,14 @@ def main():
         ns_list = svc.namespaces()
 
         # 5. Batch operations
-        batch = {f"sample_{i}": {"mass_g": 1.5 + i * 0.1, "label": f"Sample {chr(65+i)}"} for i in range(5)}
+        batch = {
+            f"sample_{i}": {"mass_g": 1.5 + i * 0.1, "label": f"Sample {chr(65 + i)}"}
+            for i in range(5)
+        }
         svc.put_many(batch, namespace="analysis")
-        retrieved = svc.get_many(["sample_0", "sample_2", "sample_4"], namespace="analysis")
+        retrieved = svc.get_many(
+            ["sample_0", "sample_2", "sample_4"], namespace="analysis"
+        )
         batch_results = {}
         for k, v in retrieved.items():
             batch_results[k] = f"{v['label']}, {v['mass_g']}g"
@@ -115,7 +138,9 @@ def main():
         print("\n[2] Store lab sensor readings (put)")
         print("-" * 50)
         for key, reading in sensors.items():
-            print(f"    Stored '{key}' -> {reading['type']}={reading['value']}{reading['unit']}")
+            print(
+                f"    Stored '{key}' -> {reading['type']}={reading['value']}{reading['unit']}"
+            )
 
         print("\n[3] Retrieve values (get)")
         print("-" * 50)
@@ -158,4 +183,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n[X] Error: {e}")
         import traceback
+
         traceback.print_exc()

@@ -10,6 +10,7 @@ intermediate object.
 This test reproduces the exact scenario from the WebAgent action processing
 pipeline where [InputText, Click] becomes [InputText, InputText].
 """
+
 import gc
 import sys
 from pathlib import Path
@@ -17,7 +18,7 @@ from pathlib import Path
 # Setup import paths
 _current_file = Path(__file__).resolve()
 _test_dir = _current_file.parent
-while _test_dir.name != 'test' and _test_dir.parent != _test_dir:
+while _test_dir.name != "test" and _test_dir.parent != _test_dir:
     _test_dir = _test_dir.parent
 _project_root = _test_dir.parent
 _src_dir = _project_root / "src"
@@ -26,15 +27,16 @@ if _src_dir.exists() and str(_src_dir) not in sys.path:
 
 import attr
 import pytest
-
 from rich_python_utils.common_utils.map_helper import dict__
 
 
 # --- Attrs classes simulating the WebAgent's AgentAction ---
 
+
 @attr.s
 class AgentAction:
     """Simulates the action object from the WebAgent pipeline."""
+
     reasoning = attr.ib(type=str)
     target = attr.ib(type=str)
     type = attr.ib(type=str)
@@ -68,7 +70,7 @@ def test_dict_obj_cache_stale_entry_with_attrs_list():
     # Structure mirrors the actual next_actions: [[action1], [action2]]
     next_actions = [[action1], [action2]]
 
-    result = dict__(next_actions, recursive=True, fallback='skip')
+    result = dict__(next_actions, recursive=True, fallback="skip")
 
     # Verify action1 is correct
     assert result[0][0]["type"] == "ElementInteraction.InputText", (
@@ -118,7 +120,7 @@ def test_dict_obj_cache_stale_entry_with_gc_pressure():
     # Force GC to free any lingering objects and make address reuse more likely
     gc.collect()
 
-    result = dict__(next_actions, recursive=True, fallback='skip')
+    result = dict__(next_actions, recursive=True, fallback="skip")
 
     # Each action in the result should preserve its own distinct data
     assert result[0][0]["type"] == "ElementInteraction.InputText"
@@ -180,7 +182,7 @@ def test_dict_obj_cache_deterministic_id_collision():
 
     # Regardless of whether collision happened in THIS run,
     # verify dict__ produces correct results
-    result = dict__([action_a, action_b], recursive=True, fallback='skip')
+    result = dict__([action_a, action_b], recursive=True, fallback="skip")
     assert result[0]["type"] == "TypeA", f"First action wrong: {result[0]}"
     assert result[1]["type"] == "TypeB", (
         f"Second action wrong: got {result[1]['type']} instead of TypeB. "
@@ -204,7 +206,7 @@ def test_dict_obj_cache_many_attrs_objects():
     ]
 
     # Process as a flat list of attrs objects
-    result = dict__(actions, recursive=True, fallback='skip')
+    result = dict__(actions, recursive=True, fallback="skip")
 
     # Verify EVERY action preserved its unique data
     corrupted = []
@@ -230,16 +232,18 @@ def test_dict_obj_cache_nested_attrs_in_list_of_lists():
     """
     N = 20
     next_actions = [
-        [AgentAction(
-            reasoning=f"Group {i} reasoning",
-            target=str(100 + i),
-            type=f"ActionType_{i}",
-            args={"key": f"value_{i}"},
-        )]
+        [
+            AgentAction(
+                reasoning=f"Group {i} reasoning",
+                target=str(100 + i),
+                type=f"ActionType_{i}",
+                args={"key": f"value_{i}"},
+            )
+        ]
         for i in range(N)
     ]
 
-    result = dict__(next_actions, recursive=True, fallback='skip')
+    result = dict__(next_actions, recursive=True, fallback="skip")
 
     corrupted = []
     for i in range(N):
@@ -269,22 +273,23 @@ def test_dict_obj_cache_bug_vs_individual_conversion():
     """
     N = 20
     next_actions = [
-        [AgentAction(
-            reasoning=f"Group {i} reasoning",
-            target=str(100 + i),
-            type=f"ActionType_{i}",
-            args={"key": f"value_{i}"},
-        )]
+        [
+            AgentAction(
+                reasoning=f"Group {i} reasoning",
+                target=str(100 + i),
+                type=f"ActionType_{i}",
+                args={"key": f"value_{i}"},
+            )
+        ]
         for i in range(N)
     ]
 
     # Method 1: dict__ on the whole list (shared _obj_cache)
-    result_shared = dict__(next_actions, recursive=True, fallback='skip')
+    result_shared = dict__(next_actions, recursive=True, fallback="skip")
 
     # Method 2: dict__ on each element individually (fresh cache each time)
     result_individual = [
-        dict__(group, recursive=True, fallback='skip')
-        for group in next_actions
+        dict__(group, recursive=True, fallback="skip") for group in next_actions
     ]
 
     # Individual conversion should ALWAYS be correct
@@ -316,23 +321,32 @@ def test_dict_obj_cache_bug_vs_individual_conversion():
         )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print("Running dict__ _obj_cache stale entry tests...")
     print()
 
     tests = [
-        ("Basic two-action scenario (InputText+Click)",
-         test_dict_obj_cache_stale_entry_with_attrs_list),
-        ("Three-action scenario with GC pressure",
-         test_dict_obj_cache_stale_entry_with_gc_pressure),
-        ("Deterministic id collision demonstration",
-         test_dict_obj_cache_deterministic_id_collision),
-        ("Stress test: many attrs objects",
-         test_dict_obj_cache_many_attrs_objects),
-        ("Nested list of lists structure",
-         test_dict_obj_cache_nested_attrs_in_list_of_lists),
-        ("Shared vs individual cache comparison",
-         test_dict_obj_cache_bug_vs_individual_conversion),
+        (
+            "Basic two-action scenario (InputText+Click)",
+            test_dict_obj_cache_stale_entry_with_attrs_list,
+        ),
+        (
+            "Three-action scenario with GC pressure",
+            test_dict_obj_cache_stale_entry_with_gc_pressure,
+        ),
+        (
+            "Deterministic id collision demonstration",
+            test_dict_obj_cache_deterministic_id_collision,
+        ),
+        ("Stress test: many attrs objects", test_dict_obj_cache_many_attrs_objects),
+        (
+            "Nested list of lists structure",
+            test_dict_obj_cache_nested_attrs_in_list_of_lists,
+        ),
+        (
+            "Shared vs individual cache comparison",
+            test_dict_obj_cache_bug_vs_individual_conversion,
+        ),
     ]
 
     passed = 0

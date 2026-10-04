@@ -1,11 +1,15 @@
-from typing import Iterator, Iterable, Callable, Union, Optional, Any, List, Tuple
+from typing import Any, Callable, Iterable, Iterator, List, Optional, Tuple, Union
 
-from rich_python_utils.common_utils.iter_helper import iter__, iter_
-from rich_python_utils.common_utils.typing_helper import solve_nested_singleton_tuple_list
+from rich_python_utils.common_utils.iter_helper import iter_, iter__
+from rich_python_utils.common_utils.typing_helper import (
+    solve_nested_singleton_tuple_list,
+)
 from rich_python_utils.string_utils.tokenization import tokenize
 
 
-def add_prefix(s: str, prefix: Any, sep: Optional[str] = '_', avoid_repeat: bool = False) -> str:
+def add_prefix(
+    s: str, prefix: Any, sep: Optional[str] = "_", avoid_repeat: bool = False
+) -> str:
     """
     Adds a prefix to the beginning of the current string.
     Args:
@@ -30,7 +34,7 @@ def add_prefix(s: str, prefix: Any, sep: Optional[str] = '_', avoid_repeat: bool
         >>> assert add_prefix('global_name', prefix='global', sep='_', avoid_repeat=True) == 'global_name'
         >>> assert add_prefix('global_name', prefix='global', sep='_', avoid_repeat=False) == 'global_global_name'
     """
-    if s and prefix is not None and prefix != '':
+    if s and prefix is not None and prefix != "":
         prefix = str(prefix)
         if sep and not prefix.endswith(sep):
             prefix += sep
@@ -39,7 +43,9 @@ def add_prefix(s: str, prefix: Any, sep: Optional[str] = '_', avoid_repeat: bool
     return s
 
 
-def add_suffix(s: str, suffix: Any, sep: Optional[str] = '_', avoid_repeat: bool = False) -> str:
+def add_suffix(
+    s: str, suffix: Any, sep: Optional[str] = "_", avoid_repeat: bool = False
+) -> str:
     """
     Adds a suffix to the end of the current string.
     Args:
@@ -64,7 +70,7 @@ def add_suffix(s: str, suffix: Any, sep: Optional[str] = '_', avoid_repeat: bool
         >>> assert add_suffix('name1', suffix='1', sep='', avoid_repeat=True) == 'name1'
         >>> assert add_suffix('name-1', suffix='-1', sep=None, avoid_repeat=False) == 'name-1-1'
     """
-    if s and suffix is not None and suffix != '':
+    if s and suffix is not None and suffix != "":
         suffix = str(suffix)
         if sep and not suffix.startswith(sep):
             suffix = sep + suffix
@@ -74,13 +80,13 @@ def add_suffix(s: str, suffix: Any, sep: Optional[str] = '_', avoid_repeat: bool
 
 
 def add_prefix_suffix(
-        s: str,
-        prefix: str,
-        suffix: str,
-        sep: Optional[str] = '_',
-        sep_for_prefix: Optional[str] = None,
-        sep_for_suffix: Optional[str] = None,
-        avoid_repeat: bool = False
+    s: str,
+    prefix: str,
+    suffix: str,
+    sep: Optional[str] = "_",
+    sep_for_prefix: Optional[str] = None,
+    sep_for_suffix: Optional[str] = None,
+    avoid_repeat: bool = False,
 ):
     """
     Adds a prefix/suffix to the beginning/end of the current string.
@@ -113,48 +119,33 @@ def add_prefix_suffix(
         >>> assert add_prefix_suffix('global_name_1', prefix='global', suffix='1', sep='_', avoid_repeat=False) == 'global_global_name_1_1'
     """
     return add_suffix(
-        add_prefix(
-            s,
-            prefix,
-            sep=(sep_for_prefix or sep),
-            avoid_repeat=avoid_repeat
-        ),
+        add_prefix(s, prefix, sep=(sep_for_prefix or sep), avoid_repeat=avoid_repeat),
         suffix,
         sep=(sep_for_suffix or sep),
-        avoid_repeat=avoid_repeat
+        avoid_repeat=avoid_repeat,
     )
 
 
-def replace_prefix(
-        s: str,
-        prefix_to_replace: str,
-        replacement: str,
-        sep='_'
-) -> str:
+def replace_prefix(s: str, prefix_to_replace: str, replacement: str, sep="_") -> str:
     if sep and (not prefix_to_replace.endswith(sep)):
         prefix_to_replace = prefix_to_replace + sep
 
     if s.startswith(prefix_to_replace):
         if sep and (not replacement.endswith(sep)):
             replacement = replacement + sep
-        return replacement + s[len(prefix_to_replace):]
+        return replacement + s[len(prefix_to_replace) :]
     else:
         return s
 
 
-def replace_suffix(
-        s: str,
-        suffix_to_replace: str,
-        replacement: str,
-        sep='_'
-) -> str:
+def replace_suffix(s: str, suffix_to_replace: str, replacement: str, sep="_") -> str:
     if sep and (not suffix_to_replace.startswith(sep)):
         suffix_to_replace = sep + suffix_to_replace
 
     if s.endswith(suffix_to_replace):
         if sep and (not replacement.startswith(sep)):
             replacement = sep + replacement
-        return s[:-len(suffix_to_replace)] + replacement
+        return s[: -len(suffix_to_replace)] + replacement
     else:
         return s
 
@@ -167,14 +158,16 @@ def remove_suffix(text: str, suffix: str) -> str:
 
 def remove_prefix(text: str, prefix: str) -> str:
     if text.startswith(prefix):
-        return text[len(prefix):]
+        return text[len(prefix) :]
     return text
 
 
-def remove_any_prefix(text: str, prefixes: Iterable[str], return_match_index: bool = False) -> Union[str, Tuple[str, int]]:
+def remove_any_prefix(
+    text: str, prefixes: Iterable[str], return_match_index: bool = False
+) -> Union[str, Tuple[str, int]]:
     for i, prefix in enumerate(iter_(prefixes)):
         if text.startswith(prefix):
-            text_without_prefix = text[len(prefix):]
+            text_without_prefix = text[len(prefix) :]
             if return_match_index:
                 return text_without_prefix, i
             else:
@@ -186,10 +179,10 @@ def remove_any_prefix(text: str, prefixes: Iterable[str], return_match_index: bo
 
 
 def remove_prefix_suffix(
-        s: str,
-        prefixes: Iterable[str] = None,
-        suffixes: Iterable[str] = None,
-        sep: str = ' '
+    s: str,
+    prefixes: Iterable[str] = None,
+    suffixes: Iterable[str] = None,
+    sep: str = " ",
 ) -> str:
     """
     Removes the longest matching prefix and suffix from the string `s`.
@@ -254,7 +247,7 @@ def remove_prefix_suffix(
                     if not _prefix.endswith(sep):
                         _prefix += sep
                     if s.startswith(_prefix):
-                        s = s[len(_prefix):]
+                        s = s[len(_prefix) :]
                         prefix_removed = True
     if suffixes:
         if not isinstance(suffixes, str):
@@ -312,9 +305,7 @@ def _get_token_index_before_common_suffix(tks):
 
 
 def remove_common_specified_prefix(
-        *strings: str,
-        prefixes: Iterable[str],
-        sep: str = ' '
+    *strings: str, prefixes: Iterable[str], sep: str = " "
 ) -> List[str]:
     """
     Removes the common prefixes specified in `prefixes` from the input `strings`.
@@ -360,15 +351,13 @@ def remove_common_specified_prefix(
         len_sep = len(sep)
         for prefix in prefixes:
             if all(s.startswith(prefix + sep) for s in strings):
-                strings = [s[(len(prefix)) + len_sep:] for s in strings]
+                strings = [s[(len(prefix)) + len_sep :] for s in strings]
 
     return list(strings)
 
 
 def remove_common_specified_suffix(
-        *strings: str,
-        suffixes: Iterable[str],
-        sep: str = ' '
+    *strings: str, suffixes: Iterable[str], sep: str = " "
 ) -> List[str]:
     """
     Removes common suffixes specified in `suffixes` from input `strings`.
@@ -410,18 +399,18 @@ def remove_common_specified_suffix(
         len_sep = len(sep)
         for suffix in suffixes:
             if all(s.endswith(sep + suffix) for s in strings):
-                strings = [s[:-(len(suffix) + len_sep)] for s in strings]
+                strings = [s[: -(len(suffix) + len_sep)] for s in strings]
 
     return list(strings)
 
 
 def remove_common_prefix_suffix(
-        *strings: str,
-        tokenizer: Optional[Union[Callable, str]] = None,
-        prefixes: Iterable[str] = None,
-        suffixes: Iterable[str] = None,
-        remove_prefix: bool = True,
-        remove_suffix: bool = False
+    *strings: str,
+    tokenizer: Optional[Union[Callable, str]] = None,
+    prefixes: Iterable[str] = None,
+    suffixes: Iterable[str] = None,
+    remove_prefix: bool = True,
+    remove_suffix: bool = False,
 ) -> List[str]:
     """
     Remove common prefixes/suffixes from string instances.
@@ -472,20 +461,19 @@ def remove_common_prefix_suffix(
             i = _get_token_index_after_common_prefix(tks)
             if suffixes is None:
                 j = _get_token_index_before_common_suffix(tks)
-                strings = (' '.join(x[i:(len(x) + j + 1)]) for x in tks)
+                strings = (" ".join(x[i : (len(x) + j + 1)]) for x in tks)
             else:
                 strings = remove_common_specified_suffix(
-                    *(' '.join(x[i:]) for x in tks),
-                    suffixes=suffixes
+                    *(" ".join(x[i:]) for x in tks), suffixes=suffixes
                 )
         else:
             if suffixes is None:
                 tks = [tokenize(s, tokenizer) for s in strings]
                 j = _get_token_index_before_common_suffix(tks)
-                strings = (' '.join(x[:(len(x) + j + 1)]) for x in tks)
+                strings = (" ".join(x[: (len(x) + j + 1)]) for x in tks)
             else:
                 if tokenizer is not None:
-                    strings = (' '.join(tokenize(s, tokenizer)) for s in strings)
+                    strings = (" ".join(tokenize(s, tokenizer)) for s in strings)
 
             strings = remove_common_specified_prefix(*strings, prefixes=prefixes)
             if suffixes is not None:
@@ -494,27 +482,29 @@ def remove_common_prefix_suffix(
         if prefixes is None:
             tks = [tokenize(s, tokenizer) for s in strings]
             i = _get_token_index_after_common_prefix(tks)
-            strings = (' '.join(x[i:]) for x in tks)
+            strings = (" ".join(x[i:]) for x in tks)
         else:
             if tokenizer is not None:
-                strings = (' '.join(tokenize(s, tokenizer)) for s in strings)
+                strings = (" ".join(tokenize(s, tokenizer)) for s in strings)
 
             strings = remove_common_specified_prefix(*strings, prefixes=prefixes)
     elif remove_suffix:
         if suffixes is None:
             tks = [tokenize(s, tokenizer) for s in strings]
             j = _get_token_index_before_common_suffix(tks)
-            strings = (' '.join(x[:(len(x) + j + 1)]) for x in tks)
+            strings = (" ".join(x[: (len(x) + j + 1)]) for x in tks)
         else:
             if tokenizer is not None:
-                strings = (' '.join(tokenize(s, tokenizer)) for s in strings)
+                strings = (" ".join(tokenize(s, tokenizer)) for s in strings)
 
             strings = remove_common_specified_suffix(*strings, suffixes=suffixes)
 
     return list(strings)
 
 
-def remove_all_prefix_tokens(s: str, prefixes: Iterable[str], token_sep: str = ' ') -> str:
+def remove_all_prefix_tokens(
+    s: str, prefixes: Iterable[str], token_sep: str = " "
+) -> str:
     """
     Removes all prefix tokens from the input string.
     For example, suppose input string is 'the my songs', and `prefixes` is `['a', 'the', 'my']`,
@@ -532,14 +522,16 @@ def remove_all_prefix_tokens(s: str, prefixes: Iterable[str], token_sep: str = '
         no_replacement = True
         for prefix in prefixes:
             if s.startswith(prefix + token_sep):
-                s = s[len(prefix) + len(token_sep):]
+                s = s[len(prefix) + len(token_sep) :]
                 no_replacement = False
         if no_replacement:
             break
     return s
 
 
-def remove_all_suffix_tokens(s: str, suffixes: Iterable[str], token_sep: str = ' ') -> str:
+def remove_all_suffix_tokens(
+    s: str, suffixes: Iterable[str], token_sep: str = " "
+) -> str:
     while True:
         no_replacement = True
         for suffix in suffixes:
@@ -552,12 +544,12 @@ def remove_all_suffix_tokens(s: str, suffixes: Iterable[str], token_sep: str = '
 
 
 def solve_name_conflict(
-        name: str,
-        existing_names: Union[set, Iterable],
-        always_with_suffix: bool = False,
-        suffix_sep: str = '',
-        suffix_gen: Union[Iterator, str, Callable[[int], str]] = None,
-        update_current_names: bool = True
+    name: str,
+    existing_names: Union[set, Iterable],
+    always_with_suffix: bool = False,
+    suffix_sep: str = "",
+    suffix_gen: Union[Iterator, str, Callable[[int], str]] = None,
+    update_current_names: bool = True,
 ) -> str:
     """
     Solves name conflict by appending a suffix
@@ -679,8 +671,8 @@ def get_next_numbered_string(strings: Union[str, Iterable[str]]) -> str:
     length_of_number_part = None
 
     for s in iter__(strings):
-        base_string = s.rstrip('0123456789')
-        number_str = s[len(base_string):]
+        base_string = s.rstrip("0123456789")
+        number_str = s[len(base_string) :]
 
         if not number_str.isdigit():
             raise ValueError(f"Invalid numeric suffix in string: {s}")

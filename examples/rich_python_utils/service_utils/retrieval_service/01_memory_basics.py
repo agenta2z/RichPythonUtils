@@ -20,12 +20,13 @@ Usage:
 """
 
 from resolve_path import resolve_path
+
 resolve_path()
 
+from rich_python_utils.service_utils.retrieval_service.document import Document
 from rich_python_utils.service_utils.retrieval_service.memory_retrieval_service import (
     MemoryRetrievalService,
 )
-from rich_python_utils.service_utils.retrieval_service.document import Document
 
 
 # -- Mock data: scientific paper abstracts --
@@ -34,8 +35,8 @@ PAPERS = [
     Document(
         doc_id="paper:quantum_ml_2024",
         content="We present a novel quantum machine learning algorithm for molecular "
-                "property prediction. By leveraging variational quantum circuits, our "
-                "approach achieves state-of-the-art accuracy on benchmark datasets.",
+        "property prediction. By leveraging variational quantum circuits, our "
+        "approach achieves state-of-the-art accuracy on benchmark datasets.",
         metadata={
             "authors": ["Alice Chen", "Bob Patel"],
             "journal": "Nature Physics",
@@ -48,8 +49,8 @@ PAPERS = [
     Document(
         doc_id="paper:crispr_delivery_2024",
         content="This study develops a lipid nanoparticle delivery system for CRISPR-Cas9 "
-                "gene editing in vivo. We demonstrate efficient genome editing in liver "
-                "cells with minimal off-target effects.",
+        "gene editing in vivo. We demonstrate efficient genome editing in liver "
+        "cells with minimal off-target effects.",
         metadata={
             "authors": ["Diana Lee", "Bob Patel"],
             "journal": "Nature Biotechnology",
@@ -62,8 +63,8 @@ PAPERS = [
     Document(
         doc_id="paper:climate_model_2023",
         content="We introduce an improved climate model incorporating ocean-atmosphere "
-                "coupling at unprecedented resolution. The model accurately reproduces "
-                "observed temperature trends and predicts regional precipitation changes.",
+        "coupling at unprecedented resolution. The model accurately reproduces "
+        "observed temperature trends and predicts regional precipitation changes.",
         metadata={
             "authors": ["Carol Kim", "Eve Zhang"],
             "journal": "Science",
@@ -76,8 +77,8 @@ PAPERS = [
     Document(
         doc_id="paper:topological_insulator_2024",
         content="Discovery of a new class of topological insulators exhibiting robust "
-                "surface states at room temperature. Our findings open pathways for "
-                "low-power quantum computing devices.",
+        "surface states at room temperature. Our findings open pathways for "
+        "low-power quantum computing devices.",
         metadata={
             "authors": ["Alice Chen", "Frank Wu"],
             "journal": "Physical Review Letters",
@@ -90,8 +91,8 @@ PAPERS = [
     Document(
         doc_id="paper:protein_structure_2023",
         content="Using deep learning methods we predict protein tertiary structures with "
-                "near-experimental accuracy. Our transformer-based architecture processes "
-                "amino acid sequences end-to-end without multiple sequence alignments.",
+        "near-experimental accuracy. Our transformer-based architecture processes "
+        "amino acid sequences end-to-end without multiple sequence alignments.",
         metadata={
             "authors": ["Bob Patel", "Diana Lee"],
             "journal": "Nature Methods",
@@ -104,8 +105,8 @@ PAPERS = [
     Document(
         doc_id="paper:battery_materials_2024",
         content="High-throughput computational screening identifies novel solid-state "
-                "electrolyte materials for next-generation lithium batteries. Candidates "
-                "show ionic conductivity exceeding current commercial electrolytes.",
+        "electrolyte materials for next-generation lithium batteries. Candidates "
+        "show ionic conductivity exceeding current commercial electrolytes.",
         metadata={
             "authors": ["Eve Zhang", "Frank Wu"],
             "journal": "Advanced Energy Materials",
@@ -150,19 +151,32 @@ def main():
     results_protein_formatted = [(d.doc_id, s) for d, s in results_protein]
 
     # 5. Metadata filters
-    results_year = svc.search("novel algorithm quantum materials", filters={"year": 2024})
+    results_year = svc.search(
+        "novel algorithm quantum materials", filters={"year": 2024}
+    )
     results_year_ids = [d.doc_id for d, _ in results_year]
 
-    results_oa = svc.search("novel algorithm quantum materials", filters={"open_access": True})
+    results_oa = svc.search(
+        "novel algorithm quantum materials", filters={"open_access": True}
+    )
 
-    results_topics = svc.search("novel algorithm quantum materials", filters={"topics": ["quantum_computing", "machine_learning"]})
-    results_topics_detail = [(d.doc_id, d.metadata["topics"]) for d, _ in results_topics]
+    results_topics = svc.search(
+        "novel algorithm quantum materials",
+        filters={"topics": ["quantum_computing", "machine_learning"]},
+    )
+    results_topics_detail = [
+        (d.doc_id, d.metadata["topics"]) for d, _ in results_topics
+    ]
 
-    results_combined = svc.search("novel algorithm quantum materials", filters={"year": 2024, "open_access": True})
+    results_combined = svc.search(
+        "novel algorithm quantum materials", filters={"year": 2024, "open_access": True}
+    )
 
     # 6. Update a document
     doc_to_update = svc.get_by_id("paper:quantum_ml_2024")
-    doc_to_update.content = doc_to_update.content + " Updated with new experimental validation results."
+    doc_to_update.content = (
+        doc_to_update.content + " Updated with new experimental validation results."
+    )
     doc_to_update.metadata["citations"] = 52
     update_success = svc.update(doc_to_update)
     updated_doc = svc.get_by_id("paper:quantum_ml_2024")
@@ -176,10 +190,16 @@ def main():
     physics_docs_count = len(physics_docs)
 
     # 8. Namespaces
-    physics_paper = Document(doc_id="cross_ns_1", content="Quantum entanglement experiment",
-                             metadata={"field": "physics"})
-    biology_paper = Document(doc_id="cross_ns_1", content="DNA methylation patterns",
-                             metadata={"field": "biology"})
+    physics_paper = Document(
+        doc_id="cross_ns_1",
+        content="Quantum entanglement experiment",
+        metadata={"field": "physics"},
+    )
+    biology_paper = Document(
+        doc_id="cross_ns_1",
+        content="DNA methylation patterns",
+        metadata={"field": "biology"},
+    )
 
     svc.add(physics_paper, namespace="physics")
     svc.add(biology_paper, namespace="biology")
@@ -237,10 +257,14 @@ def main():
 
     print("\n[4] Search by keyword")
     print("-" * 50)
-    print(f"    'quantum computing machine learning' -> {len(results_quantum_formatted)} results:")
+    print(
+        f"    'quantum computing machine learning' -> {len(results_quantum_formatted)} results:"
+    )
     for rid, score in results_quantum_formatted:
         print(f"        {rid:40s} score={score:.4f}")
-    print(f"    'protein structure deep learning' -> {len(results_protein_formatted)} results:")
+    print(
+        f"    'protein structure deep learning' -> {len(results_protein_formatted)} results:"
+    )
     for rid, score in results_protein_formatted:
         print(f"        {rid:40s} score={score:.4f}")
 
@@ -250,7 +274,9 @@ def main():
     for rid in results_year_ids:
         print(f"        {rid}")
     print(f"    open_access=True: {len(results_oa)} papers")
-    print(f"    topics contains BOTH 'quantum_computing' AND 'machine_learning': {len(results_topics)} papers")
+    print(
+        f"    topics contains BOTH 'quantum_computing' AND 'machine_learning': {len(results_topics)} papers"
+    )
     for rid, topics in results_topics_detail:
         print(f"        {rid} -- topics={topics}")
     print(f"    year=2024 AND open_access=True: {len(results_combined)} papers")
@@ -304,4 +330,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n[X] Error: {e}")
         import traceback
+
         traceback.print_exc()

@@ -6,22 +6,22 @@ which is useful for checking if strings contain any of several keywords.
 """
 
 import os
-import sys
 import re
+import sys
 
 # Set UTF-8 encoding for Windows console
-if sys.platform == 'win32':
-    sys.stdout.reconfigure(encoding='utf-8')
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8")
 
 # Add src directory to path
 test_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(test_dir, '..', '..', '..', '..'))
-src_dir = os.path.join(project_root, 'src')
+project_root = os.path.abspath(os.path.join(test_dir, "..", "..", "..", ".."))
+src_dir = os.path.join(project_root, "src")
 sys.path.insert(0, src_dir)
 
 from rich_python_utils.string_utils.comparison import (
     solve_compare_option,
-    string_compare
+    string_compare,
 )
 
 
@@ -32,18 +32,20 @@ def test_contains_with_regex():
     print("=" * 80)
 
     # Test case from user: check if string contains view, body, or presentation
-    pattern_str = r'@.*(view|body|presentation).*'
+    pattern_str = r"@.*(view|body|presentation).*"
     test_cases = [
-        ('p-workspace__primary_view_body', True, 'Contains "view" and "body"'),
-        ('main-presentation-slide', True, 'Contains "presentation"'),
-        ('simple-view-container', True, 'Contains "view"'),
-        ('body-content-wrapper', True, 'Contains "body"'),
-        ('unrelated-class-name', False, 'Contains none of the keywords'),
-        ('header-footer-navigation', False, 'Contains none of the keywords'),
+        ("p-workspace__primary_view_body", True, 'Contains "view" and "body"'),
+        ("main-presentation-slide", True, 'Contains "presentation"'),
+        ("simple-view-container", True, 'Contains "view"'),
+        ("body-content-wrapper", True, 'Contains "body"'),
+        ("unrelated-class-name", False, "Contains none of the keywords"),
+        ("header-footer-navigation", False, "Contains none of the keywords"),
     ]
 
     print(f"\nPattern: '{pattern_str}'")
-    print("Explanation: Matches if string contains 'view' OR 'body' OR 'presentation'\n")
+    print(
+        "Explanation: Matches if string contains 'view' OR 'body' OR 'presentation'\n"
+    )
 
     # Test without compilation
     print("Without compilation:")
@@ -52,7 +54,9 @@ def test_contains_with_regex():
         result = string_compare(test_str, pattern, option)
         status = "✓" if result == expected else "✗"
         print(f"  {status} '{test_str}' -> {result} ({description})")
-        assert result == expected, f"Failed for '{test_str}': got {result}, expected {expected}"
+        assert result == expected, (
+            f"Failed for '{test_str}': got {result}, expected {expected}"
+        )
 
     # Test with compilation
     print("\nWith compilation:")
@@ -65,7 +69,9 @@ def test_contains_with_regex():
         result = string_compare(test_str, pattern, option)
         status = "✓" if result == expected else "✗"
         print(f"  {status} '{test_str}' -> {result} ({description})")
-        assert result == expected, f"Failed for '{test_str}': got {result}, expected {expected}"
+        assert result == expected, (
+            f"Failed for '{test_str}': got {result}, expected {expected}"
+        )
 
     print("\n✅ All tests passed!\n")
 
@@ -77,17 +83,24 @@ def test_contains_with_word_boundaries():
     print("=" * 80)
 
     # Pattern with word boundaries - matches only complete words
-    pattern_str = r'@.*\b(view|body|presentation)\b.*'
+    pattern_str = r"@.*\b(view|body|presentation)\b.*"
     test_cases = [
-        ('this is a view', True, 'Complete word "view"'),
-        ('body is here', True, 'Complete word "body"'),
-        ('presentation slide', True, 'Complete word "presentation"'),
-        ('overview document', False, '"view" is not a complete word'),
-        ('p-workspace__primary_view_body', False, '"view" and "body" are not complete words'),
+        ("this is a view", True, 'Complete word "view"'),
+        ("body is here", True, 'Complete word "body"'),
+        ("presentation slide", True, 'Complete word "presentation"'),
+        ("overview document", False, '"view" is not a complete word'),
+        (
+            "p-workspace__primary_view_body",
+            False,
+            '"view" and "body" are not complete words',
+        ),
     ]
 
     print(f"\nPattern: '{pattern_str}'")
-    print(r"Explanation: Matches if string contains complete words 'view', 'body', or 'presentation'" + "\n")
+    print(
+        r"Explanation: Matches if string contains complete words 'view', 'body', or 'presentation'"
+        + "\n"
+    )
 
     option, pattern = solve_compare_option(pattern_str, compile_regex=True)
     assert isinstance(pattern, re.Pattern), "Pattern should be compiled"
@@ -98,7 +111,9 @@ def test_contains_with_word_boundaries():
         result = string_compare(test_str, pattern, option)
         status = "✓" if result == expected else "✗"
         print(f"  {status} '{test_str}' -> {result} ({description})")
-        assert result == expected, f"Failed for '{test_str}': got {result}, expected {expected}"
+        assert result == expected, (
+            f"Failed for '{test_str}': got {result}, expected {expected}"
+        )
 
     print("\n✅ All tests passed!\n")
 
@@ -110,13 +125,17 @@ def test_case_insensitive_contains():
     print("=" * 80)
 
     # Case insensitive pattern
-    pattern_str = r'/@.*(view|body|presentation).*'
+    pattern_str = r"/@.*(view|body|presentation).*"
     test_cases = [
-        ('View_Container', True, 'Contains "View" (case insensitive)'),
-        ('BODY_CONTENT', True, 'Contains "BODY" (case insensitive)'),
-        ('Main-Presentation', True, 'Contains "Presentation" (case insensitive)'),
-        ('p-workspace__PRIMARY_VIEW_BODY', True, 'Contains "VIEW" and "BODY" (case insensitive)'),
-        ('unrelated-text', False, 'Contains none of the keywords'),
+        ("View_Container", True, 'Contains "View" (case insensitive)'),
+        ("BODY_CONTENT", True, 'Contains "BODY" (case insensitive)'),
+        ("Main-Presentation", True, 'Contains "Presentation" (case insensitive)'),
+        (
+            "p-workspace__PRIMARY_VIEW_BODY",
+            True,
+            'Contains "VIEW" and "BODY" (case insensitive)',
+        ),
+        ("unrelated-text", False, "Contains none of the keywords"),
     ]
 
     print(f"\nPattern: '{pattern_str}'")
@@ -133,7 +152,9 @@ def test_case_insensitive_contains():
         result = string_compare(test_str, pattern, option)
         status = "✓" if result == expected else "✗"
         print(f"  {status} '{test_str}' -> {result} ({description})")
-        assert result == expected, f"Failed for '{test_str}': got {result}, expected {expected}"
+        assert result == expected, (
+            f"Failed for '{test_str}': got {result}, expected {expected}"
+        )
 
     print("\n✅ All tests passed!\n")
 
@@ -144,16 +165,16 @@ def test_contains_plus_regex():
     print("TEST: *@ (contains + regex) combination")
     print("=" * 80)
 
-    pattern_str = '*@ view|body|presentation'
+    pattern_str = "*@ view|body|presentation"
 
     print(f"\nPattern: '{pattern_str}'")
     print("This pattern uses '*' (contains) with '@' (regex)")
     print("This now works BOTH with and without compilation!\n")
 
     test_cases = [
-        ('p-workspace__primary_view_body', True, 'Contains "view" and "body"'),
-        ('main-presentation-slide', True, 'Contains "presentation"'),
-        ('unrelated-class-name', False, 'Contains none of the keywords'),
+        ("p-workspace__primary_view_body", True, 'Contains "view" and "body"'),
+        ("main-presentation-slide", True, 'Contains "presentation"'),
+        ("unrelated-class-name", False, "Contains none of the keywords"),
     ]
 
     # Test WITHOUT compilation - now works!
@@ -168,7 +189,9 @@ def test_contains_plus_regex():
         result = string_compare(test_str, pattern, option)
         status = "✓" if result == expected else "✗"
         print(f"  {status} '{test_str}' -> {result} ({description})")
-        assert result == expected, f"Failed for '{test_str}': got {result}, expected {expected}"
+        assert result == expected, (
+            f"Failed for '{test_str}': got {result}, expected {expected}"
+        )
 
     # Test WITH compilation - also works!
     print("\nWITH compilation (compile_regex=True):")
@@ -183,7 +206,9 @@ def test_contains_plus_regex():
         result = string_compare(test_str, pattern, option)
         status = "✓" if result == expected else "✗"
         print(f"  {status} '{test_str}' -> {result} ({description})")
-        assert result == expected, f"Failed for '{test_str}': got {result}, expected {expected}"
+        assert result == expected, (
+            f"Failed for '{test_str}': got {result}, expected {expected}"
+        )
 
     print("\n✅ Test passed!")
     print("\nKey insight:")
@@ -212,22 +237,28 @@ def main():
         print("  1. Use '@.*(pattern).*' for explicit contains matching with regex")
         print("  2. Use '/@.*(pattern).*' for case insensitive contains")
         print(r"  3. Use '@.*\b(pattern)\b.*' for complete word matching")
-        print("  4. The '*@' combination now WORKS (both with and without compilation) ✓")
-        print("  5. Pattern '*@ view|body|presentation' matches 'p-workspace__primary_view_body'")
+        print(
+            "  4. The '*@' combination now WORKS (both with and without compilation) ✓"
+        )
+        print(
+            "  5. Pattern '*@ view|body|presentation' matches 'p-workspace__primary_view_body'"
+        )
         print("  6. Compiled patterns are ~2x faster for repeated matching")
         return True
     except AssertionError as e:
         print(f"\n❌ TEST FAILED: {e}")
         import traceback
+
         traceback.print_exc()
         return False
     except Exception as e:
         print(f"\n❌ UNEXPECTED ERROR: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     success = main()
     sys.exit(0 if success else 1)

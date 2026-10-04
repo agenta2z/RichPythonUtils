@@ -35,50 +35,52 @@ from pathlib import Path
 # Resolve src path: walk up from this file to find 'examples', then add sibling 'src'
 _current = Path(__file__).resolve()
 while _current != _current.parent:
-    if _current.name == 'examples':
-        sys.path.insert(0, str(_current.parent / 'src'))
+    if _current.name == "examples":
+        sys.path.insert(0, str(_current.parent / "src"))
         break
     _current = _current.parent
 
 from rich_python_utils.common_objects.debuggable import Debuggable
-from rich_python_utils.io_utils.json_io import write_json, PartsKeyPath
+from rich_python_utils.io_utils.json_io import PartsKeyPath, write_json
 
 
 # --- Mock data (mirrors WebDriverActionResult) ---
 
+
 def make_mock_action_result():
     return {
-        'body_html_before_last_action': (
-            '<html><body>\n'
-            '  <h1>Product Page</h1>\n'
-            '  <p>Price: $29.99</p>\n'
+        "body_html_before_last_action": (
+            "<html><body>\n"
+            "  <h1>Product Page</h1>\n"
+            "  <p>Price: $29.99</p>\n"
             '  <button id="add-to-cart">Add to Cart</button>\n'
-            '</body></html>'
+            "</body></html>"
         ),
-        'body_html_after_last_action': (
-            '<html><body>\n'
-            '  <h1>Product Page</h1>\n'
-            '  <p>Price: $29.99</p>\n'
+        "body_html_after_last_action": (
+            "<html><body>\n"
+            "  <h1>Product Page</h1>\n"
+            "  <p>Price: $29.99</p>\n"
             '  <button id="add-to-cart" disabled>Added!</button>\n'
             '  <div class="cart-popup">Item added to cart (1 item)</div>\n'
-            '</body></html>'
+            "</body></html>"
         ),
-        'cleaned_body_html_after_last_action': (
-            '<div>\n'
-            '  <h1>Product Page</h1>\n'
-            '  <p>Price: $29.99</p>\n'
-            '  <button disabled>Added!</button>\n'
+        "cleaned_body_html_after_last_action": (
+            "<div>\n"
+            "  <h1>Product Page</h1>\n"
+            "  <p>Price: $29.99</p>\n"
+            "  <button disabled>Added!</button>\n"
             '  <div class="cart-popup">Item added to cart</div>\n'
-            '</div>'
+            "</div>"
         ),
-        'is_cleaned_body_html_only_incremental_change': False,
-        'source': 'playwright',
-        'action_type': 'click',
-        'target': '#add-to-cart',
+        "is_cleaned_body_html_only_incremental_change": False,
+        "source": "playwright",
+        "action_type": "click",
+        "target": "#add-to-cart",
     }
 
 
 # --- Debuggable subclass (like WebDriver) ---
+
 
 class MockWebDriver(Debuggable):
     """Simplified stand-in for WebDriver that logs action results."""
@@ -91,14 +93,26 @@ class MockWebDriver(Debuggable):
         # so the key paths must be 'item.field_name'.
         self.log_info(
             result,
-            'AgentActionResults',
+            "AgentActionResults",
             parts_key_paths=[
-                PartsKeyPath('item.body_html_before_last_action', ext='.html',
-                             alias='BeforeHtml', subfolder='ui_source'),
-                PartsKeyPath('item.body_html_after_last_action', ext='.html',
-                             alias='AfterHtml', subfolder='ui_source'),
-                PartsKeyPath('item.cleaned_body_html_after_last_action', ext='.html',
-                             alias='CleanedHtml', subfolder='ui_source'),
+                PartsKeyPath(
+                    "item.body_html_before_last_action",
+                    ext=".html",
+                    alias="BeforeHtml",
+                    subfolder="ui_source",
+                ),
+                PartsKeyPath(
+                    "item.body_html_after_last_action",
+                    ext=".html",
+                    alias="AfterHtml",
+                    subfolder="ui_source",
+                ),
+                PartsKeyPath(
+                    "item.cleaned_body_html_after_last_action",
+                    ext=".html",
+                    alias="CleanedHtml",
+                    subfolder="ui_source",
+                ),
             ],
             parts_min_size=0,
         )
@@ -107,14 +121,15 @@ class MockWebDriver(Debuggable):
 
 # --- Run ---
 
+
 def main():
     # 1. Setup output directory and logger
-    output_dir = Path(__file__).parent / '_output'
+    output_dir = Path(__file__).parent / "_output"
     if output_dir.exists():
         shutil.rmtree(output_dir)
     output_dir.mkdir()
 
-    log_file = str(output_dir / 'actions.jsonl')
+    log_file = str(output_dir / "actions.jsonl")
     driver = MockWebDriver(
         debug_mode=True,
         logger=partial(write_json, file_path=log_file),
@@ -127,48 +142,48 @@ def main():
 
     # 3. Collect results for display
     actual_file = os.path.join(log_file, driver.id)
-    parts_dir = actual_file + '.parts'
+    parts_dir = actual_file + ".parts"
 
     dir_tree_lines = []
     for root, dirs, files in os.walk(output_dir):
-        level = str(root).replace(str(output_dir), '').count(os.sep)
-        indent = '  ' * level
-        dir_tree_lines.append(f'{indent}{os.path.basename(root)}/')
+        level = str(root).replace(str(output_dir), "").count(os.sep)
+        indent = "  " * level
+        dir_tree_lines.append(f"{indent}{os.path.basename(root)}/")
         for f in sorted(files):
             size = os.path.getsize(os.path.join(root, f))
-            dir_tree_lines.append(f'{indent}  {f}  ({size} bytes)')
+            dir_tree_lines.append(f"{indent}  {f}  ({size} bytes)")
 
-    with open(actual_file, 'r', encoding='utf-8') as f:
+    with open(actual_file, "r", encoding="utf-8") as f:
         main_json = json.loads(f.readline())
 
-    sample_parts_file = os.path.join(parts_dir, 'ui_source', 'AfterHtml.html')
-    with open(sample_parts_file, 'r', encoding='utf-8') as f:
+    sample_parts_file = os.path.join(parts_dir, "ui_source", "AfterHtml.html")
+    with open(sample_parts_file, "r", encoding="utf-8") as f:
         sample_html = f.read()
 
     # 4. Print everything
-    sep = '=' * 60
+    sep = "=" * 60
     print(sep)
-    print('Parts Extraction Example')
+    print("Parts Extraction Example")
     print(sep)
-    print(f'Output directory: {output_dir}\n')
+    print(f"Output directory: {output_dir}\n")
 
-    print('Directory structure:')
-    print('\n'.join(dir_tree_lines))
+    print("Directory structure:")
+    print("\n".join(dir_tree_lines))
 
-    print(f'\n{sep}')
-    print(f'Main JSON ({os.path.basename(actual_file)}):')
+    print(f"\n{sep}")
+    print(f"Main JSON ({os.path.basename(actual_file)}):")
     print(sep)
     print(json.dumps(main_json, indent=2))
 
-    print(f'\n{sep}')
-    print('Extracted parts file (ui_source/AfterHtml.html):')
+    print(f"\n{sep}")
+    print("Extracted parts file (ui_source/AfterHtml.html):")
     print(sep)
     print(sample_html)
 
-    print(f'\n{sep}')
-    print(f'Examine the full output at:\n  {output_dir}')
+    print(f"\n{sep}")
+    print(f"Examine the full output at:\n  {output_dir}")
     print(sep)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

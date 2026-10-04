@@ -12,33 +12,39 @@ Tests cover:
 
 Requirements: 7.2, 7.3, 7.4, 7.5, 8.1, 8.3, 8.4, 9.1, 9.2
 """
+
 import asyncio
 
 import pytest
-
-from rich_python_utils.common_objects.workflow.workgraph import WorkGraphNode, WorkGraph
-from rich_python_utils.common_objects.workflow.common.worknode_base import (
-    WorkGraphStopFlags,
-    NextNodesSelector,
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
 )
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
+from rich_python_utils.common_objects.workflow.common.worknode_base import (
+    NextNodesSelector,
+    WorkGraphStopFlags,
+)
+from rich_python_utils.common_objects.workflow.workgraph import WorkGraph, WorkGraphNode
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 class _TestGraphNode(WorkGraphNode):
     """WorkGraphNode subclass that stubs out result path for testing."""
 
     def _get_result_path(self, result_id, *args, **kwargs):
-        import tempfile, os
+        import os
+        import tempfile
+
         return os.path.join(tempfile.gettempdir(), f"_test_{result_id}.pkl")
 
 
 # ---------------------------------------------------------------------------
 # Test: basic sync / async callable execution  (Req 7.2)
 # ---------------------------------------------------------------------------
+
 
 class TestSyncAsyncCallableExecution:
     """WorkGraphNode._arun() transparently handles sync and async callables."""
@@ -83,6 +89,7 @@ class TestSyncAsyncCallableExecution:
 # ---------------------------------------------------------------------------
 # Test: multi-parent input merging via asyncio.Queue  (Req 8.1, 8.3)
 # ---------------------------------------------------------------------------
+
 
 class TestMultiParentMerge:
     """Multi-parent node collects inputs from all parents before executing."""
@@ -131,6 +138,7 @@ class TestMultiParentMerge:
 # ---------------------------------------------------------------------------
 # Test: AbstainResult filtering in multi-parent merge  (Req 8.4)
 # ---------------------------------------------------------------------------
+
 
 class TestAbstainResultFiltering:
     """AbstainResult flags are filtered from multi-parent inputs when configured."""
@@ -196,6 +204,7 @@ class TestAbstainResultFiltering:
 # ---------------------------------------------------------------------------
 # Test: self-loop iteration  (Req 7.4, 7.5)
 # ---------------------------------------------------------------------------
+
 
 class TestSelfLoopIteration:
     """Self-loop node iterates correctly using NextNodesSelector."""
@@ -274,6 +283,7 @@ class TestSelfLoopIteration:
 # Test: NextNodesSelector downstream selection  (Req 7.4)
 # ---------------------------------------------------------------------------
 
+
 class TestNextNodesSelectorDownstream:
     """NextNodesSelector controls which downstream nodes execute."""
 
@@ -312,6 +322,7 @@ class TestNextNodesSelectorDownstream:
             def fn(x):
                 called_nodes.append(name)
                 return x
+
             return fn
 
         root = WorkGraphNode(
@@ -337,6 +348,7 @@ class TestNextNodesSelectorDownstream:
 # Test: post-process hooks with async callables  (Req 9.1, 9.2)
 # ---------------------------------------------------------------------------
 
+
 class TestAsyncPostProcessHooks:
     """Post-process hooks support async callables via call_maybe_async."""
 
@@ -349,7 +361,9 @@ class TestAsyncPostProcessHooks:
                 return result + 100
 
             def _get_result_path(self, result_id, *args, **kwargs):
-                import tempfile, os
+                import os
+                import tempfile
+
                 return os.path.join(tempfile.gettempdir(), f"_test_{result_id}.pkl")
 
         node = PostProcessNode(name="pp_node", value=lambda x: x)
@@ -365,7 +379,9 @@ class TestAsyncPostProcessHooks:
                 return result * 3
 
             def _get_result_path(self, result_id, *args, **kwargs):
-                import tempfile, os
+                import os
+                import tempfile
+
                 return os.path.join(tempfile.gettempdir(), f"_test_{result_id}.pkl")
 
         node = SyncPostProcessNode(name="sync_pp", value=lambda x: x + 1)
@@ -382,7 +398,9 @@ class TestAsyncPostProcessHooks:
                 return result + 50
 
             def _get_result_path(self, result_id, *args, **kwargs):
-                import tempfile, os
+                import os
+                import tempfile
+
                 return os.path.join(tempfile.gettempdir(), f"_test_{result_id}.pkl")
 
         node = OptPostNode(
@@ -404,7 +422,9 @@ class TestAsyncPostProcessHooks:
                 return result + 50
 
             def _get_result_path(self, result_id, *args, **kwargs):
-                import tempfile, os
+                import os
+                import tempfile
+
                 return os.path.join(tempfile.gettempdir(), f"_test_{result_id}.pkl")
 
         node = OptPostNode(
@@ -420,6 +440,7 @@ class TestAsyncPostProcessHooks:
 # ---------------------------------------------------------------------------
 # Test: downstream result ordering is deterministic  (Req 7.3, 7.5)
 # ---------------------------------------------------------------------------
+
 
 class TestDownstreamResultOrdering:
     """Downstream results use indexed insertion for deterministic ordering."""
@@ -499,6 +520,7 @@ class TestDownstreamResultOrdering:
 # Test: WorkGraphStopFlags handling  (Req 7.3)
 # ---------------------------------------------------------------------------
 
+
 class TestStopFlagsInArun:
     """WorkGraphNode._arun() handles WorkGraphStopFlags correctly."""
 
@@ -554,13 +576,17 @@ class TestStopFlagsInArun:
 # Requirements: 10.2, 10.6, 11.1, 11.3, 11.4
 # ===========================================================================
 
-from unittest.mock import patch, MagicMock
-from rich_python_utils.common_objects.workflow.common.step_result_save_options import StepResultSaveOptions
+from unittest.mock import MagicMock, patch
+
+from rich_python_utils.common_objects.workflow.common.step_result_save_options import (
+    StepResultSaveOptions,
+)
 
 
 # ---------------------------------------------------------------------------
 # Helpers for WorkGraph tests
 # ---------------------------------------------------------------------------
+
 
 class _SaveTrackingNode(WorkGraphNode):
     """WorkGraphNode subclass that tracks save calls and stubs result path."""
@@ -595,6 +621,7 @@ class _LoadableNode(WorkGraphNode):
 # ---------------------------------------------------------------------------
 # Test 1: Concurrent start node execution  (Req 10.2)
 # ---------------------------------------------------------------------------
+
 
 class TestConcurrentStartNodeExecution:
     """WorkGraph._arun() executes start nodes concurrently via asyncio.gather."""
@@ -652,12 +679,14 @@ class TestConcurrentStartNodeExecution:
 # Test 2: Output ordering matches start_nodes order  (Req 10.2)
 # ---------------------------------------------------------------------------
 
+
 class TestOutputOrdering:
     """Output ordering is deterministic via indexed insertion, matching start_nodes order."""
 
     @pytest.mark.asyncio
     async def test_output_order_matches_start_nodes_order(self):
         """Results appear in start_nodes order regardless of completion order."""
+
         async def delayed(x, delay, tag):
             await asyncio.sleep(delay)
             return tag
@@ -694,6 +723,7 @@ class TestOutputOrdering:
 # Test 3: _EMPTY sentinel filtering  (Req 10.2)
 # ---------------------------------------------------------------------------
 
+
 class TestEmptySentinelFiltering:
     """_EMPTY sentinel slots are filtered from output; loaded/skipped nodes excluded."""
 
@@ -701,7 +731,9 @@ class TestEmptySentinelFiltering:
     async def test_loaded_nodes_excluded_from_output(self):
         """Loaded nodes don't contribute to output (sentinel slot stays _EMPTY, gets filtered)."""
         node_exec = WorkGraphNode(name="exec_node", value=lambda x: x + 1)
-        node_loaded = _LoadableNode(name="loaded_node", value=lambda x: x + 2, loaded_result=999)
+        node_loaded = _LoadableNode(
+            name="loaded_node", value=lambda x: x + 2, loaded_result=999
+        )
 
         graph = WorkGraph(start_nodes=[node_exec, node_loaded])
         result = await graph.arun(10)
@@ -748,6 +780,7 @@ class TestEmptySentinelFiltering:
 # Test 4: Loaded results NOT written to output  (Req 10.2)
 # ---------------------------------------------------------------------------
 
+
 class TestLoadedResultsNotInOutput:
     """Loaded results are NOT written to output, matching sync _run() behavior."""
 
@@ -781,6 +814,7 @@ class TestLoadedResultsNotInOutput:
 # ---------------------------------------------------------------------------
 # Test 5: Queue clearing before execution  (Req 10.6)
 # ---------------------------------------------------------------------------
+
 
 class TestQueueClearingBeforeExecution:
     """_clear_all_node_queues() is called before _arun() execution."""
@@ -828,6 +862,7 @@ class TestQueueClearingBeforeExecution:
 # ---------------------------------------------------------------------------
 # Test 6: OnError per-node save  (Req 11.1)
 # ---------------------------------------------------------------------------
+
 
 class TestOnErrorPerNodeSave:
     """OnError save: each node's result saved to its own path, per-node conditions."""
@@ -971,6 +1006,7 @@ class TestOnErrorPerNodeSave:
 # Test 7: Terminate flag stops subsequent start nodes  (Req 11.3)
 # ---------------------------------------------------------------------------
 
+
 class TestTerminateFlagStopsStartNodes:
     """Terminate flag via asyncio.Event stops subsequent start nodes."""
 
@@ -1023,6 +1059,7 @@ class TestTerminateFlagStopsStartNodes:
 # Test 8: AbstainResult downstream notification and flag reset  (Req 11.4)
 # ---------------------------------------------------------------------------
 
+
 class TestAbstainResultInWorkGraph:
     """AbstainResult downstream notification and flag reset in WorkGraph._arun()."""
 
@@ -1070,6 +1107,7 @@ class TestAbstainResultInWorkGraph:
 # ---------------------------------------------------------------------------
 # Test 9: max_concurrency semaphore limiting  (Req 10.4)
 # ---------------------------------------------------------------------------
+
 
 class TestMaxConcurrencySemaphore:
     """max_concurrency limits concurrent node execution via asyncio.Semaphore."""
@@ -1152,6 +1190,7 @@ class TestMaxConcurrencySemaphore:
 # Test 10: post_process calls _post_process and _optional_post_process
 #           separately via call_maybe_async  (Req 10.2)
 # ---------------------------------------------------------------------------
+
 
 class TestPostProcessSeparateCalls:
     """Post-process hooks are called separately via call_maybe_async, not through chaining post_process()."""

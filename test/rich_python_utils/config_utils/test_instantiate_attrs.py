@@ -4,9 +4,7 @@ import logging
 
 import pytest
 from omegaconf import OmegaConf
-
 from rich_python_utils.config_utils import instantiate, register_alias
-
 from test_helpers import (
     AttrsKwOnly,
     AttrsWithAlias,
@@ -27,7 +25,9 @@ _MOD = "test_helpers"
 
 class TestSimpleAttrs:
     def test_basic(self):
-        cfg = OmegaConf.create({"_target_": f"{_MOD}.SimpleAttrs", "name": "x", "count": 1})
+        cfg = OmegaConf.create(
+            {"_target_": f"{_MOD}.SimpleAttrs", "name": "x", "count": 1}
+        )
         obj = instantiate(cfg)
         assert isinstance(obj, SimpleAttrs)
         assert obj.name == "x" and obj.count == 1
@@ -35,7 +35,9 @@ class TestSimpleAttrs:
 
 class TestKwOnly:
     def test_kw_only_fields(self):
-        cfg = OmegaConf.create({"_target_": f"{_MOD}.AttrsKwOnly", "name": "kw", "value": 42})
+        cfg = OmegaConf.create(
+            {"_target_": f"{_MOD}.AttrsKwOnly", "name": "kw", "value": 42}
+        )
         obj = instantiate(cfg)
         assert obj.name == "kw" and obj.value == 42
 
@@ -43,7 +45,9 @@ class TestKwOnly:
 class TestUnderscoreStripping:
     def test_stripped_name(self):
         # attrs strips leading _ → init param is 'secret'
-        cfg = OmegaConf.create({"_target_": f"{_MOD}.AttrsWithUnderscore", "secret": "s3cr3t"})
+        cfg = OmegaConf.create(
+            {"_target_": f"{_MOD}.AttrsWithUnderscore", "secret": "s3cr3t"}
+        )
         obj = instantiate(cfg)
         assert obj._secret == "s3cr3t"
 
@@ -51,7 +55,9 @@ class TestUnderscoreStripping:
 class TestExplicitAlias:
     def test_alias_as_yaml_key(self):
         # alias='public_name' → YAML key must be 'public_name'
-        cfg = OmegaConf.create({"_target_": f"{_MOD}.AttrsWithAlias", "public_name": "hello"})
+        cfg = OmegaConf.create(
+            {"_target_": f"{_MOD}.AttrsWithAlias", "public_name": "hello"}
+        )
         obj = instantiate(cfg)
         assert obj._internal == "hello"
 
@@ -65,7 +71,9 @@ class TestFactoryDefault:
 
 class TestConverter:
     def test_dict_converter(self):
-        cfg = OmegaConf.create({"_target_": f"{_MOD}.AttrsWithConverter", "data": {"a": 1}})
+        cfg = OmegaConf.create(
+            {"_target_": f"{_MOD}.AttrsWithConverter", "data": {"a": 1}}
+        )
         obj = instantiate(cfg)
         assert obj.data == {"a": 1}
 
@@ -89,11 +97,13 @@ class TestSlots:
 
 class TestInitFalseFiltering:
     def test_init_false_removed_with_warning(self, caplog):
-        cfg = OmegaConf.create({
-            "_target_": f"{_MOD}.AttrsWithInitFalse",
-            "name": "test",
-            "_cache": {"stale": True},  # init=False — should be filtered
-        })
+        cfg = OmegaConf.create(
+            {
+                "_target_": f"{_MOD}.AttrsWithInitFalse",
+                "name": "test",
+                "_cache": {"stale": True},  # init=False — should be filtered
+            }
+        )
         with caplog.at_level(logging.WARNING):
             obj = instantiate(cfg)
         assert isinstance(obj, AttrsWithInitFalse)
@@ -104,18 +114,26 @@ class TestInitFalseFiltering:
 
 class TestPostInit:
     def test_post_init_fires(self):
-        cfg = OmegaConf.create({"_target_": f"{_MOD}.AttrsWithPostInit", "name": "hello"})
+        cfg = OmegaConf.create(
+            {"_target_": f"{_MOD}.AttrsWithPostInit", "name": "hello"}
+        )
         obj = instantiate(cfg)
         assert obj._computed == "computed_hello"
 
 
 class TestNestedAttrsInAttrs:
     def test_recursive(self):
-        cfg = OmegaConf.create({
-            "_target_": f"{_MOD}.ParentAttrs",
-            "child": {"_target_": f"{_MOD}.SimpleAttrs", "name": "inner", "count": 9},
-            "label": "outer",
-        })
+        cfg = OmegaConf.create(
+            {
+                "_target_": f"{_MOD}.ParentAttrs",
+                "child": {
+                    "_target_": f"{_MOD}.SimpleAttrs",
+                    "name": "inner",
+                    "count": 9,
+                },
+                "label": "outer",
+            }
+        )
         obj = instantiate(cfg)
         assert isinstance(obj.child, SimpleAttrs)
         assert obj.child.name == "inner"
@@ -123,11 +141,13 @@ class TestNestedAttrsInAttrs:
 
 class TestMixedAttrsAndDataclass:
     def test_attrs_parent_dataclass_child(self):
-        cfg = OmegaConf.create({
-            "_target_": f"{_MOD}.ParentAttrs",
-            "child": {"_target_": f"{_MOD}.SimpleDataclass", "x": 10, "y": 20},
-            "label": "mixed",
-        })
+        cfg = OmegaConf.create(
+            {
+                "_target_": f"{_MOD}.ParentAttrs",
+                "child": {"_target_": f"{_MOD}.SimpleDataclass", "x": 10, "y": 20},
+                "label": "mixed",
+            }
+        )
         obj = instantiate(cfg)
         assert isinstance(obj.child, SimpleDataclass)
         assert obj.child.x == 10
@@ -135,6 +155,8 @@ class TestMixedAttrsAndDataclass:
 
 class TestCallableFieldDefault:
     def test_omit_callable_uses_default(self):
-        cfg = OmegaConf.create({"_target_": f"{_MOD}.AttrsWithCallable", "name": "test"})
+        cfg = OmegaConf.create(
+            {"_target_": f"{_MOD}.AttrsWithCallable", "name": "test"}
+        )
         obj = instantiate(cfg)
         assert obj.processor is None

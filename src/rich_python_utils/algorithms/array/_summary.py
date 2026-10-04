@@ -1,19 +1,37 @@
-from rich_python_utils.algorithms.array.bidirectional_two_pass import product_except_self, find_equilibrium_indexes
+from rich_python_utils.algorithms.array.bidirectional_two_pass import (
+    find_equilibrium_indexes,
+    product_except_self,
+)
 from rich_python_utils.algorithms.array.binary_search import (
+    binary_post_order_result_compute,
     binary_search,
     binary_search_sorted_array_greater_than_or_equal_to_target,
     binary_search_sorted_array_less_than_or_equal_to_target,
-    binary_post_order_result_compute, find_a_local_maximum,
-    find_a_local_minimum
+    find_a_local_maximum,
+    find_a_local_minimum,
 )
-from rich_python_utils.algorithms.array.intervals import has_overlap, merge_intervals, count_max_overlap
-from rich_python_utils.algorithms.array.paired_elements import make_valid_by_minimum_removal, \
-    make_valid_by_minimum_add
+from rich_python_utils.algorithms.array.intervals import (
+    count_max_overlap,
+    has_overlap,
+    merge_intervals,
+)
+from rich_python_utils.algorithms.array.paired_elements import (
+    make_valid_by_minimum_add,
+    make_valid_by_minimum_removal,
+)
 from rich_python_utils.algorithms.array.streaming import reservoir_sample
-from rich_python_utils.algorithms.array.subarray import max_subarray_sum4, longest_consecutive_increasing, \
-    max_subarray_product
-from rich_python_utils.algorithms.array.time_series import next_larger_in_time_series, find_all_historical_larger, \
-    MovingAverage, find_right_side_max, find_left_side_max
+from rich_python_utils.algorithms.array.subarray import (
+    longest_consecutive_increasing,
+    max_subarray_product,
+    max_subarray_sum4,
+)
+from rich_python_utils.algorithms.array.time_series import (
+    find_all_historical_larger,
+    find_left_side_max,
+    find_right_side_max,
+    MovingAverage,
+    next_larger_in_time_series,
+)
 
 """
 Using stack for pair matching or comparison
@@ -48,7 +66,7 @@ MovingAverage  # use a queue; can take an iterator, so suitable for streaming da
 """
 Time Series Analysis
 """
-longest_consecutive_increasing # simple scan through the sequence
+longest_consecutive_increasing  # simple scan through the sequence
 next_larger_in_time_series  # b > a is a pairwise relation, so we can use stack
 find_right_side_max  # one pass from the right
 find_left_side_max  # one pass from the left
@@ -58,7 +76,7 @@ MovingAverage  # use a queue; can take an iterator, so suitable for streaming da
 """
 Subarray
 """
-max_subarray_product # DP
+max_subarray_product  # DP
 max_subarray_sum4  # Kadane's algorithm; keep sequentially adding values, reset to 0 when negative; keep tracking `max_sum`
 
 

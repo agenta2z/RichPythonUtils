@@ -7,6 +7,7 @@ from typing import Dict
 
 class OperatingSystem(StrEnum):
     """String-based enum representing common operating systems."""
+
     WINDOWS = "windows"
     LINUX = "linux"
     MACOS = "macos"
@@ -16,9 +17,9 @@ class OperatingSystem(StrEnum):
 
 
 def get_current_platform(
-        identify_mobile_operating_system: bool = True,
-        system_str: str = None,
-        platform_str: str = None
+    identify_mobile_operating_system: bool = True,
+    system_str: str = None,
+    platform_str: str = None,
 ) -> OperatingSystem:
     """Detects the current operating system, optionally overriding system/platform strings.
 
@@ -78,8 +79,12 @@ def get_current_platform(
           * 'platform.platform()' might include keywords like 'android', 'iphone', 'ios', etc.
           These checks are not guaranteed for all environments or Python distributions.
     """
-    system_str = (system_str or platform.system()).lower()  # e.g., "windows", "linux", "darwin"
-    platform_str = (platform_str or platform.platform()).lower()  # e.g., "linux-5.4.0-android...", "darwin-20.6.0..."
+    system_str = (
+        system_str or platform.system()
+    ).lower()  # e.g., "windows", "linux", "darwin"
+    platform_str = (
+        platform_str or platform.platform()
+    ).lower()  # e.g., "linux-5.4.0-android...", "darwin-20.6.0..."
 
     if "darwin" in system_str:
         # Normally macOS, unless 'identify_mobile_operating_system' is True

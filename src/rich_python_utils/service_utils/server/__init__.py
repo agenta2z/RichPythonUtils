@@ -1,5 +1,3 @@
-
-
 """Abstract server base for session-aware queue-based services."""
 
 from .base_config import BaseServiceConfig

@@ -14,6 +14,7 @@ producing a saved artifact for it would be noise in the checkpoint dir.
 
 Run: python 03_splice_mode_pure_planner.py
 """
+
 from __future__ import annotations
 
 import os
@@ -26,20 +27,21 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from resolve_path import resolve_path
+
 resolve_path()
 
-from attr import attrs, attrib
-
+from attr import attrib, attrs
 from rich_python_utils.common_objects.workflow import ExpansionResult, StepWrapper
-from rich_python_utils.common_objects.workflow.workflow import Workflow
 from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
     ResultPassDownMode,
 )
+from rich_python_utils.common_objects.workflow.workflow import Workflow
 
 
 # =============================================================
 # CORE CODE
 # =============================================================
+
 
 @attrs(slots=False)
 class ExampleWorkflow(Workflow):
@@ -56,9 +58,9 @@ def worker(original_input):
 def pure_planner(original_input):
     """A splice-mode planner: doesn't compute a usable result, only structure."""
     return ExpansionResult(
-        result=None,                                   # no result — splice mode ignores it
+        result=None,  # no result — splice mode ignores it
         new_steps=[StepWrapper(worker, name="worker")],
-        mode='splice',                                 # ← the key detail
+        mode="splice",  # ← the key detail
     )
 
 
@@ -69,13 +71,14 @@ def build_workflow(save_dir):
         result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
         max_expansion_events=3,
         max_total_steps=20,
-        enable_result_save=True,                       # so we can inspect saved files
+        enable_result_save=True,  # so we can inspect saved files
     )
 
 
 # =============================================================
 # DRIVER
 # =============================================================
+
 
 def main():
     tmp = Path(tempfile.mkdtemp(prefix="example03_"))
@@ -92,6 +95,7 @@ def main():
 # =============================================================
 # NARRATION
 # =============================================================
+
 
 def banner(text):
     print(f"\n{'=' * 60}\n  {text}\n{'=' * 60}")

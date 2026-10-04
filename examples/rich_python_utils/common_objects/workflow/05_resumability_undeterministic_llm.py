@@ -18,6 +18,7 @@ Persistence path:
 
 Run: python 05_resumability_undeterministic_llm.py
 """
+
 from __future__ import annotations
 
 import os
@@ -30,15 +31,15 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from resolve_path import resolve_path
+
 resolve_path()
 
-from attr import attrs, attrib
-
+from attr import attrib, attrs
 from rich_python_utils.common_objects.workflow import ExpansionResult, StepWrapper
-from rich_python_utils.common_objects.workflow.workflow import Workflow
 from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
     ResultPassDownMode,
 )
+from rich_python_utils.common_objects.workflow.workflow import Workflow
 
 
 # =============================================================
@@ -49,18 +50,27 @@ from rich_python_utils.common_objects.workflow.common.result_pass_down_mode impo
 # mock that logs call counts so we can prove it runs exactly once.
 LLM_CALL_COUNT = [0]
 
+
 def mock_llm_breakdown(task):
     """Mock LLM. Returns a different-length list each call if called twice."""
     LLM_CALL_COUNT[0] += 1
     if LLM_CALL_COUNT[0] == 1:
-        return ["summarize", "extract", "verify"]       # "real" answer
-    return ["DIFFERENT", "ANSWER", "ON", "SECOND", "CALL"]  # if re-called, shape diverges!
+        return ["summarize", "extract", "verify"]  # "real" answer
+    return [
+        "DIFFERENT",
+        "ANSWER",
+        "ON",
+        "SECOND",
+        "CALL",
+    ]  # if re-called, shape diverges!
 
 
 def make_worker(topic):
     """Build one worker step for a given topic."""
+
     def worker(prev):
         return f"{prev}|{topic}"
+
     return StepWrapper(worker, name=f"work_{topic}")
 
 
@@ -82,11 +92,11 @@ class ExampleWorkflow(Workflow):
 
 
 def planner(task):
-    topics = mock_llm_breakdown(task)     # non-deterministic call
+    topics = mock_llm_breakdown(task)  # non-deterministic call
     return ExpansionResult(
         result=task,
         new_steps=_seed_factory(topics),
-        seed=topics,                      # ← the frozen non-determinism
+        seed=topics,  # ← the frozen non-determinism
         reconstruct_from_seed=_seed_factory,  # ← how to rebuild from seed
     )
 
@@ -118,6 +128,7 @@ def build_workflow(save_dir, crash_on_step=None):
 # DRIVER
 # =============================================================
 
+
 def main():
     tmp = Path(tempfile.mkdtemp(prefix="example05_"))
     observations = {}
@@ -144,6 +155,7 @@ def main():
 # =============================================================
 # NARRATION
 # =============================================================
+
 
 def banner(text):
     print(f"\n{'=' * 60}\n  {text}\n{'=' * 60}")
@@ -189,7 +201,9 @@ def explain(obs):
     print("  answer and resume used it directly.")
 
     print("\n✓ observed expected behavior:")
-    print(f"  - LLM called exactly {obs['llm_calls_after_run2']} time(s) across Run 1 + Run 2")
+    print(
+        f"  - LLM called exactly {obs['llm_calls_after_run2']} time(s) across Run 1 + Run 2"
+    )
     print("  - resume rebuilt the expanded shape via reconstruct_from_seed(seed)")
     print("  - non-determinism was frozen; result chain intact")
 

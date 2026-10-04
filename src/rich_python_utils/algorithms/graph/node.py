@@ -1,11 +1,9 @@
 from collections import deque
 from io import StringIO
 from queue import Queue
-from typing import List
-from typing import Optional, Any, Callable, Union
+from typing import Any, Callable, List, Optional, Union
 
-from attr import attrs, attrib
-
+from attr import attrib, attrs
 from rich_python_utils.common_utils import make_list
 
 
@@ -29,38 +27,46 @@ class Node:
     """
 
     value: Any = attrib(default=None)
-    next: Union['Node', List['Node'], Callable] = attrib(default=None)
-    previous: Union['Node', List['Node'], Callable] = attrib(default=None)
+    next: Union["Node", List["Node"], Callable] = attrib(default=None)
+    previous: Union["Node", List["Node"], Callable] = attrib(default=None)
 
     # region temporary attributes for init
-    _node_list_factory: Callable[[], List] = attrib(
-        default=list,
-        repr=False,
-        init=True
-    )
+    _node_list_factory: Callable[[], List] = attrib(default=list, repr=False, init=True)
     # endregion
 
     def __attrs_post_init__(self):
         # Call parent __attrs_post_init__ if it exists (for multiple inheritance support)
-        super_post_init = getattr(super(), '__attrs_post_init__', None)
+        super_post_init = getattr(super(), "__attrs_post_init__", None)
         if super_post_init:
             super_post_init()
 
         if isinstance(self.next, Node):
             self.next = make_list(self.next, list_factory=self._node_list_factory)
-        elif not (self.next is None or isinstance(self.next, List) or callable(self.next)):
+        elif not (
+            self.next is None or isinstance(self.next, List) or callable(self.next)
+        ):
             raise ValueError(
-                "`next` must be None, a Node, or a list of Nodes, or a callable that generates next Nodes.")
+                "`next` must be None, a Node, or a list of Nodes, or a callable that generates next Nodes."
+            )
 
         if isinstance(self.previous, Node):
-            self.previous = make_list(self.previous, list_factory=self._node_list_factory)
-        elif not (self.previous is None or isinstance(self.previous, List) or callable(self.previous)):
+            self.previous = make_list(
+                self.previous, list_factory=self._node_list_factory
+            )
+        elif not (
+            self.previous is None
+            or isinstance(self.previous, List)
+            or callable(self.previous)
+        ):
             raise ValueError(
-                "`previous` must be None, a Node, or a list of Nodes, or a callable that generates previous Nodes.")
+                "`previous` must be None, a Node, or a list of Nodes, or a callable that generates previous Nodes."
+            )
 
         self._node_list_factory = None
 
-    def add_next(self, next_value_or_node, node_list_factory: Callable[[], List] = list):
+    def add_next(
+        self, next_value_or_node, node_list_factory: Callable[[], List] = list
+    ):
         """Adds a successor node to this node.
 
         If `next_value_or_node` is not a `Node`, a new `Node` will be created
@@ -143,7 +149,9 @@ class Node:
         """
         pass
 
-    def add_previous(self, previous_value_or_node, node_list_factory: Callable[[], List] = list):
+    def add_previous(
+        self, previous_value_or_node, node_list_factory: Callable[[], List] = list
+    ):
         """Adds a predecessor node to this node.
 
         If `previous_value_or_node` is not a `Node`, a new `Node` will be created
@@ -237,7 +245,9 @@ class Node:
     def get_previous(self):
         return self.previous(self.value) if callable(self.previous) else self.previous
 
-    def bfs(self, target_value, is_equal_value: Callable = None, return_path: bool = False):
+    def bfs(
+        self, target_value, is_equal_value: Callable = None, return_path: bool = False
+    ):
         """
         Performs a breadth-first search (BFS) starting from this node to find a node
         whose value matches `target_value`.
@@ -364,14 +374,14 @@ class Node:
         return str(self.value)
 
     def str_all_descendants(
-            self,
-            level: int = 0,
-            ascii_tree: bool = False,
-            indent: int = 4,
-            horizontal_char: str = '-',
-            vertical_char: str = '|',
-            _output: StringIO = None,
-            _visited: set = None
+        self,
+        level: int = 0,
+        ascii_tree: bool = False,
+        indent: int = 4,
+        horizontal_char: str = "-",
+        vertical_char: str = "|",
+        _output: StringIO = None,
+        _visited: set = None,
     ) -> str:
         """
         Generates a string representation of the current node and all its descendant nodes.
@@ -457,20 +467,25 @@ class Node:
                 # For levels > 0:
                 # We add vertical_char + '   ' for each previous level except the last
                 # and at the end we use vertical_char + horizontal_char*2 + ' '.
-                prefix = ((vertical_char + '   ') * (level - 1)) + vertical_char + horizontal_char * 2 + ' '
+                prefix = (
+                    ((vertical_char + "   ") * (level - 1))
+                    + vertical_char
+                    + horizontal_char * 2
+                    + " "
+                )
         else:
             # Use specified number of spaces per level
-            prefix = ' ' * (indent * level)
+            prefix = " " * (indent * level)
 
         # Check for cycle - if we've already visited this node
         if id(self) in _visited:
-            _output.write(prefix + str(self) + ' [CYCLE]\n')
+            _output.write(prefix + str(self) + " [CYCLE]\n")
             return _output.getvalue()
 
         # Mark this node as visited
         _visited.add(id(self))
 
-        _output.write(prefix + str(self) + '\n')
+        _output.write(prefix + str(self) + "\n")
         children = self.get_next()
         if children:
             for child in children:
@@ -481,19 +496,19 @@ class Node:
                     horizontal_char=horizontal_char,
                     vertical_char=vertical_char,
                     _output=_output,
-                    _visited=_visited
+                    _visited=_visited,
                 )
         return _output.getvalue()
 
     def str_all_ancestors(
-            self,
-            level: int = 0,
-            ascii_tree: bool = False,
-            indent: int = 4,
-            horizontal_char: str = '-',
-            vertical_char: str = '|',
-            _output: StringIO = None,
-            _visited: set = None
+        self,
+        level: int = 0,
+        ascii_tree: bool = False,
+        indent: int = 4,
+        horizontal_char: str = "-",
+        vertical_char: str = "|",
+        _output: StringIO = None,
+        _visited: set = None,
     ) -> str:
         """
         Generates a string representation of the current node and all its ancestor nodes.
@@ -548,21 +563,25 @@ class Node:
 
         # Build the prefix based on the current level and ASCII settings
         if ascii_tree:
-            prefix = ((vertical_char + '   ') * (level - 1)) + (
-                    vertical_char + horizontal_char * 2 + ' ') if level > 0 else ''
+            prefix = (
+                ((vertical_char + "   ") * (level - 1))
+                + (vertical_char + horizontal_char * 2 + " ")
+                if level > 0
+                else ""
+            )
         else:
-            prefix = ' ' * (indent * level)
+            prefix = " " * (indent * level)
 
         # Check for cycle - if we've already visited this node
         if id(self) in _visited:
-            _output.write(prefix + str(self) + ' [CYCLE]\n')
+            _output.write(prefix + str(self) + " [CYCLE]\n")
             return _output.getvalue()
 
         # Mark this node as visited
         _visited.add(id(self))
 
         # Write the current node's value
-        _output.write(prefix + str(self) + '\n')
+        _output.write(prefix + str(self) + "\n")
 
         # Recursively process parent nodes
         parents = self.get_previous()
@@ -575,7 +594,7 @@ class Node:
                     horizontal_char=horizontal_char,
                     vertical_char=vertical_char,
                     _output=_output,
-                    _visited=_visited
+                    _visited=_visited,
                 )
 
         # Return the accumulated string
@@ -583,11 +602,11 @@ class Node:
 
 
 def str_all_descendants_of_nodes(
-        nodes: List['Node'],
-        ascii_tree: bool = False,
-        indent: int = 4,
-        horizontal_char: str = '-',
-        vertical_char: str = '|'
+    nodes: List["Node"],
+    ascii_tree: bool = False,
+    indent: int = 4,
+    horizontal_char: str = "-",
+    vertical_char: str = "|",
 ) -> str:
     """
     Generates a combined string representation of all descendants for multiple nodes.
@@ -627,18 +646,18 @@ def str_all_descendants_of_nodes(
             indent=indent,
             horizontal_char=horizontal_char,
             vertical_char=vertical_char,
-            _output=output
+            _output=output,
         )
-        output.write('\n')  # Add a blank line between outputs for readability
+        output.write("\n")  # Add a blank line between outputs for readability
     return output.getvalue().strip()
 
 
 def str_all_ancestors_of_nodes(
-        nodes: List['Node'],
-        ascii_tree: bool = False,
-        indent: int = 4,
-        horizontal_char: str = '-',
-        vertical_char: str = '|'
+    nodes: List["Node"],
+    ascii_tree: bool = False,
+    indent: int = 4,
+    horizontal_char: str = "-",
+    vertical_char: str = "|",
 ) -> str:
     """
     Generates a combined string representation of all ancestors for multiple nodes.
@@ -677,7 +696,7 @@ def str_all_ancestors_of_nodes(
             indent=indent,
             horizontal_char=horizontal_char,
             vertical_char=vertical_char,
-            _output=output
+            _output=output,
         )
-        output.write('\n')  # Add a blank line between outputs for readability
+        output.write("\n")  # Add a blank line between outputs for readability
     return output.getvalue().strip()

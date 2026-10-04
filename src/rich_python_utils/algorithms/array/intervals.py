@@ -1,7 +1,7 @@
-from typing import Sequence, Tuple, TypeVar, List
 import heapq
+from typing import List, Sequence, Tuple, TypeVar
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 def has_overlap(intervals: Sequence[Tuple[T, T]]):

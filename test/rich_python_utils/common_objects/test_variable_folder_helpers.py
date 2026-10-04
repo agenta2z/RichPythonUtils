@@ -7,7 +7,6 @@ introduced as part of Refactor 12 (variable resolver fix).
 from pathlib import Path
 
 import pytest
-
 from rich_python_utils.common_objects.variable_manager import (
     FileBasedVariableManager,
     VariableManagerConfig,
@@ -64,9 +63,7 @@ class TestReadVariableFolderConfig:
         folder = tmp_path / "task_preamble"
         folder.mkdir()
         # Valid YAML but a list, not a dict
-        (folder / ".config.yaml").write_text(
-            "- item1\n- item2\n", encoding="utf-8"
-        )
+        (folder / ".config.yaml").write_text("- item1\n- item2\n", encoding="utf-8")
 
         assert manager._read_variable_folder_config(folder) == {}
 
@@ -124,9 +121,7 @@ class TestFindInVariableFolder:
         folder = tmp_path / "task_preamble"
         folder.mkdir()
         (folder / "agg_v2.j2").write_text("aliased content", encoding="utf-8")
-        (folder / ".config.yaml").write_text(
-            "aggregation: agg_v2\n", encoding="utf-8"
-        )
+        (folder / ".config.yaml").write_text("aggregation: agg_v2\n", encoding="utf-8")
         # Note: aggregation.j2 does NOT exist directly
 
         result = manager._find_in_variable_folder(folder, "aggregation")
@@ -137,13 +132,9 @@ class TestFindInVariableFolder:
         folder = tmp_path / "task_preamble"
         folder.mkdir()
         # Both direct file and alias exist
-        (folder / "aggregation.j2").write_text(
-            "direct content", encoding="utf-8"
-        )
+        (folder / "aggregation.j2").write_text("direct content", encoding="utf-8")
         (folder / "agg_v2.j2").write_text("alias content", encoding="utf-8")
-        (folder / ".config.yaml").write_text(
-            "aggregation: agg_v2\n", encoding="utf-8"
-        )
+        (folder / ".config.yaml").write_text("aggregation: agg_v2\n", encoding="utf-8")
 
         result = manager._find_in_variable_folder(folder, "aggregation")
         assert result is not None
@@ -180,16 +171,12 @@ class TestFindInVariableFolder:
         folder = tmp_path / "task_preamble"
         folder.mkdir()
         # Both override and direct exist
-        (folder / "aggregation.j2").write_text(
-            "regular content", encoding="utf-8"
-        )
+        (folder / "aggregation.j2").write_text("regular content", encoding="utf-8")
         (folder / "aggregation.override.j2").write_text(
             "override content", encoding="utf-8"
         )
 
-        result = manager_with_overrides._find_in_variable_folder(
-            folder, "aggregation"
-        )
+        result = manager_with_overrides._find_in_variable_folder(folder, "aggregation")
         assert result is not None
         assert result.name == "aggregation.override.j2"
 
@@ -197,9 +184,7 @@ class TestFindInVariableFolder:
         # Default manager has enable_overrides=False
         folder = tmp_path / "task_preamble"
         folder.mkdir()
-        (folder / "aggregation.j2").write_text(
-            "regular content", encoding="utf-8"
-        )
+        (folder / "aggregation.j2").write_text("regular content", encoding="utf-8")
         (folder / "aggregation.override.j2").write_text(
             "override content", encoding="utf-8"
         )
@@ -212,9 +197,7 @@ class TestFindInVariableFolder:
     def test_config_yaml_malformed_silent_skip(self, manager, tmp_path):
         folder = tmp_path / "task_preamble"
         folder.mkdir()
-        (folder / ".config.yaml").write_text(
-            "broken: yaml: : :", encoding="utf-8"
-        )
+        (folder / ".config.yaml").write_text("broken: yaml: : :", encoding="utf-8")
         # No direct file either
 
         # Should return None silently (no exception)

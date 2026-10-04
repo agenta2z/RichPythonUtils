@@ -25,6 +25,7 @@ class WorkflowAborted(Exception):
 
 class ExpansionError(Exception):
     """Base exception for all expansion-related errors."""
+
     pass
 
 
@@ -36,6 +37,7 @@ class ExpansionConfigError(ExpansionError):
     - Non-importable reconstruct_from_seed (lambda/closure) (Req 25.4)
     - worker_manages_resume + GraphExpansionResult (Req 30)
     """
+
     pass
 
 
@@ -46,6 +48,7 @@ class ExpansionReplayError(ExpansionError):
     - Factory cannot be imported by qualified name (Req 25.5)
     - Seed cannot be deserialized (Req 25.5)
     """
+
     pass
 
 
@@ -57,4 +60,5 @@ class ExpansionLimitExceeded(ExpansionError):
     - max_total_steps exceeded (Req 6.4)
     - max_total_nodes exceeded (Req 16.4)
     """
+
     pass

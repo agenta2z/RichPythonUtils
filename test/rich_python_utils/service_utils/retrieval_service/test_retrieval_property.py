@@ -15,25 +15,22 @@ will add file and sqlite_fts5).
 import uuid
 
 import pytest
-from hypothesis import given, settings, assume, HealthCheck
-from hypothesis import strategies as st
-
+from conftest import (
+    _content_strategy,
+    _doc_id_strategy,
+    _list_value_strategy,
+    _SAFE_CHARS,
+    _scalar_value_strategy,
+    document_strategy,
+    metadata_strategy,
+)
+from hypothesis import assume, given, HealthCheck, settings, strategies as st
 from rich_python_utils.service_utils.retrieval_service.document import Document
 from rich_python_utils.service_utils.retrieval_service.filter_utils import (
     matches_filters,
 )
 from rich_python_utils.service_utils.retrieval_service.memory_retrieval_service import (
     MemoryRetrievalService,
-)
-
-from conftest import (
-    document_strategy,
-    metadata_strategy,
-    _scalar_value_strategy,
-    _list_value_strategy,
-    _doc_id_strategy,
-    _content_strategy,
-    _SAFE_CHARS,
 )
 
 
@@ -152,7 +149,9 @@ class TestFilterMatchingCorrectness:
         extra_item=st.text(min_size=1, max_size=10, alphabet=_SAFE_CHARS),
     )
     @settings(max_examples=100)
-    def test_list_containment_fails_when_item_missing(self, key, metadata_list, extra_item):
+    def test_list_containment_fails_when_item_missing(
+        self, key, metadata_list, extra_item
+    ):
         """A list filter with an item not in the metadata list should not match.
 
         **Validates: Requirements 4.3, 15.3**
@@ -230,7 +229,7 @@ class TestSearchResultsOrderingAndScoreBounds:
         for i in range(len(scores) - 1):
             assert scores[i] >= scores[i + 1], (
                 f"Results not ordered by descending score: "
-                f"score[{i}]={scores[i]} < score[{i+1}]={scores[i+1]}"
+                f"score[{i}]={scores[i]} < score[{i + 1}]={scores[i + 1]}"
             )
 
 

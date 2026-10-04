@@ -1,4 +1,4 @@
-from typing import Union, Callable, Iterable, Any, Optional
+from typing import Any, Callable, Iterable, Optional, Union
 
 
 def tokenize(s: str, tokenizer: Union[None, str, Callable, Any]) -> Iterable[str]:
@@ -36,7 +36,7 @@ def tokenize(s: str, tokenizer: Union[None, str, Callable, Any]) -> Iterable[str
         return s.split()
     elif isinstance(tokenizer, str):
         return s.split(tokenizer)
-    elif hasattr(tokenizer, 'split') and callable(tokenizer.split):
+    elif hasattr(tokenizer, "split") and callable(tokenizer.split):
         return tokenizer.split(s)
     elif callable(tokenizer):
         return tokenizer(s)
@@ -45,9 +45,7 @@ def tokenize(s: str, tokenizer: Union[None, str, Callable, Any]) -> Iterable[str
 
 
 def num_overlap_tokens(
-        str1: str,
-        str2: str,
-        tokenizer: Optional[Union[str, Callable]] = None
+    str1: str, str2: str, tokenizer: Optional[Union[str, Callable]] = None
 ) -> int:
     """
     Returns the number of overlapping tokens between two strings.

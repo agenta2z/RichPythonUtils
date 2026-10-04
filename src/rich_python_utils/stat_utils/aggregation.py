@@ -3,69 +3,92 @@ from copy import copy
 from functools import partial
 from itertools import chain
 from statistics import mean
-from typing import Mapping, Iterable, Tuple, Sequence, Set
-from typing import Union, Callable, List, Dict, Any
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+)
 
 import numpy as np
 import pandas as pd
 from attr import attrib, attrs
-
-from rich_python_utils.common_utils import all_str, binary_min, binary_max
-from rich_python_utils.common_utils.iter_helper import concat, len_, zip__, product__, iter_, first
-from rich_python_utils.common_utils.map_helper import MAPPING_KEY_OR_CONVERSION, convert_map, explode_map_as_tuples, merge_list_valued_mappings, merge_mappings, get_
+from rich_python_utils.common_utils import all_str, binary_max, binary_min
+from rich_python_utils.common_utils.iter_helper import (
+    concat,
+    first,
+    iter_,
+    len_,
+    product__,
+    zip__,
+)
+from rich_python_utils.common_utils.map_helper import (
+    convert_map,
+    explode_map_as_tuples,
+    get_,
+    MAPPING_KEY_OR_CONVERSION,
+    merge_list_valued_mappings,
+    merge_mappings,
+)
 
 
 def agg_values_(*values, agg_method=mean, non_atom_types=(List, Tuple, Set)):
     """
-     Aggregates values using a specified aggregation method. If the input is a single mapping,
-     it recursively applies the aggregation method to the values. If the input is a collection
-     of iterables, it applies the aggregation method to each iterable.
+    Aggregates values using a specified aggregation method. If the input is a single mapping,
+    it recursively applies the aggregation method to the values. If the input is a collection
+    of iterables, it applies the aggregation method to each iterable.
 
-     Args:
-         *values: Variable length argument list of values to be aggregated.
-         agg_method (Callable, optional): The method to use for aggregation. Defaults to mean.
-         non_atom_types (tuple, optional): A tuple of types that are considered non-atomic (iterables). Defaults to (List, Tuple, Set).
+    Args:
+        *values: Variable length argument list of values to be aggregated.
+        agg_method (Callable, optional): The method to use for aggregation. Defaults to mean.
+        non_atom_types (tuple, optional): A tuple of types that are considered non-atomic (iterables). Defaults to (List, Tuple, Set).
 
-     Returns:
-         The aggregated value, or a mapping with aggregated values for each key if the input is a mapping.
+    Returns:
+        The aggregated value, or a mapping with aggregated values for each key if the input is a mapping.
 
-     Examples:
-         >>> agg_values_([3, 5])
-         4
-         >>> agg_values_({'a': {'x': [1, 2], 'y': [3, 4]}, 'b': [5, 6]})
-         {'a': {'x': 1.5, 'y': 3.5}, 'b': 5.5}
-         >>> agg_values_({'a': [1, 2, 3], 'b': [4, 5, 6]}, agg_method=max)
-         {'a': 3, 'b': 6}
-         >>> agg_values_({'a': [[1, 2, 3], [4, 5, 6]], 'b': [4, 5, 6]}, agg_method=concat)
-         {'a': [1, 2, 3, 4, 5, 6], 'b': [4, 5, 6]}
-         >>> agg_values_(
-         ...     {'a': [1, 2], 'b': [3]},
-         ...     {'a': [3, 4], 'b': [4, 5], 'c': [6]},
-         ...     {'a': [5], 'c': [7, 8]}
-         ... )
-         {'a': 3, 'b': 4, 'c': 7}
-         >>> agg_values_(
-         ...     {'a': [1, 2, 3], 'b': [4]},
-         ...     {'a': [4, 5], 'b': [5, 6], 'c': [6, 7]},
-         ...     {'a': [6], 'c': [8, 9]},
-         ...     agg_method=sum
-         ... )
-         {'a': 21, 'b': 15, 'c': 30}
-         >>> agg_values_(
-         ...     {'a': [1, 2], 'b': [3]},
-         ...     {'a': [3, 4], 'b': [4, 5], 'c': [6]},
-         ...     {'a': [5], 'c': [7, 8]},
-         ...     agg_method=max
-         ... )
-         {'a': 5, 'b': 5, 'c': 8}
-         >>> agg_values_(
-         ...     {'a': [[1, 2], [3, 4]], 'b': [5]},
-         ...     {'a': [[5, 6]], 'b': [6, 7]},
-         ...     {'a': [[7, 8]], 'c': [8, 9]},
-         ...     agg_method=concat
-         ... )
-         {'a': [1, 2, 3, 4, 5, 6, 7, 8], 'b': [5, 6, 7], 'c': [8, 9]}
-     """
+    Examples:
+        >>> agg_values_([3, 5])
+        4
+        >>> agg_values_({'a': {'x': [1, 2], 'y': [3, 4]}, 'b': [5, 6]})
+        {'a': {'x': 1.5, 'y': 3.5}, 'b': 5.5}
+        >>> agg_values_({'a': [1, 2, 3], 'b': [4, 5, 6]}, agg_method=max)
+        {'a': 3, 'b': 6}
+        >>> agg_values_({'a': [[1, 2, 3], [4, 5, 6]], 'b': [4, 5, 6]}, agg_method=concat)
+        {'a': [1, 2, 3, 4, 5, 6], 'b': [4, 5, 6]}
+        >>> agg_values_(
+        ...     {'a': [1, 2], 'b': [3]},
+        ...     {'a': [3, 4], 'b': [4, 5], 'c': [6]},
+        ...     {'a': [5], 'c': [7, 8]}
+        ... )
+        {'a': 3, 'b': 4, 'c': 7}
+        >>> agg_values_(
+        ...     {'a': [1, 2, 3], 'b': [4]},
+        ...     {'a': [4, 5], 'b': [5, 6], 'c': [6, 7]},
+        ...     {'a': [6], 'c': [8, 9]},
+        ...     agg_method=sum
+        ... )
+        {'a': 21, 'b': 15, 'c': 30}
+        >>> agg_values_(
+        ...     {'a': [1, 2], 'b': [3]},
+        ...     {'a': [3, 4], 'b': [4, 5], 'c': [6]},
+        ...     {'a': [5], 'c': [7, 8]},
+        ...     agg_method=max
+        ... )
+        {'a': 5, 'b': 5, 'c': 8}
+        >>> agg_values_(
+        ...     {'a': [[1, 2], [3, 4]], 'b': [5]},
+        ...     {'a': [[5, 6]], 'b': [6, 7]},
+        ...     {'a': [[7, 8]], 'c': [8, 9]},
+        ...     agg_method=concat
+        ... )
+        {'a': [1, 2, 3, 4, 5, 6, 7, 8], 'b': [5, 6, 7], 'c': [8, 9]}
+    """
     if len(values) == 1:
         values = values[0]
 
@@ -73,13 +96,16 @@ def agg_values_(*values, agg_method=mean, non_atom_types=(List, Tuple, Set)):
         if not values:
             return []
         elif isinstance(values[0], Mapping):
-            values: Mapping = merge_list_valued_mappings(values, non_atom_types=non_atom_types)
+            values: Mapping = merge_list_valued_mappings(
+                values, non_atom_types=non_atom_types
+            )
 
     if isinstance(values, Mapping):
         return {
             k: (
                 agg_values_(v, agg_method=agg_method, non_atom_types=non_atom_types)
-                if isinstance(v, Mapping) or (non_atom_types and isinstance(v, non_atom_types))
+                if isinstance(v, Mapping)
+                or (non_atom_types and isinstance(v, non_atom_types))
                 else v
             )
             for k, v in values.items()
@@ -101,40 +127,37 @@ bmin_ = partial(agg_values_, agg_method=binary_max)
 concat_ = partial(agg_values_, agg_method=concat)
 
 PREDEFINED_AGG_METHODS = {
-    'size': len,
-    'count': count_,
-    'sum': sum_,
-    'mean': mean_,
-    'min': min_,
-    'max': max_,
-    'first': first,
-    'bmin': bmin_,
-    'bmax': bmax_,
-    'concat': concat_,
-    'group': list
+    "size": len,
+    "count": count_,
+    "sum": sum_,
+    "mean": mean_,
+    "min": min_,
+    "max": max_,
+    "first": first,
+    "bmin": bmin_,
+    "bmax": bmax_,
+    "concat": concat_,
+    "group": list,
 }
 
-PREDEFINED_EXPLOSION_METHODS = {
-    'zip': zip__,
-    'product': product__
-}
+PREDEFINED_EXPLOSION_METHODS = {"zip": zip__, "product": product__}
 
 
 @attrs(slots=True)
 class Aggregation:
     target: MAPPING_KEY_OR_CONVERSION = attrib()
-    agg: MAPPING_KEY_OR_CONVERSION = attrib(default='mean')
+    agg: MAPPING_KEY_OR_CONVERSION = attrib(default="mean")
     groupby: MAPPING_KEY_OR_CONVERSION = attrib(default=None)
-    explode_group: Union[bool, str, Callable[..., Tuple]] = attrib(default='product')
+    explode_group: Union[bool, str, Callable[..., Tuple]] = attrib(default="product")
 
 
 def aggregate(
-        df: Iterable[Mapping],
-        aggregations: Sequence[Aggregation],
-        agg_aliases: Mapping[str, Callable] = PREDEFINED_AGG_METHODS,
-        explosion_alias: Mapping[str, Callable] = PREDEFINED_EXPLOSION_METHODS,
-        always_add_agg_alias_to_agg_results: bool = False,
-        unpack_single_aggregation_result: bool = True
+    df: Iterable[Mapping],
+    aggregations: Sequence[Aggregation],
+    agg_aliases: Mapping[str, Callable] = PREDEFINED_AGG_METHODS,
+    explosion_alias: Mapping[str, Callable] = PREDEFINED_EXPLOSION_METHODS,
+    always_add_agg_alias_to_agg_results: bool = False,
+    unpack_single_aggregation_result: bool = True,
 ) -> Union[List[Mapping], List[List[Mapping]]]:
     """
     Performs aggregation operations on a dataset based on specified aggregation rules.
@@ -311,8 +334,7 @@ def aggregate(
     # region helping functions
     def _is_single_agg(agg):
         return not (
-                isinstance(agg, List)
-                and any(isinstance(_agg, List) for _agg in agg)
+            isinstance(agg, List) and any(isinstance(_agg, List) for _agg in agg)
         )
 
     def _resolve_agg(agg):
@@ -324,34 +346,46 @@ def aggregate(
                         if _agg in agg_aliases:
                             yield agg_aliases[_agg]
                         else:
-                            raise ValueError(f"'{_agg}' is not a recognized aggregation alias")
+                            raise ValueError(
+                                f"'{_agg}' is not a recognized aggregation alias"
+                            )
                     elif callable(_agg):
                         yield partial(agg_values_, agg_method=_agg)
                     else:
-                        raise ValueError(f"'{_agg}' must be an aggregation alias or a callable")
+                        raise ValueError(
+                            f"'{_agg}' must be an aggregation alias or a callable"
+                        )
             else:
                 if isinstance(agg, str):
-                    _agg = agg[1:] if agg[0] == '.' else agg
+                    _agg = agg[1:] if agg[0] == "." else agg
                     if _agg in agg_aliases:
                         agg_alias_in_use.append(agg)
                         yield agg_aliases[_agg]
                     else:
-                        raise ValueError(f"'{agg}' is not a recognized aggregation alias")
+                        raise ValueError(
+                            f"'{agg}' is not a recognized aggregation alias"
+                        )
                 elif callable(agg):
                     agg_alias_in_use.append(str(agg))
                     yield partial(agg_values_, agg_method=agg)
                 else:
-                    raise ValueError(f"'{agg}' must be an aggregation alias or a callable")
+                    raise ValueError(
+                        f"'{agg}' must be an aggregation alias or a callable"
+                    )
         else:
             if isinstance(agg, Mapping):
                 for _agg_alias, _agg in agg.items():
                     if isinstance(_agg, str):
-                        raise ValueError(f"'{_agg}' is not a recognized aggregation alias")
+                        raise ValueError(
+                            f"'{_agg}' is not a recognized aggregation alias"
+                        )
                     elif callable(_agg):
                         agg_alias_in_use.append(_agg_alias)
                         yield partial(agg_values_, agg_method=_agg)
                     else:
-                        raise ValueError(f"'{_agg}' must be an aggregation alias or a callable")
+                        raise ValueError(
+                            f"'{_agg}' must be an aggregation alias or a callable"
+                        )
             else:
                 if isinstance(agg, str):
                     raise ValueError(f"'{agg}' is not a recognized aggregation alias")
@@ -359,7 +393,9 @@ def aggregate(
                     agg_alias_in_use.append(str(agg))
                     yield partial(agg_values_, agg_method=agg)
                 else:
-                    raise ValueError(f"'{agg}' must be an aggregation alias or a callable")
+                    raise ValueError(
+                        f"'{agg}' must be an aggregation alias or a callable"
+                    )
 
     def _resolve_target(target):
         if not isinstance(target, List) or all_str(target):
@@ -370,27 +406,34 @@ def aggregate(
         if explode is not False:
             if explode is True:
                 return partial(explode_map_as_tuples, explosion_method=zip__)
-            elif explosion_alias and isinstance(explode, str) and explode in explosion_alias:
-                return partial(explode_map_as_tuples, explosion_method=explosion_alias[explode])
+            elif (
+                explosion_alias
+                and isinstance(explode, str)
+                and explode in explosion_alias
+            ):
+                return partial(
+                    explode_map_as_tuples, explosion_method=explosion_alias[explode]
+                )
             else:
                 return partial(explode_map_as_tuples, explosion_method=explode)
 
     def _resolve_agg_result(agg_index, sub_agg_index, agg_method_index, agg_result):
-        agg_alias = agg_alias_in_use_all_aggregations[agg_index][sub_agg_index][agg_method_index]
+        agg_alias = agg_alias_in_use_all_aggregations[agg_index][sub_agg_index][
+            agg_method_index
+        ]
 
-        if agg_alias[0] == '.':
+        if agg_alias[0] == ".":
             add_agg_alias_to_agg_results = True
             agg_alias = agg_alias[1:]
         else:
             add_agg_alias_to_agg_results = False
-        add_agg_alias_to_agg_results = always_add_agg_alias_to_agg_results or add_agg_alias_to_agg_results
+        add_agg_alias_to_agg_results = (
+            always_add_agg_alias_to_agg_results or add_agg_alias_to_agg_results
+        )
 
         if isinstance(agg_result, Mapping):
             if add_agg_alias_to_agg_results:
-                return {
-                    f'{k}.{agg_alias}': v
-                    for k, v in agg_result.items()
-                }
+                return {f"{k}.{agg_alias}": v for k, v in agg_result.items()}
             else:
                 return agg_result
         else:
@@ -409,14 +452,18 @@ def aggregate(
 
         if _is_single_agg(aggregation_agg):
             agg_alias_in_use = []
-            aggregation.agg = [list(chain(*(_resolve_agg(agg) for agg in iter_(aggregation_agg))))]
+            aggregation.agg = [
+                list(chain(*(_resolve_agg(agg) for agg in iter_(aggregation_agg))))
+            ]
             agg_alias_in_use_all_aggregations.append([agg_alias_in_use])
         else:
             aggregation.agg = []
             agg_alias_in_use_all_aggregations.append([])
             for _aggregation_agg in aggregation_agg:
                 agg_alias_in_use = []
-                aggregation.agg.append(list(chain(*(_resolve_agg(agg) for agg in iter_(_aggregation_agg)))))
+                aggregation.agg.append(
+                    list(chain(*(_resolve_agg(agg) for agg in iter_(_aggregation_agg))))
+                )
                 agg_alias_in_use_all_aggregations[-1].append(agg_alias_in_use)
 
         aggregation.explode_group = _resolve_explode(aggregation.explode_group)
@@ -432,7 +479,8 @@ def aggregate(
         for groups, aggregation in zip(groups_per_aggregation, processed_aggregations):
             aggregation_target = _resolve_target(aggregation.target)
             aggregation_target_values: List[Mapping] = [
-                convert_map(item, target, _index=_index) for target in aggregation_target
+                convert_map(item, target, _index=_index)
+                for target in aggregation_target
             ]
             if aggregation.groupby is None:
                 groups.append(aggregation_target_values)
@@ -445,7 +493,9 @@ def aggregate(
                 else:
                     groups[tuple(group_keys.items())].append(aggregation_target_values)
 
-    for i, (groups, aggregation) in enumerate(zip(groups_per_aggregation, processed_aggregations)):
+    for i, (groups, aggregation) in enumerate(
+        zip(groups_per_aggregation, processed_aggregations)
+    ):
         if aggregation.groupby is None:
             groups_per_aggregation[i] = list(zip(*groups))
         else:
@@ -457,23 +507,38 @@ def aggregate(
     # region STEP3: compute aggregations
 
     out_aggs = []
-    for aggregation_index, (groups, aggregation) in enumerate(zip(groups_per_aggregation, processed_aggregations)):
+    for aggregation_index, (groups, aggregation) in enumerate(
+        zip(groups_per_aggregation, processed_aggregations)
+    ):
         agg = []
         if isinstance(groups, Mapping):
             for group_key, group in groups.items():
-                agg.append(merge_mappings(
-                    (
-                        dict(group_key),
-                        *chain(
-                            *(
-                                [
-                                    _resolve_agg_result(aggregation_index, sub_aggregation_index, individual_agg_method_index, agg_method(_group))
-                                    for individual_agg_method_index, agg_method in enumerate(_agg)
-                                ] for sub_aggregation_index, (_group, _agg) in enumerate(zip(group, aggregation.agg))
-                            )
+                agg.append(
+                    merge_mappings(
+                        (
+                            dict(group_key),
+                            *chain(
+                                *(
+                                    [
+                                        _resolve_agg_result(
+                                            aggregation_index,
+                                            sub_aggregation_index,
+                                            individual_agg_method_index,
+                                            agg_method(_group),
+                                        )
+                                        for individual_agg_method_index, agg_method in enumerate(
+                                            _agg
+                                        )
+                                    ]
+                                    for sub_aggregation_index, (
+                                        _group,
+                                        _agg,
+                                    ) in enumerate(zip(group, aggregation.agg))
+                                )
+                            ),
                         )
                     )
-                ))
+                )
         else:
             single_group = groups
             agg.append(
@@ -481,10 +546,19 @@ def aggregate(
                     chain(
                         *(
                             [
-                                _resolve_agg_result(aggregation_index, sub_aggregation_index, individual_agg_method_index, agg_method(_group))
-                                for individual_agg_method_index, agg_method in enumerate(_agg)
+                                _resolve_agg_result(
+                                    aggregation_index,
+                                    sub_aggregation_index,
+                                    individual_agg_method_index,
+                                    agg_method(_group),
+                                )
+                                for individual_agg_method_index, agg_method in enumerate(
+                                    _agg
+                                )
                             ]
-                            for sub_aggregation_index, (_group, _agg) in enumerate(zip(single_group, aggregation.agg))
+                            for sub_aggregation_index, (_group, _agg) in enumerate(
+                                zip(single_group, aggregation.agg)
+                            )
                         )
                     )
                 )
@@ -500,12 +574,12 @@ def aggregate(
 
 
 def construct_confusion_examples(
-        data: List[Dict[str, Any]],
-        reference_key: Union[str, Callable] = 'reference',
-        prediction_key: Union[str, Callable] = 'prediction',
-        data_key: Union[str, Callable] = 'data',
-        confusion_format: str = '{reference}-{prediction}',
-        non_atom_types: tuple = (list,)
+    data: List[Dict[str, Any]],
+    reference_key: Union[str, Callable] = "reference",
+    prediction_key: Union[str, Callable] = "prediction",
+    data_key: Union[str, Callable] = "data",
+    confusion_format: str = "{reference}-{prediction}",
+    non_atom_types: tuple = (list,),
 ) -> Dict[str, List[Any]]:
     """
     Constructs a dictionary of confusion examples from a list of dictionaries containing predictions, references,
@@ -580,7 +654,9 @@ def construct_confusion_examples(
         data_value = get_(entry, data_key)
 
         # Construct the confusion pair using the specified format
-        confusion_pair = confusion_format.format(reference=reference, prediction=prediction)
+        confusion_pair = confusion_format.format(
+            reference=reference, prediction=prediction
+        )
 
         # Append the data to the corresponding confusion pair
         if isinstance(data_value, non_atom_types):
@@ -592,14 +668,14 @@ def construct_confusion_examples(
 
 
 def pd_construct_confusion_matrix(
-        data: List[Dict[str, Any]],
-        reference_key: Union[str, Callable] = 'reference',
-        prediction_key: Union[str, Callable] = 'prediction',
-        count_key: Union[str, Callable] = 'count',
-        add_totals: bool = True,
-        add_precision: bool = True,
-        add_recall: bool = True,
-        sort_key: Callable[[Any], Any] = None
+    data: List[Dict[str, Any]],
+    reference_key: Union[str, Callable] = "reference",
+    prediction_key: Union[str, Callable] = "prediction",
+    count_key: Union[str, Callable] = "count",
+    add_totals: bool = True,
+    add_precision: bool = True,
+    add_recall: bool = True,
+    sort_key: Callable[[Any], Any] = None,
 ) -> pd.DataFrame:
     """
     Constructs a confusion matrix from a list of dictionaries containing predictions, references, and counts.
@@ -697,26 +773,38 @@ def pd_construct_confusion_matrix(
 
     if add_totals:
         # Add a 'Total' row and column
-        df['Total'] = df.sum(axis=1)
+        df["Total"] = df.sum(axis=1)
         total_row = pd.DataFrame(df.sum(axis=0)).T
-        total_row.index = ['Total']
+        total_row.index = ["Total"]
         df = pd.concat([df, total_row])
 
     if add_recall:
         # Add a 'Recall' column
-        df['Recall'] = df.apply(lambda row: row[row.name] / row['Total'] if row['Total'] != 0 else np.nan, axis=1)
+        df["Recall"] = df.apply(
+            lambda row: row[row.name] / row["Total"] if row["Total"] != 0 else np.nan,
+            axis=1,
+        )
 
     if add_precision:
         # Add a 'Precision' row
-        precision_values = df.apply(lambda col: col[col.name] / col['Total'] if col.name in labels and col['Total'] != 0 else np.nan, axis=0)
+        precision_values = df.apply(
+            lambda col: col[col.name] / col["Total"]
+            if col.name in labels and col["Total"] != 0
+            else np.nan,
+            axis=0,
+        )
         precision_row = pd.DataFrame(precision_values).T
-        precision_row.index = ['Precision']
+        precision_row.index = ["Precision"]
         df = pd.concat([df, precision_row])
 
     return df
 
 
-def pd_get_top_k_confusions(confusion_matrix: pd.DataFrame, k: int = 5, exclude: Sequence[str] = ("Total", "Recall", "Precision")):
+def pd_get_top_k_confusions(
+    confusion_matrix: pd.DataFrame,
+    k: int = 5,
+    exclude: Sequence[str] = ("Total", "Recall", "Precision"),
+):
     """
     Identifies the top k confusions for each ground truth class from a confusion matrix.
 
@@ -761,7 +849,7 @@ def pd_get_top_k_confusions(confusion_matrix: pd.DataFrame, k: int = 5, exclude:
     # Remove any statistics rows and columns based on the exclude parameter
     exclude = list(set(exclude))
     if exclude:
-        confusion_data = confusion_matrix.drop(columns=exclude, errors='ignore')
+        confusion_data = confusion_matrix.drop(columns=exclude, errors="ignore")
         confusion_data = confusion_data.loc[~confusion_data.index.isin(exclude)]
     else:
         confusion_data = confusion_matrix
@@ -771,7 +859,7 @@ def pd_get_top_k_confusions(confusion_matrix: pd.DataFrame, k: int = 5, exclude:
     for groundtruth_class, row in confusion_data.iterrows():
         # Exclude the diagonal (true positives) by setting the corresponding value to NaN
         row_without_diag = row.copy()
-        row_without_diag[groundtruth_class] = float('nan')
+        row_without_diag[groundtruth_class] = float("nan")
 
         # Sort the row by the number of confusions in descending order and select the top k
         top_k_confusions = row_without_diag.sort_values(ascending=False).head(k)
@@ -791,6 +879,6 @@ def pd_get_top_k_confusions(confusion_matrix: pd.DataFrame, k: int = 5, exclude:
         results.append(csv_row)
 
     # Convert the results to a DataFrame and return
-    columns = ['Ground Truth'] + [f'Confusion {i + 1}' for i in range(k)]
+    columns = ["Ground Truth"] + [f"Confusion {i + 1}" for i in range(k)]
     results_df = pd.DataFrame(results, columns=columns)
     return results_df

@@ -8,8 +8,7 @@ which is what serialization / purity snapshots / caches rely on.
 
 import copy
 
-from attr import attrs, attrib
-
+from attr import attrib, attrs
 from rich_python_utils.common_objects.identifiable import Identifiable
 
 
@@ -57,15 +56,15 @@ def test_plain_deepcopy_is_unchanged_no_global_override():
 def test_explicit_id_param_sets_root_only():
     root = _Node(child=_Node())
     a = root.deepcopy_with_fresh_id(id="MyId")
-    assert a.id == "MyId"               # root uses the explicit id (as-is, no suffix by default)
+    assert a.id == "MyId"  # root uses the explicit id (as-is, no suffix by default)
     assert a.child.id != root.child.id  # nested still auto-fresh
 
 
 def test_copy_with_fresh_id_is_shallow():
     root = _Node(child=_Node())
     a = root.copy_with_fresh_id()
-    assert a.id != root.id           # root fresh
-    assert a.child is root.child     # nested SHARED (shallow)
+    assert a.id != root.id  # root fresh
+    assert a.child is root.child  # nested SHARED (shallow)
 
 
 def test_cycle_is_handled():

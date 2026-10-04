@@ -3,17 +3,20 @@ Test the refactored section separator functions
 """
 
 import sys
-sys.path.insert(0, r'C:\Users\yxinl\OneDrive\Projects\PythonProjects\SciencePythonUtils\src')
+
+sys.path.insert(
+    0, r"C:\Users\yxinl\OneDrive\Projects\PythonProjects\SciencePythonUtils\src"
+)
 
 from rich_python_utils.console_utils.rich_console_utils import (
+    cprint_pairs,
     cprint_section_separator,
-    hprint_section_separator,
-    eprint_section_separator,
-    wprint_section_separator,
-    hprint_pairs,
     eprint_pairs,
+    eprint_section_separator,
+    hprint_pairs,
+    hprint_section_separator,
     wprint_pairs,
-    cprint_pairs
+    wprint_section_separator,
 )
 
 print("=" * 80)
@@ -49,19 +52,19 @@ wprint_section_separator()
 # Test 6: Verify separators are used in pairs functions
 print("6. Verify separators are called from hprint_pairs:")
 print("-" * 80)
-hprint_pairs('metric1', 100, 'metric2', 200, title='Metrics')
+hprint_pairs("metric1", 100, "metric2", 200, title="Metrics")
 
 print("7. Verify separators are called from eprint_pairs:")
 print("-" * 80)
-eprint_pairs('error', 'NotFound', 'code', 404, title='Error')
+eprint_pairs("error", "NotFound", "code", 404, title="Error")
 
 print("8. Verify separators are called from wprint_pairs:")
 print("-" * 80)
-wprint_pairs('memory', '85%', 'disk', '90%', title='Warnings')
+wprint_pairs("memory", "85%", "disk", "90%", title="Warnings")
 
 print("9. Verify separators are called from cprint_pairs with custom color:")
 print("-" * 80)
-cprint_pairs('key1', 'val1', 'key2', 'val2', title='Custom', title_color='magenta')
+cprint_pairs("key1", "val1", "key2", "val2", title="Custom", title_color="magenta")
 
 print("=" * 80)
 print("All section separator refactoring tests completed!")

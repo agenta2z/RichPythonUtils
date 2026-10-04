@@ -13,12 +13,10 @@ import subprocess
 import sys
 
 from resolve_path import resolve_path
+
 resolve_path()  # Add project src to sys.path
 
-from rich_python_utils.common_utils.arg_utils.arg_parse import (
-    get_parsed_args,
-    ArgInfo,
-)
+from rich_python_utils.common_utils.arg_utils.arg_parse import ArgInfo, get_parsed_args
 
 
 def pause():
@@ -65,7 +63,7 @@ EXPECTED BEHAVIOR:
         project_root = os.path.dirname(project_root)
 
     # Create demo script
-    demo_code = '''
+    demo_code = """
 import sys
 sys.path.insert(0, "src")
 from rich_python_utils.common_utils.arg_utils.arg_parse import get_parsed_args
@@ -79,27 +77,49 @@ args = get_parsed_args(
 print(f"  learning_rate = {args.learning_rate}")
 print(f"  batch_size    = {args.batch_size}")
 print(f"  model_name    = {args.model_name}")
-'''
+"""
 
     print("TEST 1: Running with NO arguments (uses defaults)")
     print("-" * 60)
-    result = subprocess.run([sys.executable, "-c", demo_code], cwd=project_root, capture_output=True, text=True)
+    result = subprocess.run(
+        [sys.executable, "-c", demo_code],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
+    )
     print(result.stdout)
 
     pause()
     print("\nTEST 2: Running with --learning_rate 0.05")
     print("-" * 60)
-    result = subprocess.run([sys.executable, "-c", demo_code, "--learning_rate", "0.05"], cwd=project_root, capture_output=True, text=True)
+    result = subprocess.run(
+        [sys.executable, "-c", demo_code, "--learning_rate", "0.05"],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
+    )
     print(result.stdout)
     print("OBSERVATION: learning_rate changed from 0.001 to 0.05 (CLI override!)")
 
     pause()
     print("\nTEST 3: Running with --learning_rate 0.05 --batch_size 128")
     print("-" * 60)
-    result = subprocess.run([sys.executable, "-c", demo_code, "--learning_rate", "0.05", "--batch_size", "128"], cwd=project_root, capture_output=True, text=True)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            demo_code,
+            "--learning_rate",
+            "0.05",
+            "--batch_size",
+            "128",
+        ],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
+    )
     print(result.stdout)
     print("OBSERVATION: Both values overridden by CLI!")
-
 
 
 def example_format_2_tuples():
@@ -322,7 +342,7 @@ with different arguments and show you what happens.
         project_root = os.path.dirname(project_root)
 
     # Create a mini demo script
-    demo_script = '''
+    demo_script = """
 import sys
 sys.path.insert(0, "src")
 from rich_python_utils.common_utils.arg_utils.arg_parse import get_parsed_args
@@ -336,28 +356,35 @@ args = get_parsed_args(
 print(f"  learning_rate = {args.learning_rate}")
 print(f"  batch_size    = {args.batch_size}")
 print(f"  model_name    = {args.model_name}")
-'''
+"""
 
     demos = [
         {
             "title": "Demo 1: No arguments (use defaults)",
             "args": [],
-            "expected": "All values use defaults: lr=0.001, bs=32, mn='transformer'"
+            "expected": "All values use defaults: lr=0.001, bs=32, mn='transformer'",
         },
         {
             "title": "Demo 2: Override learning_rate with --learning_rate",
             "args": ["--learning_rate", "0.05"],
-            "expected": "learning_rate changes to 0.05, others stay default"
+            "expected": "learning_rate changes to 0.05, others stay default",
         },
         {
             "title": "Demo 3: Use short names -lr and -bs",
             "args": ["-lr", "0.01", "-bs", "128"],
-            "expected": "learning_rate=0.01, batch_size=128, model_name=default"
+            "expected": "learning_rate=0.01, batch_size=128, model_name=default",
         },
         {
             "title": "Demo 4: Override all three arguments",
-            "args": ["--learning_rate", "0.1", "--batch_size", "256", "--model_name", "resnet"],
-            "expected": "All three values changed from CLI"
+            "args": [
+                "--learning_rate",
+                "0.1",
+                "--batch_size",
+                "256",
+                "--model_name",
+                "resnet",
+            ],
+            "expected": "All three values changed from CLI",
         },
     ]
 

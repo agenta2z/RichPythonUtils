@@ -13,15 +13,12 @@ import pytest
 
 chromadb = pytest.importorskip("chromadb")
 
-from hypothesis import given, settings, assume, HealthCheck
-from hypothesis import strategies as st
-
+from conftest import document_strategy
+from hypothesis import assume, given, HealthCheck, settings, strategies as st
 from rich_python_utils.service_utils.retrieval_service.chroma_retrieval_service import (
     ChromaRetrievalService,
 )
 from rich_python_utils.service_utils.retrieval_service.document import Document
-
-from conftest import document_strategy
 
 pytestmark = pytest.mark.requires_chroma
 
@@ -48,6 +45,7 @@ def chroma_svc():
 
 # ── Property 7: Document add/get round-trip ──
 
+
 class TestChromaDocRoundTrip:
     """**Validates: Requirements 6.1**"""
 
@@ -65,6 +63,7 @@ class TestChromaDocRoundTrip:
 
 # ── Property 8: Duplicate add raises error ──
 
+
 class TestChromaDuplicateAdd:
     """**Validates: Requirements 6.2**"""
 
@@ -79,8 +78,8 @@ class TestChromaDuplicateAdd:
 
 # ── Unit tests ──
 
-class TestChromaUnit:
 
+class TestChromaUnit:
     def test_get_nonexistent_returns_none(self, chroma_svc):
         assert chroma_svc.get_by_id("no_such_doc") is None
 
@@ -101,7 +100,9 @@ class TestChromaUnit:
 
     def test_search_returns_scores_in_range(self, chroma_svc):
         for i in range(3):
-            chroma_svc.add(Document(doc_id=f"d{i}", content=f"test document number {i}"))
+            chroma_svc.add(
+                Document(doc_id=f"d{i}", content=f"test document number {i}")
+            )
         results = chroma_svc.search("test document")
         for doc, score in results:
             assert 0.0 <= score <= 1.0

@@ -36,17 +36,18 @@ Example:
 """
 
 from abc import ABC, abstractmethod
-from multiprocessing import Process, get_context
+from multiprocessing import get_context, Process
 from multiprocessing.context import BaseContext
 from threading import Thread
-from time import time, sleep
+from time import sleep, time
 from typing import Any, Callable, List, Optional, Union
 
-from attr import attrs, attrib
-
+from attr import attrib, attrs
 from rich_python_utils.console_utils import hprint_message
 from rich_python_utils.mp_utils.task import Task, TaskState, TaskStatus
-from rich_python_utils.service_utils.queue_service.queue_service_base import QueueServiceBase
+from rich_python_utils.service_utils.queue_service.queue_service_base import (
+    QueueServiceBase,
+)
 
 
 @attrs(slots=False)  # slots=False required for ABC
@@ -91,7 +92,7 @@ class QueuedExecutorBase(ABC):
 
     # Executor configuration
     num_workers = attrib(type=int, default=1)
-    name = attrib(type=str, default='QueuedExecutor')
+    name = attrib(type=str, default="QueuedExecutor")
     poll_interval = attrib(type=float, default=0.1)
     verbose = attrib(type=bool, default=__debug__)
 
@@ -117,9 +118,7 @@ class QueuedExecutorBase(ABC):
         if not self.output_queue_id:
             raise ValueError("output_queue_id cannot be empty")
         if self.num_workers < 1:
-            raise ValueError(
-                f"num_workers must be at least 1; got {self.num_workers}"
-            )
+            raise ValueError(f"num_workers must be at least 1; got {self.num_workers}")
 
     def _ensure_queues_exist(self):
         """Create input and output queues if they don't exist."""
@@ -194,21 +193,20 @@ class QueuedExecutorBase(ABC):
         no_task_count = 0
 
         if self.verbose:
-            hprint_message('worker started', f'{self.name}-{worker_id}')
+            hprint_message("worker started", f"{self.name}-{worker_id}")
 
         try:
             while active_flag[0]:
-                task = self.input_queue_service.get(
-                    self.input_queue_id,
-                    blocking=False
-                )
+                task = self.input_queue_service.get(self.input_queue_id, blocking=False)
 
                 if task is None:
                     no_task_count += 1
                     if self.verbose and no_task_count % 100 == 0:
                         hprint_message(
-                            'worker waiting', f'{self.name}-{worker_id}',
-                            'poll_interval', self.poll_interval
+                            "worker waiting",
+                            f"{self.name}-{worker_id}",
+                            "poll_interval",
+                            self.poll_interval,
                         )
                     sleep(self.poll_interval)
                     continue
@@ -218,8 +216,10 @@ class QueuedExecutorBase(ABC):
                 if not isinstance(task, Task):
                     if self.verbose:
                         hprint_message(
-                            'invalid task type', type(task).__name__,
-                            'worker', f'{self.name}-{worker_id}'
+                            "invalid task type",
+                            type(task).__name__,
+                            "worker",
+                            f"{self.name}-{worker_id}",
                         )
                     continue
 
@@ -228,7 +228,7 @@ class QueuedExecutorBase(ABC):
 
         finally:
             if self.verbose:
-                hprint_message('worker stopped', f'{self.name}-{worker_id}')
+                hprint_message("worker stopped", f"{self.name}-{worker_id}")
 
     def _execute_task(self, worker_id: int, task: Task) -> TaskState:
         """
@@ -245,9 +245,7 @@ class QueuedExecutorBase(ABC):
 
         if self.verbose:
             hprint_message(
-                'executing', task.name,
-                'task_id', task.task_id,
-                'worker', worker_id
+                "executing", task.name, "task_id", task.task_id, "worker", worker_id
             )
 
         try:
@@ -263,16 +261,14 @@ class QueuedExecutorBase(ABC):
                 worker_id=worker_id,
                 start_time=start_time,
                 end_time=end_time,
-                execution_time=end_time - start_time
+                execution_time=end_time - start_time,
             )
         except Exception as e:
             end_time = time()
 
             if self.verbose:
                 hprint_message(
-                    'task failed', task.task_id,
-                    'worker', worker_id,
-                    'error', str(e)
+                    "task failed", task.task_id, "worker", worker_id, "error", str(e)
                 )
 
             return TaskState(
@@ -285,7 +281,7 @@ class QueuedExecutorBase(ABC):
                 worker_id=worker_id,
                 start_time=start_time,
                 end_time=end_time,
-                execution_time=end_time - start_time
+                execution_time=end_time - start_time,
             )
 
     def run(self, active_flag: Optional[list] = None, blocking: bool = True) -> list:
@@ -323,8 +319,7 @@ class QueuedExecutorBase(ABC):
             # Run directly in current thread (single worker)
             if self.verbose:
                 hprint_message(
-                    'running executor (blocking)', self.name,
-                    'num_workers', 1
+                    "running executor (blocking)", self.name, "num_workers", 1
                 )
             try:
                 self._worker_loop(0, active_flag)
@@ -336,8 +331,10 @@ class QueuedExecutorBase(ABC):
 
             if self.verbose:
                 hprint_message(
-                    'running executor (non-blocking)', self.name,
-                    'num_workers', self.num_workers
+                    "running executor (non-blocking)",
+                    self.name,
+                    "num_workers",
+                    self.num_workers,
                 )
 
             for i in range(self.num_workers):
@@ -379,7 +376,7 @@ class QueuedExecutorBase(ABC):
             flag[0] = False
 
         if self.verbose:
-            hprint_message('stopping executor', self.name)
+            hprint_message("stopping executor", self.name)
 
         for worker in self._workers:
             self._join_worker(worker, timeout)
@@ -389,8 +386,7 @@ class QueuedExecutorBase(ABC):
 
         if self.verbose:
             hprint_message(
-                'executor stopped', self.name,
-                'all_workers_stopped', all_stopped
+                "executor stopped", self.name, "all_workers_stopped", all_stopped
             )
 
         return all_stopped
@@ -409,9 +405,7 @@ class QueuedExecutorBase(ABC):
         return task.task_id
 
     def get_result(
-            self,
-            blocking: bool = True,
-            timeout: Optional[float] = None
+        self, blocking: bool = True, timeout: Optional[float] = None
     ) -> Optional[TaskState]:
         """
         Get a result from the output queue.
@@ -425,9 +419,7 @@ class QueuedExecutorBase(ABC):
             or timeout reached.
         """
         return self.output_queue_service.get(
-            self.output_queue_id,
-            blocking=blocking,
-            timeout=timeout
+            self.output_queue_id, blocking=blocking, timeout=timeout
         )
 
     def get_stats(self) -> dict:
@@ -438,12 +430,12 @@ class QueuedExecutorBase(ABC):
             Dictionary with executor statistics.
         """
         return {
-            'name': self.name,
-            'num_workers': self.num_workers,
-            'is_running': self._is_running,
-            'input_queue_size': self.input_queue_service.size(self.input_queue_id),
-            'output_queue_size': self.output_queue_service.size(self.output_queue_id),
-            'workers_alive': sum(1 for w in self._workers if self._is_worker_alive(w)),
+            "name": self.name,
+            "num_workers": self.num_workers,
+            "is_running": self._is_running,
+            "input_queue_size": self.input_queue_service.size(self.input_queue_id),
+            "output_queue_size": self.output_queue_service.size(self.output_queue_id),
+            "workers_alive": sum(1 for w in self._workers if self._is_worker_alive(w)),
         }
 
     @property
@@ -465,9 +457,9 @@ class QueuedExecutorBase(ABC):
         tasks: List[Task],
         router: Optional[Callable[[str, Any, TaskState], List[Task]]] = None,
         depth_first: bool = True,
-        on_error: str = 'raise',
+        on_error: str = "raise",
         on_task_complete: Optional[Callable[[str, Any], None]] = None,
-        max_concurrent: Optional[int] = None
+        max_concurrent: Optional[int] = None,
     ) -> Any:
         """
         Run tasks asynchronously with dynamic task generation.
@@ -541,7 +533,7 @@ class QueuedExecutorBase(ABC):
         """
         from collections import deque
 
-        if on_error not in ('raise', 'skip'):
+        if on_error not in ("raise", "skip"):
             raise ValueError(f"on_error must be 'raise' or 'skip', got {on_error!r}")
 
         pending = deque(tasks)
@@ -550,13 +542,13 @@ class QueuedExecutorBase(ABC):
 
         # Ensure workers are running for thread/process-based executors
         workers_started = False
-        if not self._workers and hasattr(self, 'start'):
+        if not self._workers and hasattr(self, "start"):
             self.start()
             workers_started = True
 
         # Default max_concurrent to num_workers
         if max_concurrent is None:
-            max_concurrent = getattr(self, 'num_workers', 1)
+            max_concurrent = getattr(self, "num_workers", 1)
 
         try:
             while pending or in_flight:
@@ -580,7 +572,7 @@ class QueuedExecutorBase(ABC):
 
                 # === ERROR HANDLING ===
                 if task_state.status == TaskStatus.FAILED:
-                    if on_error == 'raise':
+                    if on_error == "raise":
                         raise task_state.exception or RuntimeError(
                             f"Task {task_state.task_id} failed"
                         )
@@ -588,8 +580,10 @@ class QueuedExecutorBase(ABC):
                         # on_error == 'skip'
                         if self.verbose:
                             hprint_message(
-                                'task failed, skipping', task_state.task_id,
-                                'error', str(task_state.exception)
+                                "task failed, skipping",
+                                task_state.task_id,
+                                "error",
+                                str(task_state.exception),
                             )
                         continue
 
@@ -602,9 +596,11 @@ class QueuedExecutorBase(ABC):
                     next_tasks = router(task_state.task_id, actual_result, task_state)
                 else:
                     # Wrapper mode: result is (actual_result, next_tasks) tuple
-                    if (isinstance(task_state.result, tuple) and
-                            len(task_state.result) == 2 and
-                            isinstance(task_state.result[1], list)):
+                    if (
+                        isinstance(task_state.result, tuple)
+                        and len(task_state.result) == 2
+                        and isinstance(task_state.result[1], list)
+                    ):
                         actual_result, next_tasks = task_state.result
                     else:
                         # Not a proper wrapper result - treat as leaf
@@ -621,7 +617,9 @@ class QueuedExecutorBase(ABC):
                 has_next = bool(next_tasks)
 
                 # Filter out None markers
-                actual_next_tasks = [t for t in next_tasks if t is not None] if next_tasks else []
+                actual_next_tasks = (
+                    [t for t in next_tasks if t is not None] if next_tasks else []
+                )
 
                 if actual_next_tasks:
                     if depth_first:
@@ -643,7 +641,7 @@ class QueuedExecutorBase(ABC):
 
         finally:
             # Stop workers if we started them
-            if workers_started and hasattr(self, 'stop'):
+            if workers_started and hasattr(self, "stop"):
                 self.stop()
 
         # Return single result or tuple based on leaf count
@@ -689,7 +687,7 @@ class SingleThreadExecutor(QueuedExecutorBase):
 
     def __attrs_post_init__(self):
         """Force num_workers to 1 for single-thread executor."""
-        object.__setattr__(self, 'num_workers', 1)
+        object.__setattr__(self, "num_workers", 1)
         super().__attrs_post_init__()
 
     def _create_worker(self, worker_id: int, active_flag: list) -> Thread:
@@ -698,7 +696,7 @@ class SingleThreadExecutor(QueuedExecutorBase):
             target=self._worker_loop,
             args=(worker_id, active_flag),
             name=f"{self.name}-worker-{worker_id}",
-            daemon=True
+            daemon=True,
         )
 
     def _start_worker(self, worker: Thread) -> None:
@@ -754,9 +752,7 @@ class SimulatedMultiThreadExecutor(SingleThreadExecutor):
     """
 
     def process_one(
-            self,
-            blocking: bool = False,
-            timeout: Optional[float] = None
+        self, blocking: bool = False, timeout: Optional[float] = None
     ) -> Optional[TaskState]:
         """
         Process a single task from the input queue.
@@ -775,18 +771,14 @@ class SimulatedMultiThreadExecutor(SingleThreadExecutor):
             TypeError: If the item from queue is not a Task.
         """
         task = self.input_queue_service.get(
-            self.input_queue_id,
-            blocking=blocking,
-            timeout=timeout
+            self.input_queue_id, blocking=blocking, timeout=timeout
         )
 
         if task is None:
             return None
 
         if not isinstance(task, Task):
-            raise TypeError(
-                f"Expected Task from queue, got {type(task).__name__}"
-            )
+            raise TypeError(f"Expected Task from queue, got {type(task).__name__}")
 
         result = self._execute_task(0, task)
         self.output_queue_service.put(self.output_queue_id, result)
@@ -868,7 +860,7 @@ class QueuedThreadPoolExecutor(QueuedExecutorBase):
             target=self._worker_loop,
             args=(worker_id, active_flag),
             name=f"{self.name}-worker-{worker_id}",
-            daemon=True
+            daemon=True,
         )
 
     def _start_worker(self, worker: Thread) -> None:
@@ -892,7 +884,7 @@ def _process_worker_loop(
     output_queue_id: str,
     poll_interval: float,
     verbose: bool,
-    name: str
+    name: str,
 ):
     """
     Standalone worker loop for process pool executor.
@@ -918,7 +910,7 @@ def _process_worker_loop(
     no_task_count = 0
 
     if verbose:
-        hprint_message('worker started', f'{name}-{worker_id}')
+        hprint_message("worker started", f"{name}-{worker_id}")
 
     try:
         while active_flag[0]:
@@ -928,8 +920,10 @@ def _process_worker_loop(
                 no_task_count += 1
                 if verbose and no_task_count % 100 == 0:
                     hprint_message(
-                        'worker waiting', f'{name}-{worker_id}',
-                        'poll_interval', poll_interval
+                        "worker waiting",
+                        f"{name}-{worker_id}",
+                        "poll_interval",
+                        poll_interval,
                     )
                 sleep(poll_interval)
                 continue
@@ -939,8 +933,10 @@ def _process_worker_loop(
             if not isinstance(task, Task):
                 if verbose:
                     hprint_message(
-                        'invalid task type', type(task).__name__,
-                        'worker', f'{name}-{worker_id}'
+                        "invalid task type",
+                        type(task).__name__,
+                        "worker",
+                        f"{name}-{worker_id}",
                     )
                 continue
 
@@ -959,16 +955,19 @@ def _process_worker_loop(
                     worker_id=worker_id,
                     start_time=start_time,
                     end_time=end_time,
-                    execution_time=end_time - start_time
+                    execution_time=end_time - start_time,
                 )
             except Exception as e:
                 end_time = time()
 
                 if verbose:
                     hprint_message(
-                        'task failed', task.task_id,
-                        'worker', worker_id,
-                        'error', str(e)
+                        "task failed",
+                        task.task_id,
+                        "worker",
+                        worker_id,
+                        "error",
+                        str(e),
                     )
 
                 result = TaskState(
@@ -981,17 +980,17 @@ def _process_worker_loop(
                     worker_id=worker_id,
                     start_time=start_time,
                     end_time=end_time,
-                    execution_time=end_time - start_time
+                    execution_time=end_time - start_time,
                 )
 
             queue_service.put(output_queue_id, result)
 
     finally:
         # Close the worker's queue service instance
-        if hasattr(queue_service, 'close'):
+        if hasattr(queue_service, "close"):
             queue_service.close()
         if verbose:
-            hprint_message('worker stopped', f'{name}-{worker_id}')
+            hprint_message("worker stopped", f"{name}-{worker_id}")
 
 
 @attrs(slots=False)
@@ -1058,7 +1057,7 @@ class QueuedProcessPoolExecutor(QueuedExecutorBase):
         """Initialize multiprocessing context and validate factory."""
         super().__attrs_post_init__()
         if self.mp_context is None:
-            object.__setattr__(self, 'mp_context', get_context('spawn'))
+            object.__setattr__(self, "mp_context", get_context("spawn"))
         if self.queue_service_factory is None:
             raise ValueError(
                 "queue_service_factory is required for QueuedProcessPoolExecutor. "
@@ -1083,10 +1082,10 @@ class QueuedProcessPoolExecutor(QueuedExecutorBase):
                 self.output_queue_id,
                 self.poll_interval,
                 self.verbose,
-                self.name
+                self.name,
             ),
             name=f"{self.name}-worker-{worker_id}",
-            daemon=True
+            daemon=True,
         )
 
     def _start_worker(self, worker: Process) -> None:
@@ -1103,9 +1102,9 @@ class QueuedProcessPoolExecutor(QueuedExecutorBase):
 
 
 __all__ = [
-    'QueuedExecutorBase',
-    'SingleThreadExecutor',
-    'SimulatedMultiThreadExecutor',
-    'QueuedThreadPoolExecutor',
-    'QueuedProcessPoolExecutor',
+    "QueuedExecutorBase",
+    "SingleThreadExecutor",
+    "SimulatedMultiThreadExecutor",
+    "QueuedThreadPoolExecutor",
+    "QueuedProcessPoolExecutor",
 ]

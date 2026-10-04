@@ -1,19 +1,17 @@
 from io import StringIO
 from itertools import chain
-from typing import Sequence, Any, List, Hashable, Type
-from typing import Union, Callable
+from typing import Any, Callable, Hashable, List, Sequence, Type, Union
 
-from attr import attrs, attrib
-
+from attr import attrib, attrs
 from rich_python_utils.algorithms.graph.node import Node, str_all_descendants_of_nodes
 
 
 def build_nodes_from_paths(
-        paths: Sequence[Sequence[Any]],
-        node_cls: Type[Node] = Node,
-        node_list_factory: Callable[[], List] = list,
-        return_all_nodes: bool = False,
-        hashable: bool = True
+    paths: Sequence[Sequence[Any]],
+    node_cls: Type[Node] = Node,
+    node_list_factory: Callable[[], List] = list,
+    return_all_nodes: bool = False,
+    hashable: bool = True,
 ) -> List[Node]:
     """Builds a directed acyclic graph (DAG) of `Node` objects from given paths, merging common subpaths.
 
@@ -80,14 +78,18 @@ def build_nodes_from_paths(
     # List of start nodes for the entire DAG.
     if hashable:
         all_nodes: dict = {}
+
         def _find_node_with_value(_value) -> node_cls:
             return all_nodes.get(_value, None)
+
         def _add_new_node(_node: node_cls):
             all_nodes[_node.value] = _node
     else:
         all_nodes: List[node_cls] = []
+
         def _find_node_with_value(_value) -> node_cls:
-            return  next((x for x in all_nodes if x.value == _value), None)
+            return next((x for x in all_nodes if x.value == _value), None)
+
         def _add_new_node(_node: node_cls):
             all_nodes.append(_node)
 
@@ -101,7 +103,9 @@ def build_nodes_from_paths(
             current_node = _find_node_with_value(value)
             if current_node is None:
                 # Create a new node since we don't have one with this value
-                current_node = node_cls(value=value, node_list_factory=node_list_factory)
+                current_node = node_cls(
+                    value=value, node_list_factory=node_list_factory
+                )
                 _add_new_node(current_node)
 
             if prev_node is not None:
@@ -116,15 +120,18 @@ def build_nodes_from_paths(
         if return_all_nodes:
             return list(all_nodes.values())
         else:
-            start_nodes: List[node_cls] = list(filter(lambda node: not node.previous, all_nodes.values()))
+            start_nodes: List[node_cls] = list(
+                filter(lambda node: not node.previous, all_nodes.values())
+            )
             return start_nodes
     else:
         if return_all_nodes:
             return all_nodes
         else:
-            start_nodes: List[node_cls] = list(filter(lambda node: not node.previous, all_nodes))
+            start_nodes: List[node_cls] = list(
+                filter(lambda node: not node.previous, all_nodes)
+            )
             return start_nodes
-
 
 
 @attrs(slots=False, repr=False)
@@ -135,7 +142,7 @@ class DirectedAcyclicGraph:
 
     def __attrs_post_init__(self):
         # Call parent __attrs_post_init__ if it exists (for multiple inheritance support)
-        super_post_init = getattr(super(), '__attrs_post_init__', None)
+        super_post_init = getattr(super(), "__attrs_post_init__", None)
         if super_post_init:
             super_post_init()
 
@@ -146,7 +153,9 @@ class DirectedAcyclicGraph:
         else:
             # Otherwise, treat input as multiple paths and build the DAG
             hashable = all(isinstance(x, Hashable) for x in chain(*start_nodes))
-            self.start_nodes = build_nodes_from_paths(start_nodes, node_cls=self.node_cls, hashable=hashable)
+            self.start_nodes = build_nodes_from_paths(
+                start_nodes, node_cls=self.node_cls, hashable=hashable
+            )
 
     def __repr__(self):
         """
@@ -190,7 +199,11 @@ class DirectedAcyclicGraph:
         else:
             output = StringIO()
             output.write("DirectedAcyclicGraph:\n")
-            output.write(str_all_descendants_of_nodes(self.start_nodes, ascii_tree=True, indent=4))
+            output.write(
+                str_all_descendants_of_nodes(
+                    self.start_nodes, ascii_tree=True, indent=4
+                )
+            )
             return output.getvalue()
 
     def print_structure(
@@ -198,7 +211,7 @@ class DirectedAcyclicGraph:
         ascii_tree: bool = True,
         include_degrees: bool = True,
         include_adjacency: bool = True,
-        print_output: bool = True
+        print_output: bool = True,
     ) -> str:
         """
         Print detailed DAG structure for debugging and analysis.
@@ -279,7 +292,7 @@ class DirectedAcyclicGraph:
                 return
             visited_ids.add(id(node))
             all_nodes.append(node)
-            for child in (node.next or []):
+            for child in node.next or []:
                 collect_nodes(child)
 
         for start in self.start_nodes:
@@ -327,7 +340,9 @@ class DirectedAcyclicGraph:
 
         # Tree visualization (reuse existing method)
         output.write("Tree View:\n")
-        output.write(str_all_descendants_of_nodes(self.start_nodes, ascii_tree=ascii_tree))
+        output.write(
+            str_all_descendants_of_nodes(self.start_nodes, ascii_tree=ascii_tree)
+        )
         output.write("\n\n")
 
         # Adjacency lists
@@ -335,7 +350,9 @@ class DirectedAcyclicGraph:
             output.write("Adjacency (forward -> successors):\n")
             for i, node in enumerate(all_nodes):
                 successors = [node_indices.get(id(n), "?") for n in (node.next or [])]
-                succ_str = ", ".join(f"[{s}]" for s in successors) if successors else "(leaf)"
+                succ_str = (
+                    ", ".join(f"[{s}]" for s in successors) if successors else "(leaf)"
+                )
                 output.write(f"  [{i}] -> {succ_str}\n")
 
             output.write("\nAdjacency (reverse <- predecessors):\n")

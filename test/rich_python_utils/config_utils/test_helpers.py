@@ -17,6 +17,7 @@ from attr import attrib, attrs
 # attrs test classes
 # ---------------------------------------------------------------------------
 
+
 @attrs
 class SimpleAttrs:
     name: str = attrib(default="")
@@ -26,18 +27,21 @@ class SimpleAttrs:
 @attrs
 class AttrsWithUnderscore:
     """``_secret`` → init param is ``secret`` (attrs auto-strips leading ``_``)."""
+
     _secret: str = attrib(default=None)
 
 
 @attrs
 class AttrsWithAlias:
     """``_internal`` with explicit ``alias='public_name'``."""
+
     _internal: str = attrib(default=None, alias="public_name")
 
 
 @attrs
 class AttrsWithInitFalse:
     """``_cache`` has ``init=False`` — should be filtered from YAML."""
+
     name: str = attrib(default="")
     _cache: dict = attrib(factory=dict, init=False)
 
@@ -75,6 +79,7 @@ class AttrsKwOnly:
 @attrs
 class ParentAttrs:
     """Parent with a nested attrs child."""
+
     child: Optional[Any] = attrib(default=None)
     label: str = attrib(default="")
 
@@ -82,6 +87,7 @@ class ParentAttrs:
 @attrs
 class AttrsWithCallable:
     """Has a callable field that defaults to None — should be safe to omit."""
+
     name: str = attrib(default="")
     processor: Optional[Any] = attrib(default=None)
 
@@ -89,6 +95,7 @@ class AttrsWithCallable:
 @attrs
 class AttrsWithFactory:
     """Has a ``*_factory`` field for testing _ImportFactory / auto-partial."""
+
     name: str = attrib(default="")
     worker_factory: Any = attrib(default=None)
 
@@ -96,6 +103,7 @@ class AttrsWithFactory:
 @attrs
 class InnerWorker:
     """Simple worker instantiated by factory tests."""
+
     model: str = attrib(default="default")
     child: Any = attrib(default=None)
 
@@ -103,6 +111,7 @@ class InnerWorker:
 # ---------------------------------------------------------------------------
 # dataclass test classes
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class SimpleDataclass:
@@ -120,6 +129,7 @@ class DataclassWithNested:
 # Plain class
 # ---------------------------------------------------------------------------
 
+
 class PlainClass:
     def __init__(self, name: str = "", value: int = 0):
         self.name = name
@@ -129,6 +139,7 @@ class PlainClass:
 # ---------------------------------------------------------------------------
 # Factory function (callable target)
 # ---------------------------------------------------------------------------
+
 
 def create_simple(name: str = "default", count: int = 1) -> SimpleAttrs:
     return SimpleAttrs(name=name, count=count)

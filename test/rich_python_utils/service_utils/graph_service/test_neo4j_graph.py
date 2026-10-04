@@ -14,15 +14,13 @@ import pytest
 
 neo4j = pytest.importorskip("neo4j")
 
-from hypothesis import given, settings, assume, HealthCheck
-from hypothesis import strategies as st
-
-from rich_python_utils.service_utils.graph_service.neo4j_graph_service import (
-    Neo4jGraphService,
-)
+from hypothesis import assume, given, HealthCheck, settings, strategies as st
 from rich_python_utils.service_utils.graph_service.graph_node import (
     GraphEdge,
     GraphNode,
+)
+from rich_python_utils.service_utils.graph_service.neo4j_graph_service import (
+    Neo4jGraphService,
 )
 
 pytestmark = pytest.mark.requires_neo4j
@@ -37,6 +35,7 @@ def _check_neo4j():
     if _NEO4J_AVAILABLE is None:
         try:
             from neo4j import GraphDatabase
+
             driver = GraphDatabase.driver(_NEO4J_URI, auth=_NEO4J_AUTH)
             driver.verify_connectivity()
             driver.close()
@@ -68,12 +67,15 @@ def neo4j_svc():
 
 # ── Property 12: GraphNode add/get round-trip ──
 
+
 class TestNeo4jNodeRoundTrip:
     """**Validates: Requirements 10.1**"""
 
     def test_add_get_round_trip(self, neo4j_svc):
         svc, ns = neo4j_svc
-        node = GraphNode(node_id="n1", node_type="person", label="Alice", properties={"age": 30})
+        node = GraphNode(
+            node_id="n1", node_type="person", label="Alice", properties={"age": 30}
+        )
         svc.add_node(node, namespace=ns)
         retrieved = svc.get_node("n1", namespace=ns)
         assert retrieved is not None
@@ -85,6 +87,7 @@ class TestNeo4jNodeRoundTrip:
 
 # ── Property 13: GraphEdge add/get_edges round-trip ──
 
+
 class TestNeo4jEdgeRoundTrip:
     """**Validates: Requirements 10.2**"""
 
@@ -92,7 +95,9 @@ class TestNeo4jEdgeRoundTrip:
         svc, ns = neo4j_svc
         svc.add_node(GraphNode(node_id="a", node_type="t"), namespace=ns)
         svc.add_node(GraphNode(node_id="b", node_type="t"), namespace=ns)
-        edge = GraphEdge(source_id="a", target_id="b", edge_type="knows", properties={"since": 2020})
+        edge = GraphEdge(
+            source_id="a", target_id="b", edge_type="knows", properties={"since": 2020}
+        )
         svc.add_edge(edge, namespace=ns)
         edges = svc.get_edges("a", namespace=ns)
         assert len(edges) >= 1
@@ -103,6 +108,7 @@ class TestNeo4jEdgeRoundTrip:
 
 # ── Property 14: Add edge with missing node raises error ──
 
+
 class TestNeo4jMissingNodeEdge:
     """**Validates: Requirements 10.3**"""
 
@@ -110,16 +116,23 @@ class TestNeo4jMissingNodeEdge:
         svc, ns = neo4j_svc
         svc.add_node(GraphNode(node_id="b", node_type="t"), namespace=ns)
         with pytest.raises(ValueError, match="Source"):
-            svc.add_edge(GraphEdge(source_id="missing", target_id="b", edge_type="x"), namespace=ns)
+            svc.add_edge(
+                GraphEdge(source_id="missing", target_id="b", edge_type="x"),
+                namespace=ns,
+            )
 
     def test_add_edge_missing_target(self, neo4j_svc):
         svc, ns = neo4j_svc
         svc.add_node(GraphNode(node_id="a", node_type="t"), namespace=ns)
         with pytest.raises(ValueError, match="Target"):
-            svc.add_edge(GraphEdge(source_id="a", target_id="missing", edge_type="x"), namespace=ns)
+            svc.add_edge(
+                GraphEdge(source_id="a", target_id="missing", edge_type="x"),
+                namespace=ns,
+            )
 
 
 # ── Property 11: Node removal cascade-deletes edges ──
+
 
 class TestNeo4jCascadeDelete:
     """**Validates: Requirements 7.4**"""
@@ -128,15 +141,17 @@ class TestNeo4jCascadeDelete:
         svc, ns = neo4j_svc
         svc.add_node(GraphNode(node_id="a", node_type="t"), namespace=ns)
         svc.add_node(GraphNode(node_id="b", node_type="t"), namespace=ns)
-        svc.add_edge(GraphEdge(source_id="a", target_id="b", edge_type="x"), namespace=ns)
+        svc.add_edge(
+            GraphEdge(source_id="a", target_id="b", edge_type="x"), namespace=ns
+        )
         svc.remove_node("a", namespace=ns)
         assert svc.get_edges("b", direction="incoming", namespace=ns) == []
 
 
 # ── Unit tests ──
 
-class TestNeo4jUnit:
 
+class TestNeo4jUnit:
     def test_get_nonexistent_returns_none(self, neo4j_svc):
         svc, ns = neo4j_svc
         assert svc.get_node("no_such", namespace=ns) is None
@@ -167,8 +182,12 @@ class TestNeo4jUnit:
         svc.add_node(GraphNode(node_id="a", node_type="t"), namespace=ns)
         svc.add_node(GraphNode(node_id="b", node_type="t"), namespace=ns)
         svc.add_node(GraphNode(node_id="c", node_type="t"), namespace=ns)
-        svc.add_edge(GraphEdge(source_id="a", target_id="b", edge_type="x"), namespace=ns)
-        svc.add_edge(GraphEdge(source_id="b", target_id="c", edge_type="x"), namespace=ns)
+        svc.add_edge(
+            GraphEdge(source_id="a", target_id="b", edge_type="x"), namespace=ns
+        )
+        svc.add_edge(
+            GraphEdge(source_id="b", target_id="c", edge_type="x"), namespace=ns
+        )
         neighbors = svc.get_neighbors("a", depth=2, namespace=ns)
         ids = {n.node_id for n, d in neighbors}
         assert "b" in ids
@@ -188,7 +207,9 @@ class TestNeo4jUnit:
         svc, ns = neo4j_svc
         svc.add_node(GraphNode(node_id="a", node_type="t"), namespace=ns)
         svc.add_node(GraphNode(node_id="b", node_type="t"), namespace=ns)
-        svc.add_edge(GraphEdge(source_id="a", target_id="b", edge_type="x"), namespace=ns)
+        svc.add_edge(
+            GraphEdge(source_id="a", target_id="b", edge_type="x"), namespace=ns
+        )
         assert svc.remove_edge("a", "b", "x", namespace=ns) is True
         assert svc.get_edges("a", namespace=ns) == []
         assert svc.remove_edge("a", "b", "x", namespace=ns) is False

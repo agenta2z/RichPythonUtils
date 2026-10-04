@@ -8,29 +8,38 @@ Author: Science Python Utils
 Date: 2025-01-15
 """
 
+import json
 import logging
-import time
 import sys
-from typing import Any, List, Tuple, Optional, Dict, Union
+import time
 from contextlib import contextmanager
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+from rich import print as rprint
 from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
-from rich.syntax import Syntax
-from rich.markdown import Markdown
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
 from rich.logging import RichHandler
+from rich.markdown import Markdown
+from rich.panel import Panel
+from rich.pretty import Pretty
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+    TimeRemainingColumn,
+)
+from rich.syntax import Syntax
+from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme
-from rich import print as rprint
-from rich.pretty import Pretty
-import json
 
 # Detect cursor control support
 _CURSOR_CONTROL_SUPPORTED = False
-if sys.platform == 'win32':
+if sys.platform == "win32":
     try:
         import ctypes
+
         kernel32 = ctypes.windll.kernel32
         kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
         _CURSOR_CONTROL_SUPPORTED = True
@@ -41,7 +50,8 @@ else:
 
 # Detect if we're in PyCharm or other limited terminal
 import os
-if os.getenv('PYCHARM_HOSTED') or 'PYCHARM' in os.getenv('TERMINAL_EMULATOR', ''):
+
+if os.getenv("PYCHARM_HOSTED") or "PYCHARM" in os.getenv("TERMINAL_EMULATOR", ""):
     _CURSOR_CONTROL_SUPPORTED = False
 
 # Track displayed messages for in-place updates
@@ -50,23 +60,28 @@ _displayed_messages: Dict[str, Dict[str, Any]] = {}
 
 # Enable ANSI color support on Windows
 try:
-    from rich_python_utils.console_utils.enable_windows_ansi import enable_windows_ansi_support
+    from rich_python_utils.console_utils.enable_windows_ansi import (
+        enable_windows_ansi_support,
+    )
+
     enable_windows_ansi_support()
 except ImportError:
     pass  # Module not available, colors may not work on Windows console
 
 # Define custom theme matching original console_util colors from basics.py
-CUSTOM_THEME = Theme({
-    "info": "cyan",
-    "warning": "yellow",
-    "error": "red",
-    "success": "bold green",
-    "highlight": "bright_cyan",
-    "title": "cyan",
-    "content": "white",
-    "key": "bright_cyan",
-    "value": "white",
-})
+CUSTOM_THEME = Theme(
+    {
+        "info": "cyan",
+        "warning": "yellow",
+        "error": "red",
+        "success": "bold green",
+        "highlight": "bright_cyan",
+        "title": "cyan",
+        "content": "white",
+        "key": "bright_cyan",
+        "value": "white",
+    }
+)
 
 # Global console instance
 # force_terminal=True ensures colors are always output (useful for Windows terminals)
@@ -87,6 +102,7 @@ WPRINT_HEADER_OR_HIGHLIGHT_COLOR = "bright_magenta"
 WPRINT_MESSAGE_BODY_COLOR = "yellow"
 
 # region Helper Functions
+
 
 def _format_content(content: Any, replacement_for_empty: str = "n/a") -> str:
     """Format content for display, handling None and empty values."""
@@ -115,11 +131,11 @@ def _count_lines(text: str) -> int:
         return 0
 
     # Split by newline to get all segments
-    segments = text.split('\n')
+    segments = text.split("\n")
 
     # If text ends with \n, the last segment will be empty and shouldn't be counted
     # (it represents the cursor position after the final newline, not a visual line)
-    if segments and segments[-1] == '':
+    if segments and segments[-1] == "":
         return len(segments) - 1
 
     return len(segments)
@@ -138,8 +154,8 @@ def _clear_previous_lines(line_count: int):
 
         # Move cursor up and clear lines
         for _ in range(line_count):
-            console.file.write('\033[F')  # Move cursor up one line
-            console.file.write('\033[K')  # Clear line from cursor to end
+            console.file.write("\033[F")  # Move cursor up one line
+            console.file.write("\033[K")  # Clear line from cursor to end
         console.file.flush()
 
 
@@ -152,7 +168,7 @@ def clear_message(message_id: str):
     """
     if message_id in _displayed_messages:
         info = _displayed_messages[message_id]
-        _clear_previous_lines(info['line_count'])
+        _clear_previous_lines(info["line_count"])
         del _displayed_messages[message_id]
 
 
@@ -180,13 +196,15 @@ def _solve_key_value_pairs(*args) -> List[Tuple[str, Any]]:
             pairs.append((str(args[i]), ""))
     return pairs
 
+
 # endregion
 
 # region Backtick Highlighting Helper
 
+
 def _parse_backtick_highlights(
     text: str,
-    color_quote: str = '`',
+    color_quote: str = "`",
     highlight_color: str = "cyan",
     bk_color: str = "white",
 ) -> Text:
@@ -220,14 +238,14 @@ def _parse_backtick_highlights(
             elif color_start:
                 # Start of highlight - flush any accumulated text first
                 if current_segment:
-                    result.append(''.join(current_segment), style=bk_color)
+                    result.append("".join(current_segment), style=bk_color)
                     current_segment = []
                 prev_color_quote = True
                 color_start = False
             else:
                 # End of highlight - flush highlighted text
                 if current_segment:
-                    result.append(''.join(current_segment), style=highlight_color)
+                    result.append("".join(current_segment), style=highlight_color)
                     current_segment = []
                 color_start = True
         else:
@@ -239,20 +257,22 @@ def _parse_backtick_highlights(
     # Flush any remaining text
     if current_segment:
         style = bk_color if color_start else highlight_color
-        result.append(''.join(current_segment), style=style)
+        result.append("".join(current_segment), style=style)
 
     return result
+
 
 # endregion
 
 # region Backtick-Based Highlighting Functions
 
+
 def cprint(
     text: str,
-    color_quote: str = '`',
+    color_quote: str = "`",
     color: str = "cyan",
     bk_color: str = "white",
-    end: str = '\n'
+    end: str = "\n",
 ):
     """
     Print text with custom color highlighting for sections enclosed in quotes.
@@ -274,7 +294,7 @@ def cprint(
     console.print(rich_text, end=end)
 
 
-def hprint(text: str, color_quote: str = '`', end: str = '\n'):
+def hprint(text: str, color_quote: str = "`", end: str = "\n"):
     """
     Highlight-print text with cyan highlighting for backtick-enclosed sections.
 
@@ -287,11 +307,16 @@ def hprint(text: str, color_quote: str = '`', end: str = '\n'):
         color_quote: Character marking highlight boundaries (default: backtick)
         end: String appended after text (default: newline)
     """
-    cprint(text, color_quote=color_quote, color=HPRINT_HEADER_OR_HIGHLIGHT_COLOR,
-           bk_color=HPRINT_MESSAGE_BODY_COLOR, end=end)
+    cprint(
+        text,
+        color_quote=color_quote,
+        color=HPRINT_HEADER_OR_HIGHLIGHT_COLOR,
+        bk_color=HPRINT_MESSAGE_BODY_COLOR,
+        end=end,
+    )
 
 
-def eprint(text: str, color_quote: str = '`', end: str = '\n'):
+def eprint(text: str, color_quote: str = "`", end: str = "\n"):
     """
     Error-print text with red highlighting for backtick-enclosed sections.
 
@@ -303,11 +328,16 @@ def eprint(text: str, color_quote: str = '`', end: str = '\n'):
         color_quote: Character marking highlight boundaries (default: backtick)
         end: String appended after text (default: newline)
     """
-    cprint(text, color_quote=color_quote, color=EPRINT_HEADER_OR_HIGHLIGHT_COLOR,
-           bk_color=EPRINT_MESSAGE_BODY_COLOR, end=end)
+    cprint(
+        text,
+        color_quote=color_quote,
+        color=EPRINT_HEADER_OR_HIGHLIGHT_COLOR,
+        bk_color=EPRINT_MESSAGE_BODY_COLOR,
+        end=end,
+    )
 
 
-def wprint(text: str, color_quote: str = '`', end: str = '\n'):
+def wprint(text: str, color_quote: str = "`", end: str = "\n"):
     """
     Warning-print text with yellow highlighting for backtick-enclosed sections.
 
@@ -319,12 +349,19 @@ def wprint(text: str, color_quote: str = '`', end: str = '\n'):
         color_quote: Character marking highlight boundaries (default: backtick)
         end: String appended after text (default: newline)
     """
-    cprint(text, color_quote=color_quote, color=WPRINT_HEADER_OR_HIGHLIGHT_COLOR,
-           bk_color=WPRINT_MESSAGE_BODY_COLOR, end=end)
+    cprint(
+        text,
+        color_quote=color_quote,
+        color=WPRINT_HEADER_OR_HIGHLIGHT_COLOR,
+        bk_color=WPRINT_MESSAGE_BODY_COLOR,
+        end=end,
+    )
+
 
 # endregion
 
 # region Basic Message Printing
+
 
 def hprint_message(
     *msg_pairs,
@@ -334,7 +371,7 @@ def hprint_message(
     update_previous: bool = False,
     logger: Optional[logging.Logger] = None,
     replacement_for_empty_content: str = "n/a",
-    **kwargs
+    **kwargs,
 ):
     """
     Highlight-print one or more messages (cyan/white theme).
@@ -379,7 +416,7 @@ def hprint_message(
         logger=logger,
         log_method=logger.info if logger else None,
         replacement_for_empty_content=replacement_for_empty_content,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -389,7 +426,7 @@ def eprint_message(
     content: str = "",
     logger: Optional[logging.Logger] = None,
     replacement_for_empty_content: str = "n/a",
-    **kwargs
+    **kwargs,
 ):
     """
     Error-print messages (red/bright_yellow theme).
@@ -409,7 +446,7 @@ def eprint_message(
         logger=logger,
         log_method=logger.error if logger else None,
         replacement_for_empty_content=replacement_for_empty_content,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -419,7 +456,7 @@ def wprint_message(
     content: str = "",
     logger: Optional[logging.Logger] = None,
     replacement_for_empty_content: str = "n/a",
-    **kwargs
+    **kwargs,
 ):
     """
     Warning-print messages (magenta/yellow theme).
@@ -438,7 +475,7 @@ def wprint_message(
         logger=logger,
         log_method=logger.warning if logger else None,
         replacement_for_empty_content=replacement_for_empty_content,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -453,7 +490,7 @@ def cprint_message(
     logger: Optional[logging.Logger] = None,
     log_method: Optional[callable] = None,
     replacement_for_empty_content: str = "n/a",
-    **kwargs
+    **kwargs,
 ):
     """
     Custom-color print message with support for both single messages and key-value pairs.
@@ -478,22 +515,26 @@ def cprint_message(
     # Check if this is an update operation
     # Only update in place if terminal supports cursor control
     should_update_in_place = (
-        message_id and
-        update_previous and
-        message_id in _displayed_messages and
-        _CURSOR_CONTROL_SUPPORTED
+        message_id
+        and update_previous
+        and message_id in _displayed_messages
+        and _CURSOR_CONTROL_SUPPORTED
     )
 
     if should_update_in_place:
         # Clear previous lines before printing update
         prev_info = _displayed_messages[message_id]
-        _clear_previous_lines(prev_info['line_count'])
+        _clear_previous_lines(prev_info["line_count"])
 
     # Capture output to count lines - use a StringIO buffer for Rich console
     from io import StringIO
+
     from rich.console import Console as RichConsole
+
     captured_output = StringIO()
-    capture_console = RichConsole(file=captured_output, force_terminal=False, width=console.width)
+    capture_console = RichConsole(
+        file=captured_output, force_terminal=False, width=console.width
+    )
 
     try:
         if msg_pairs:
@@ -511,7 +552,7 @@ def cprint_message(
                 replacement_for_empty_content=replacement_for_empty_content,
                 message_id=message_id,
                 update_previous=update_previous,
-                **kwargs
+                **kwargs,
             )
             # cprint_pairs handles message tracking, so we return early
             return
@@ -533,7 +574,9 @@ def cprint_message(
 
             # Log to logger if provided
             if logger is not None:
-                log_msg = f"{title}: {formatted_content}" if title else formatted_content
+                log_msg = (
+                    f"{title}: {formatted_content}" if title else formatted_content
+                )
                 if log_method:
                     log_method(log_msg)
                 else:
@@ -551,14 +594,16 @@ def cprint_message(
     # Track for future updates if message_id provided
     if message_id:
         _displayed_messages[message_id] = {
-            'text': output_text,
-            'line_count': line_count,
-            'timestamp': time.time()
+            "text": output_text,
+            "line_count": line_count,
+            "timestamp": time.time(),
         }
+
 
 # endregion
 
 # region Pairs Printing
+
 
 def hprint_pairs(
     *args,
@@ -571,7 +616,7 @@ def hprint_pairs(
     message_id: Optional[str] = None,
     update_previous: bool = False,
     section_separator: str = "----",
-    **kwargs
+    **kwargs,
 ):
     """
     Print multiple key-value pairs with optional section title.
@@ -603,7 +648,7 @@ def hprint_pairs(
         message_id=message_id,
         update_previous=update_previous,
         section_separator=section_separator,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -618,7 +663,7 @@ def eprint_pairs(
     message_id: Optional[str] = None,
     update_previous: bool = False,
     section_separator: str = "----",
-    **kwargs
+    **kwargs,
 ):
     """
     Error-print multiple key-value pairs.
@@ -641,7 +686,7 @@ def eprint_pairs(
         message_id=message_id,
         update_previous=update_previous,
         section_separator=section_separator,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -656,7 +701,7 @@ def wprint_pairs(
     message_id: Optional[str] = None,
     update_previous: bool = False,
     section_separator: str = "----",
-    **kwargs
+    **kwargs,
 ):
     """
     Warning-print multiple key-value pairs.
@@ -679,7 +724,7 @@ def wprint_pairs(
         message_id=message_id,
         update_previous=update_previous,
         section_separator=section_separator,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -699,7 +744,7 @@ def cprint_pairs(
     message_id: Optional[str] = None,
     update_previous: bool = False,
     section_separator: str = "----",
-    **kwargs
+    **kwargs,
 ):
     """
     Generic colored pairs printing with customizable colors.
@@ -741,22 +786,26 @@ def cprint_pairs(
     """
     # Check if this is an update operation
     should_update_in_place = (
-        message_id and
-        update_previous and
-        message_id in _displayed_messages and
-        _CURSOR_CONTROL_SUPPORTED
+        message_id
+        and update_previous
+        and message_id in _displayed_messages
+        and _CURSOR_CONTROL_SUPPORTED
     )
 
     if should_update_in_place:
         # Clear previous lines before printing update
         prev_info = _displayed_messages[message_id]
-        _clear_previous_lines(prev_info['line_count'])
+        _clear_previous_lines(prev_info["line_count"])
 
     # Capture output to count lines
     from io import StringIO
+
     from rich.console import Console as RichConsole
+
     captured_output = StringIO()
-    capture_console = RichConsole(file=captured_output, force_terminal=False, width=console.width)
+    capture_console = RichConsole(
+        file=captured_output, force_terminal=False, width=console.width
+    )
 
     pairs = _solve_key_value_pairs(*args)
 
@@ -764,7 +813,9 @@ def cprint_pairs(
     if title:
         # Use Text object for better formatting control
         title_text = Text()
-        title_text.append(f"\n{title_decoration}{title}{title_decoration}\n", style=title_color)
+        title_text.append(
+            f"\n{title_decoration}{title}{title_decoration}\n", style=title_color
+        )
         capture_console.print(title_text)
         console.print(title_text)
         if comment:
@@ -796,8 +847,14 @@ def cprint_pairs(
         # Capture separator output - must match what cprint_section_separator outputs
         # cprint_section_separator prints "\n{separator_text}\n" plus an extra newline from console.print()
         sep_text = f"\n{section_separator}\n"
-        capture_console.print(sep_text)  # Don't use end="" - let it add the newline like console.print() does
-        cprint_section_separator(title_color=title_color, title_style=title_style, separator_text=section_separator)
+        capture_console.print(
+            sep_text
+        )  # Don't use end="" - let it add the newline like console.print() does
+        cprint_section_separator(
+            title_color=title_color,
+            title_style=title_style,
+            separator_text=section_separator,
+        )
 
     # Add to output list if provided
     if output_title_and_contents is not None:
@@ -809,7 +866,10 @@ def cprint_pairs(
 
     # Log if logger provided
     if logger is not None:
-        log_parts = [f"{k}: {_format_content(v, replacement_for_empty_content)}" for k, v in pairs]
+        log_parts = [
+            f"{k}: {_format_content(v, replacement_for_empty_content)}"
+            for k, v in pairs
+        ]
         log_msg = sep.join(log_parts)
         if title:
             log_msg = f"[{title}] {log_msg}"
@@ -820,14 +880,16 @@ def cprint_pairs(
         output_text = captured_output.getvalue()
         line_count = _count_lines(output_text)
         _displayed_messages[message_id] = {
-            'text': output_text,
-            'line_count': line_count,
-            'timestamp': time.time()
+            "text": output_text,
+            "line_count": line_count,
+            "timestamp": time.time(),
         }
+
 
 # endregion
 
 # region Section Formatting
+
 
 def hprint_section_title(title: str, decoration: str = "===="):
     """
@@ -841,7 +903,9 @@ def hprint_section_title(title: str, decoration: str = "===="):
     console.print(f"\n[{HPRINT_TITLE_COLOR}]{decoration}{title}{decoration}[/]\n")
 
 
-def cprint_section_separator(title_color: str = "cyan", title_style: str = "bold", separator_text: str = "----"):
+def cprint_section_separator(
+    title_color: str = "cyan", title_style: str = "bold", separator_text: str = "----"
+):
     """
     Print a section separator line with custom color.
 
@@ -934,9 +998,11 @@ def wprint_panel(
     """
     cprint_panel(content, title=title, border_style=WPRINT_TITLE_COLOR, padding=padding)
 
+
 # endregion
 
 # region Rich-Specific Features
+
 
 def print_table(
     data: List[Dict[str, Any]],
@@ -1041,9 +1107,11 @@ def progress_bar(description: str = "Processing...", total: Optional[int] = None
     ) as progress:
         yield progress
 
+
 # endregion
 
 # region Logger Integration
+
 
 def get_rich_logger(
     name: str,
@@ -1075,9 +1143,11 @@ def get_rich_logger(
 
     return logger
 
+
 # endregion
 
 # region Utility Functions
+
 
 def print_attrs(obj, exclude_private: bool = True):
     """
@@ -1092,14 +1162,17 @@ def print_attrs(obj, exclude_private: bool = True):
     """
     attrs = []
     for attr in dir(obj):
-        if exclude_private and attr.startswith('_'):
+        if exclude_private and attr.startswith("_"):
             continue
         attr_val = getattr(obj, attr)
         if not callable(attr_val):
             attrs.append((attr, attr_val))
 
     if attrs:
-        hprint_pairs(*[item for pair in attrs for item in pair], title=f"{obj.__class__.__name__} Attributes")
+        hprint_pairs(
+            *[item for pair in attrs for item in pair],
+            title=f"{obj.__class__.__name__} Attributes",
+        )
 
 
 def retrieve_and_print_attrs(obj, *attr_names) -> Tuple:
@@ -1120,11 +1193,11 @@ def retrieve_and_print_attrs(obj, *attr_names) -> Tuple:
 
 def color_print_pair_str(
     pair_str: str,
-    pair_delimiter: str = ',',
-    kv_delimiter: str = ':',
+    pair_delimiter: str = ",",
+    kv_delimiter: str = ":",
     key_color: str = "cyan",
     value_color: str = "white",
-    end: str = '\n',
+    end: str = "\n",
 ):
     """
     Parse and print a delimited pair string with colors.
@@ -1161,9 +1234,7 @@ def color_print_pair_str(
 
 
 def hprint_message_pair_str(
-    pair_str: str,
-    pair_delimiter: str = ',',
-    kv_delimiter: str = ':'
+    pair_str: str, pair_delimiter: str = ",", kv_delimiter: str = ":"
 ):
     """
     Parse and print a delimited pair string using hprint colors.
@@ -1202,7 +1273,7 @@ def log_pairs(logging_fun: callable, *args):
         logging_fun: Logging function (e.g., logger.info, logger.debug)
         *args: Tuples of (key, value) pairs
     """
-    msg = ' '.join(str(arg_tup[0]) + ' ' + str(arg_tup[1]) for arg_tup in args)
+    msg = " ".join(str(arg_tup[0]) + " " + str(arg_tup[1]) for arg_tup in args)
     logging_fun(msg)
 
 
@@ -1220,18 +1291,18 @@ def info_print(tag: Any, content: Any):
         tag: Tag object (class, string, or any object)
         content: Message content
     """
-    from rich_python_utils.common_utils.typing_helper import is_class, is_basic_type
+    from rich_python_utils.common_utils.typing_helper import is_basic_type, is_class
 
     # Determine tag string
     if is_class(tag):
-        tag_str = tag.__module__ + '.' + tag.__name__
+        tag_str = tag.__module__ + "." + tag.__name__
     elif is_basic_type(tag):
         tag_str = str(tag)
     else:
         tag_str = tag.__class__.__name__
 
     # Check verbose setting
-    if not hasattr(tag, '_verbose') or getattr(tag, '_verbose') is True:
+    if not hasattr(tag, "_verbose") or getattr(tag, "_verbose") is True:
         text = Text()
         text.append(tag_str, style="cyan")
         text.append(": ", style="white")
@@ -1252,18 +1323,18 @@ def debug_print(tag: Any, content: Any):
         tag: Tag object (class, string, or any object)
         content: Message content
     """
-    from rich_python_utils.common_utils.typing_helper import is_class, is_basic_type
+    from rich_python_utils.common_utils.typing_helper import is_basic_type, is_class
 
     # Determine tag string
     if is_class(tag):
-        tag_str = tag.__module__ + '.' + tag.__name__
+        tag_str = tag.__module__ + "." + tag.__name__
     elif is_basic_type(tag):
         tag_str = str(tag)
     else:
         tag_str = tag.__class__.__name__
 
     # Check verbose setting
-    if not hasattr(tag, '_verbose') or getattr(tag, '_verbose') is True:
+    if not hasattr(tag, "_verbose") or getattr(tag, "_verbose") is True:
         text = Text()
         text.append(tag_str, style="yellow")
         text.append(": ", style="white")
@@ -1280,12 +1351,15 @@ def checkpoint(prompt: str = "Enter 'YES' to continue"):
     """
     while True:
         msg = console.input(f"[yellow]{prompt}[/yellow]\n")
-        if msg.upper() == 'YES':
+        if msg.upper() == "YES":
             return True
-        elif msg.lower() == 'exit':
+        elif msg.lower() == "exit":
             console.print("[red]Exiting...[/red]")
             exit()
         else:
-            console.print(f"[dim]'{msg}' is invalid. Enter 'YES' to continue or 'exit' to quit.[/dim]")
+            console.print(
+                f"[dim]'{msg}' is invalid. Enter 'YES' to continue or 'exit' to quit.[/dim]"
+            )
+
 
 # endregion

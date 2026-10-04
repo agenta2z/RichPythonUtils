@@ -6,13 +6,14 @@ including creation, updates, cleanup, and idle detection.
 Subclasses implement ``_create_session()`` to build service-specific session
 objects and optionally override ``_on_before_cleanup()`` for custom teardown.
 """
+
 import abc
 import threading
 import time
 from pathlib import Path
 from typing import ClassVar, Dict, Optional
 
-from attr import attrs, attrib
+from attr import attrib, attrs
 from rich_python_utils.common_objects.debuggable import Debuggable
 
 from .session_base import SessionBase
@@ -35,6 +36,7 @@ class SessionManager(Debuggable, abc.ABC):
         - Set ``_RUNTIME_FIELDS`` for fields routed to session properties
           (vs. ``session.info``).
     """
+
     _session_idle_timeout: int = attrib(kw_only=True, default=1800)
     _service_log_dir: Path = attrib(kw_only=True, default=None)
 
@@ -51,18 +53,20 @@ class SessionManager(Debuggable, abc.ABC):
 
     def _get_log_type_session_management(self) -> str:
         """Return the log type string for session management events."""
-        return 'SessionManagement'
+        return "SessionManagement"
 
     def _get_log_type_session_cleanup(self) -> str:
         """Return the log type string for session cleanup events."""
-        return 'SessionCleanup'
+        return "SessionCleanup"
 
     # ------------------------------------------------------------------
     # Abstract / hook methods
     # ------------------------------------------------------------------
 
     @abc.abstractmethod
-    def _create_session(self, session_id: str, session_type: str, **kwargs) -> SessionBase:
+    def _create_session(
+        self, session_id: str, session_type: str, **kwargs
+    ) -> SessionBase:
         """Create a new session with all infrastructure.
 
         Called inside ``get_or_create()`` under the lock when a session does
@@ -111,11 +115,13 @@ class SessionManager(Debuggable, abc.ABC):
                 session = self._create_session(session_id, session_type, **kwargs)
                 self._sessions[session_id] = session
 
-                self.log_info({
-                    'type': self._get_log_type_session_management(),
-                    'message': f'Session created: {session_id}',
-                    'session_type': session_type,
-                })
+                self.log_info(
+                    {
+                        "type": self._get_log_type_session_management(),
+                        "message": f"Session created: {session_id}",
+                        "session_type": session_type,
+                    }
+                )
 
             return self._sessions[session_id]
 
@@ -177,10 +183,12 @@ class SessionManager(Debuggable, abc.ABC):
             if session is None:
                 return
 
-            session.log_info({
-                'type': self._get_log_type_session_cleanup(),
-                'message': f'Cleaning up session: {session_id}',
-            })
+            session.log_info(
+                {
+                    "type": self._get_log_type_session_cleanup(),
+                    "message": f"Cleaning up session: {session_id}",
+                }
+            )
 
             self._on_before_cleanup(session)
 
@@ -203,10 +211,12 @@ class SessionManager(Debuggable, abc.ABC):
                 idle_time = current_time - session.info.last_active
                 if idle_time > timeout:
                     sessions_to_cleanup.append(session_id)
-                    session.log_info({
-                        'type': self._get_log_type_session_cleanup(),
-                        'message': f'Session {session_id} idle for {idle_time:.1f}s (timeout: {timeout}s)',
-                    })
+                    session.log_info(
+                        {
+                            "type": self._get_log_type_session_cleanup(),
+                            "message": f"Session {session_id} idle for {idle_time:.1f}s (timeout: {timeout}s)",
+                        }
+                    )
 
             for session_id in sessions_to_cleanup:
                 self.cleanup_session(session_id)

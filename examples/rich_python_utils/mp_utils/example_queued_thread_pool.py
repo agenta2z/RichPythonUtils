@@ -27,28 +27,33 @@ Usage:
 """
 
 from resolve_path import resolve_path
+
 resolve_path()  # Add project src to sys.path
 
 import time
-from rich_python_utils.mp_utils.task import Task
+
 from rich_python_utils.mp_utils.queued_executor import (
-    SingleThreadExecutor,
     QueuedThreadPoolExecutor,
+    SingleThreadExecutor,
 )
-from rich_python_utils.service_utils.queue_service.thread_queue_service import ThreadQueueService
+from rich_python_utils.mp_utils.task import Task
+from rich_python_utils.service_utils.queue_service.thread_queue_service import (
+    ThreadQueueService,
+)
 
 
 # =============================================================================
 # Simulated I/O-bound tasks
 # =============================================================================
 
+
 def fetch_api_data(endpoint_id):
     """Simulate fetching data from an API endpoint."""
     time.sleep(0.15)  # Simulate network latency
     return {
-        'endpoint_id': endpoint_id,
-        'data': f'response_from_endpoint_{endpoint_id}',
-        'latency_ms': 150
+        "endpoint_id": endpoint_id,
+        "data": f"response_from_endpoint_{endpoint_id}",
+        "latency_ms": 150,
     }
 
 
@@ -56,20 +61,16 @@ def read_file(file_id):
     """Simulate reading a file from disk."""
     time.sleep(0.10)  # Simulate disk I/O
     return {
-        'file_id': file_id,
-        'content': f'file_{file_id}_contents',
-        'size_kb': 100 + file_id * 10
+        "file_id": file_id,
+        "content": f"file_{file_id}_contents",
+        "size_kb": 100 + file_id * 10,
     }
 
 
 def query_database(query_id):
     """Simulate executing a database query."""
     time.sleep(0.12)  # Simulate query execution
-    return {
-        'query_id': query_id,
-        'rows': query_id * 5,
-        'execution_ms': 120
-    }
+    return {"query_id": query_id, "rows": query_id * 5, "execution_ms": 120}
 
 
 def main():
@@ -106,10 +107,10 @@ Threads excel at I/O-bound tasks because:
     seq_executor = SingleThreadExecutor(
         input_queue_service=queue_service,
         output_queue_service=queue_service,
-        input_queue_id='seq_in',
-        output_queue_id='seq_out',
-        name='SequentialWorker',
-        verbose=False
+        input_queue_id="seq_in",
+        output_queue_id="seq_out",
+        name="SequentialWorker",
+        verbose=False,
     )
 
     for i in range(NUM_TASKS):
@@ -137,11 +138,11 @@ Threads excel at I/O-bound tasks because:
     par_executor = QueuedThreadPoolExecutor(
         input_queue_service=queue_service,
         output_queue_service=queue_service,
-        input_queue_id='par_in',
-        output_queue_id='par_out',
+        input_queue_id="par_in",
+        output_queue_id="par_out",
         num_workers=NUM_WORKERS,
-        name='ThreadPool',
-        verbose=False
+        name="ThreadPool",
+        verbose=False,
     )
 
     for i in range(NUM_TASKS):
@@ -198,18 +199,18 @@ Threads excel at I/O-bound tasks because:
     mixed_executor = QueuedThreadPoolExecutor(
         input_queue_service=queue_service,
         output_queue_service=queue_service,
-        input_queue_id='mixed_in',
-        output_queue_id='mixed_out',
+        input_queue_id="mixed_in",
+        output_queue_id="mixed_out",
         num_workers=4,
-        name='MixedIO',
-        verbose=False
+        name="MixedIO",
+        verbose=False,
     )
 
     # Submit different I/O task types
     for i in range(4):
-        mixed_executor.submit(Task(callable=fetch_api_data, args=(i,), name=f'API-{i}'))
-        mixed_executor.submit(Task(callable=read_file, args=(i,), name=f'File-{i}'))
-        mixed_executor.submit(Task(callable=query_database, args=(i,), name=f'DB-{i}'))
+        mixed_executor.submit(Task(callable=fetch_api_data, args=(i,), name=f"API-{i}"))
+        mixed_executor.submit(Task(callable=read_file, args=(i,), name=f"File-{i}"))
+        mixed_executor.submit(Task(callable=query_database, args=(i,), name=f"DB-{i}"))
 
     total_tasks = 12
 
@@ -236,7 +237,7 @@ Threads excel at I/O-bound tasks because:
     # =========================================================================
     print("\n7. Cleanup...")
 
-    for qid in ['seq_in', 'seq_out', 'par_in', 'par_out', 'mixed_in', 'mixed_out']:
+    for qid in ["seq_in", "seq_out", "par_in", "par_out", "mixed_in", "mixed_out"]:
         queue_service.delete(qid)
     queue_service.close()
 
@@ -255,12 +256,14 @@ Key Takeaways:
 """)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         main()
     except Exception as e:
         print(f"\n[X] Error: {e}")
         import traceback
+
         traceback.print_exc()
         import sys
+
         sys.exit(1)

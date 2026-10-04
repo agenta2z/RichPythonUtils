@@ -2,34 +2,32 @@ import calendar
 import datetime
 import sys
 from datetime import datetime, timedelta
-from typing import Union, Mapping, List, Tuple, Iterator, Iterable
+from typing import Iterable, Iterator, List, Mapping, Tuple, Union
 
 from rich_python_utils.common_utils import iter_
 from rich_python_utils.datetime_utils.common import solve_datetime
 
 
 def solve_start_date_with_days_delta(
-        start_date: Union[datetime, str, Mapping, List, Tuple],
-        end_date_inclusive: Union[datetime, str, Mapping, List, Tuple] = None,
-        end_date_exclusive: Union[datetime, str, Mapping, List, Tuple] = None,
-        days_delta=None,
-        date_str_format: str = '%m/%d/%Y',
-        return_days_delta=False,
-        solve_negative_days_delta: bool = True
+    start_date: Union[datetime, str, Mapping, List, Tuple],
+    end_date_inclusive: Union[datetime, str, Mapping, List, Tuple] = None,
+    end_date_exclusive: Union[datetime, str, Mapping, List, Tuple] = None,
+    days_delta=None,
+    date_str_format: str = "%m/%d/%Y",
+    return_days_delta=False,
+    solve_negative_days_delta: bool = True,
 ):
     start_date = solve_datetime(start_date, datetime_str_format=date_str_format)
 
-    if days_delta != float('-inf') and days_delta != float('-inf'):
+    if days_delta != float("-inf") and days_delta != float("-inf"):
         if end_date_inclusive is not None:
             if end_date_exclusive is not None:
                 raise ValueError(
                     "can only specify one of 'end_date_inclusive' and 'end_date_exclusive'"
                 )
             days_delta = (
-                    solve_datetime(
-                        end_date_inclusive,
-                        datetime_str_format=date_str_format
-                    ) - start_date
+                solve_datetime(end_date_inclusive, datetime_str_format=date_str_format)
+                - start_date
             ).days
             if days_delta < 0:
                 days_delta -= 1
@@ -37,10 +35,8 @@ def solve_start_date_with_days_delta(
                 days_delta += 1
         elif end_date_exclusive is not None:
             days_delta = (
-                    solve_datetime(
-                        end_date_exclusive,
-                        datetime_str_format=date_str_format
-                    ) - start_date
+                solve_datetime(end_date_exclusive, datetime_str_format=date_str_format)
+                - start_date
             ).days
 
         if days_delta is not None and solve_negative_days_delta and days_delta < 0:
@@ -54,10 +50,10 @@ def solve_start_date_with_days_delta(
 
 
 def is_partial_or_single_batch(
-        num_days: int,
-        end_date_inclusive: Union[datetime, str],
-        batch_size: Union[int, str, Iterable[int]] = "monthly",
-        date_str_format: str = "%m/%d/%Y",
+    num_days: int,
+    end_date_inclusive: Union[datetime, str],
+    batch_size: Union[int, str, Iterable[int]] = "monthly",
+    date_str_format: str = "%m/%d/%Y",
 ) -> bool:
     """
     Determine if the number of days can be considered as a single or partial batch for the given
@@ -96,7 +92,9 @@ def is_partial_or_single_batch(
             return False
         else:
             if isinstance(end_date_inclusive, str):
-                end_date_inclusive = datetime.strptime(end_date_inclusive, date_str_format)
+                end_date_inclusive = datetime.strptime(
+                    end_date_inclusive, date_str_format
+                )
 
             if num_days <= end_date_inclusive.day:
                 return True
@@ -111,7 +109,9 @@ def is_partial_or_single_batch(
             return True
         else:
             if isinstance(end_date_inclusive, str):
-                end_date_inclusive = datetime.strptime(end_date_inclusive, date_str_format)
+                end_date_inclusive = datetime.strptime(
+                    end_date_inclusive, date_str_format
+                )
             if num_days <= end_date_inclusive.day:
                 return True
             else:
@@ -121,13 +121,13 @@ def is_partial_or_single_batch(
 
 
 def iter_dates(
-        start_date: Union[datetime, str, Mapping, List, Tuple],
-        end_date_inclusive: Union[datetime, str, Mapping, List, Tuple] = None,
-        end_date_exclusive: Union[datetime, str, Mapping, List, Tuple] = None,
-        days_delta=None,
-        date_str_format: str = '%m/%d/%Y',
-        always_forward_iter_if_possible: bool = True,
-        output_date_str_format: Union[str, bool] = None
+    start_date: Union[datetime, str, Mapping, List, Tuple],
+    end_date_inclusive: Union[datetime, str, Mapping, List, Tuple] = None,
+    end_date_exclusive: Union[datetime, str, Mapping, List, Tuple] = None,
+    days_delta=None,
+    date_str_format: str = "%m/%d/%Y",
+    always_forward_iter_if_possible: bool = True,
+    output_date_str_format: Union[str, bool] = None,
 ) -> Iterator[datetime]:
     """
     Iterates `datetime` objects starting from the `start_date` (always inclusive);
@@ -235,7 +235,7 @@ def iter_dates(
         days_delta=days_delta,
         date_str_format=date_str_format,
         return_days_delta=True,
-        solve_negative_days_delta=always_forward_iter_if_possible
+        solve_negative_days_delta=always_forward_iter_if_possible,
     )
 
     if output_date_str_format is True:
@@ -247,11 +247,11 @@ def iter_dates(
     day = start_date
     yield _day()
 
-    if days_delta == float('inf'):
+    if days_delta == float("inf"):
         while True:
             day = day + timedelta(days=1)
             yield _day()
-    elif days_delta == float('-inf'):
+    elif days_delta == float("-inf"):
         while True:
             day = day + timedelta(days=-1)
             yield _day()
@@ -266,11 +266,11 @@ def iter_dates(
 
 
 def _get_date_range(
-        num_days_backward,
-        end_date_inclusive,
-        yield_start_date,
-        format_output_date_as_string,
-        date_str_format
+    num_days_backward,
+    end_date_inclusive,
+    yield_start_date,
+    format_output_date_as_string,
+    date_str_format,
 ):
     _end_date_inclusive = (
         end_date_inclusive.strftime(date_str_format)
@@ -278,7 +278,9 @@ def _get_date_range(
         else end_date_inclusive
     )
     if yield_start_date:
-        start_date_inclusive = end_date_inclusive - timedelta(days=num_days_backward - 1)
+        start_date_inclusive = end_date_inclusive - timedelta(
+            days=num_days_backward - 1
+        )
         _start_date_inclusive = (
             start_date_inclusive.strftime(date_str_format)
             if format_output_date_as_string
@@ -290,16 +292,16 @@ def _get_date_range(
 
 
 def iter_monthly_num_days_backward(
-        end_date_inclusive: Union[datetime, str],
-        date_str_format: str = '%m/%d/%Y',
-        max_num_months: int = None,
-        max_num_days: int = None,
-        partial_first_month: bool = True,
-        partial_last_month: bool = True,
-        return_end_date: bool = False,
-        format_output_date_as_string: bool = True,
-        yield_start_date: bool = False,
-        biweekly: bool = False
+    end_date_inclusive: Union[datetime, str],
+    date_str_format: str = "%m/%d/%Y",
+    max_num_months: int = None,
+    max_num_days: int = None,
+    partial_first_month: bool = True,
+    partial_last_month: bool = True,
+    return_end_date: bool = False,
+    format_output_date_as_string: bool = True,
+    yield_start_date: bool = False,
+    biweekly: bool = False,
 ) -> Iterable[Union[int, Tuple[int, Union[datetime, str]]]]:
     """
     This function generates the number of days in each month, starting from the month of the
@@ -407,11 +409,10 @@ def iter_monthly_num_days_backward(
     if max_num_days < 0:
         raise ValueError("'max_num_days' must be a positive integer")
 
-    num_days_last_month = (end_date_inclusive - datetime(
-        year=end_date_inclusive.year,
-        month=end_date_inclusive.month,
-        day=1
-    )).days + 1
+    num_days_last_month = (
+        end_date_inclusive
+        - datetime(year=end_date_inclusive.year, month=end_date_inclusive.month, day=1)
+    ).days + 1
 
     if partial_last_month:
         if biweekly and num_days_last_month > 15:
@@ -420,11 +421,14 @@ def iter_monthly_num_days_backward(
             month_base_date = 1
             max_num_months -= 1
 
-        num_days = (end_date_inclusive - datetime(
-            year=end_date_inclusive.year,
-            month=end_date_inclusive.month,
-            day=month_base_date
-        )).days + 1
+        num_days = (
+            end_date_inclusive
+            - datetime(
+                year=end_date_inclusive.year,
+                month=end_date_inclusive.month,
+                day=month_base_date,
+            )
+        ).days + 1
 
         num_days = min(max_num_days, num_days)
 
@@ -434,7 +438,7 @@ def iter_monthly_num_days_backward(
                 end_date_inclusive=end_date_inclusive,
                 yield_start_date=yield_start_date,
                 format_output_date_as_string=format_output_date_as_string,
-                date_str_format=date_str_format
+                date_str_format=date_str_format,
             )
         else:
             yield num_days
@@ -450,14 +454,14 @@ def iter_monthly_num_days_backward(
             end_date_inclusive_mid_month = datetime(
                 year=end_date_inclusive.year,
                 month=end_date_inclusive.month,
-                day=num_days_last_month
+                day=num_days_last_month,
             )
             yield _get_date_range(
                 num_days_backward=num_days_last_month,
                 end_date_inclusive=end_date_inclusive_mid_month,
                 yield_start_date=yield_start_date,
                 format_output_date_as_string=format_output_date_as_string,
-                date_str_format=date_str_format
+                date_str_format=date_str_format,
             )
         else:
             yield num_days_last_month
@@ -466,7 +470,9 @@ def iter_monthly_num_days_backward(
         max_num_months -= 1
 
     while max_num_months and max_num_days:
-        num_days_in_month = calendar.monthrange(end_date_inclusive.year, end_date_inclusive.month)[1]
+        num_days_in_month = calendar.monthrange(
+            end_date_inclusive.year, end_date_inclusive.month
+        )[1]
         num_days = (num_days_in_month - 15) if biweekly else num_days_in_month
 
         if partial_first_month:
@@ -477,7 +483,7 @@ def iter_monthly_num_days_backward(
                 end_date_inclusive=end_date_inclusive,
                 yield_start_date=yield_start_date,
                 format_output_date_as_string=format_output_date_as_string,
-                date_str_format=date_str_format
+                date_str_format=date_str_format,
             )
         else:
             yield num_days
@@ -494,7 +500,7 @@ def iter_monthly_num_days_backward(
                     end_date_inclusive=end_date_inclusive,
                     yield_start_date=yield_start_date,
                     format_output_date_as_string=format_output_date_as_string,
-                    date_str_format=date_str_format
+                    date_str_format=date_str_format,
                 )
             else:
                 yield num_days
@@ -505,12 +511,12 @@ def iter_monthly_num_days_backward(
 
 
 def iter_date_ranges_by_end_date(
-        num_days: int,
-        end_date_inclusive: Union[datetime, str],
-        batch_size: Union[int, str, Iterable[int]] = 'monthly',
-        date_str_format: str = '%m/%d/%Y',
-        yield_start_date: bool = False,
-        format_output_date_as_string: bool = True
+    num_days: int,
+    end_date_inclusive: Union[datetime, str],
+    batch_size: Union[int, str, Iterable[int]] = "monthly",
+    date_str_format: str = "%m/%d/%Y",
+    yield_start_date: bool = False,
+    format_output_date_as_string: bool = True,
 ) -> Iterator[Tuple[Union[int, datetime, str], Union[datetime, str]]]:
     """
 
@@ -574,18 +580,7 @@ def iter_date_ranges_by_end_date(
         end_date_inclusive = datetime.strptime(end_date_inclusive, date_str_format)
 
     if isinstance(batch_size, str):
-        if batch_size in 'monthly':
-            yield from iter_monthly_num_days_backward(
-                end_date_inclusive=end_date_inclusive,
-                date_str_format=date_str_format,
-                max_num_days=num_days,
-                partial_first_month=True,
-                partial_last_month=True,
-                return_end_date=True,
-                yield_start_date=yield_start_date,
-                format_output_date_as_string=format_output_date_as_string
-            )
-        elif batch_size == 'biweekly':
+        if batch_size in "monthly":
             yield from iter_monthly_num_days_backward(
                 end_date_inclusive=end_date_inclusive,
                 date_str_format=date_str_format,
@@ -595,7 +590,18 @@ def iter_date_ranges_by_end_date(
                 return_end_date=True,
                 yield_start_date=yield_start_date,
                 format_output_date_as_string=format_output_date_as_string,
-                biweekly=True
+            )
+        elif batch_size == "biweekly":
+            yield from iter_monthly_num_days_backward(
+                end_date_inclusive=end_date_inclusive,
+                date_str_format=date_str_format,
+                max_num_days=num_days,
+                partial_first_month=True,
+                partial_last_month=True,
+                return_end_date=True,
+                yield_start_date=yield_start_date,
+                format_output_date_as_string=format_output_date_as_string,
+                biweekly=True,
             )
         else:
             raise ValueError(f"'{batch_size}' is not a valid batch size option")
@@ -612,7 +618,7 @@ def iter_date_ranges_by_end_date(
                 end_date_inclusive=end_date_inclusive,
                 yield_start_date=yield_start_date,
                 format_output_date_as_string=format_output_date_as_string,
-                date_str_format=date_str_format
+                date_str_format=date_str_format,
             )
             num_days -= _batch_size
             end_date_inclusive -= timedelta(days=_batch_size)

@@ -1,7 +1,7 @@
 import re
-from typing import Mapping, Callable, Dict, Optional, Any, List, Union, Tuple, Set
+from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Union
 
-from jinja2 import Template, meta, Environment, ChainableUndefined
+from jinja2 import ChainableUndefined, Environment, meta, Template
 
 
 class _FalsyChainableUndefined(ChainableUndefined):
@@ -11,6 +11,7 @@ class _FalsyChainableUndefined(ChainableUndefined):
     def __bool__(self) -> bool:
         return False
 
+
 from rich_python_utils.common_utils import dict_
 
 
@@ -19,19 +20,23 @@ def get_common_helpers() -> Dict[str, Callable]:
     Returns a dictionary of common helper functions for Jinja2 templates.
     """
 
-    from rich_python_utils.datetime_utils.common import current_date_time_string, current_date_string, \
-        current_time_string
+    from rich_python_utils.datetime_utils.common import (
+        current_date_string,
+        current_date_time_string,
+        current_time_string,
+    )
+
     return {
-        'currentDateTime': current_date_time_string,
-        'currentDate': current_date_string,
-        'currentTime': current_time_string
+        "currentDateTime": current_date_time_string,
+        "currentDate": current_date_string,
+        "currentTime": current_time_string,
     }
 
 
 def compile_template(
-        template: str,
-        return_variables: bool = False,
-        required_variables: Optional[Union[Set[str], List[str]]] = None
+    template: str,
+    return_variables: bool = False,
+    required_variables: Optional[Union[Set[str], List[str]]] = None,
 ) -> Union[Template, Tuple[Template, Set[str]]]:
     """
     Compile a Jinja2 template string and optionally return variables found in it.
@@ -108,7 +113,11 @@ def compile_template(
 
         # Validate required variables if provided
         if required_variables is not None:
-            required_set = set(required_variables) if not isinstance(required_variables, set) else required_variables
+            required_set = (
+                set(required_variables)
+                if not isinstance(required_variables, set)
+                else required_variables
+            )
             missing_variables = required_set - variables_found
 
             if missing_variables:
@@ -151,12 +160,12 @@ def extract_variables(template: str) -> Set[str]:
 
 
 def format_template(
-        template: str,
-        feed: Optional[Mapping[str, Any]] = None,
-        post_process: Optional[Callable[[str], str]] = None,
-        helpers: Optional[Mapping[str, Callable]] = None,
-        use_builtin_common_helpers: bool = True,
-        **default_feed
+    template: str,
+    feed: Optional[Mapping[str, Any]] = None,
+    post_process: Optional[Callable[[str], str]] = None,
+    helpers: Optional[Mapping[str, Callable]] = None,
+    use_builtin_common_helpers: bool = True,
+    **default_feed,
 ) -> str:
     """
     Renders a Jinja2 template string with provided context and optional built-in/common helpers.
@@ -274,9 +283,9 @@ def format_template(
 
 
 def validate_table_and_compile_template(
-        data_frame: Any,
-        prompt: str,
-        get_colnames: Optional[Callable[[Any], List[str]]] = None,
+    data_frame: Any,
+    prompt: str,
+    get_colnames: Optional[Callable[[Any], List[str]]] = None,
 ) -> Tuple[Template, Any, List[str], List[str]]:
     """
     Utility function to validate data frame columns against Jinja2 template variables
@@ -312,13 +321,17 @@ def validate_table_and_compile_template(
         try:
             columns = get_colnames(data_frame)
         except Exception as e:
-            raise ValueError(f"Failed to get column names using provided function: {str(e)}")
+            raise ValueError(
+                f"Failed to get column names using provided function: {str(e)}"
+            )
     else:
         # Default: assume pandas-like interface
         try:
             columns = list(data_frame.columns)
         except AttributeError:
-            raise ValueError("Data frame does not have .columns attribute. Please provide get_colnames function.")
+            raise ValueError(
+                "Data frame does not have .columns attribute. Please provide get_colnames function."
+            )
 
     # Check if required variables exist as columns in the dataframe
     missing_columns = []

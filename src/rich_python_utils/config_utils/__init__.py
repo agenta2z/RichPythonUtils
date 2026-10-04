@@ -29,18 +29,20 @@ Discoverability::
     list_registered()                  # all aliases
     list_registered('inferencer')      # filtered by category
     resolve_target('ClaudeAPI')        # alias → full import path
+    import_target('ClaudeAPI')         # alias → imported class (raises on failure)
 """
 
 from rich_python_utils.config_utils._registry import (
+    _reset_registry,
     AliasResolutionError,
+    import_target,
+    list_registered,
     MissingTargetError,
-    RegistryError,
     register,
     register_alias,
     register_class,
+    RegistryError,
     resolve_target,
-    list_registered,
-    _reset_registry,
 )
 
 # Lazy — only imported when called, not at module load time.
@@ -49,18 +51,35 @@ from rich_python_utils.config_utils._registry import (
 
 def load_config(path, overrides=None, env_prefix=None, config_defaults=None):
     from rich_python_utils.config_utils._instantiate import load_config as _load
-    return _load(path, overrides, env_prefix=env_prefix, config_defaults=config_defaults)
+
+    return _load(
+        path, overrides, env_prefix=env_prefix, config_defaults=config_defaults
+    )
 
 
 def merge_configs(*configs):
     from rich_python_utils.config_utils._instantiate import merge_configs as _merge
+
     return _merge(*configs)
 
 
 def instantiate(config, _convert_="all", merge_dict_typed_attributes=True, **kwargs):
     from rich_python_utils.config_utils._instantiate import instantiate as _inst
-    return _inst(config, _convert_=_convert_,
-                 merge_dict_typed_attributes=merge_dict_typed_attributes, **kwargs)
+
+    return _inst(
+        config,
+        _convert_=_convert_,
+        merge_dict_typed_attributes=merge_dict_typed_attributes,
+        **kwargs,
+    )
+
+
+def collect_slot_defaults(cls):
+    from rich_python_utils.config_utils._instantiate import (
+        collect_slot_defaults as _collect,
+    )
+
+    return _collect(cls)
 
 
 __all__ = [
@@ -69,11 +88,13 @@ __all__ = [
     "merge_configs",
     # Instantiation
     "instantiate",
+    "collect_slot_defaults",
     # Registry
     "register",
     "register_alias",
     "register_class",
     "resolve_target",
+    "import_target",
     "list_registered",
     "_reset_registry",
     # Exceptions

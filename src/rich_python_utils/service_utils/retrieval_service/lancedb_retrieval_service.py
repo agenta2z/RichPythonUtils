@@ -23,7 +23,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from attr import attrs, attrib
+from attr import attrib, attrs
 
 from .document import Document
 from .filter_utils import matches_filters
@@ -146,12 +146,16 @@ class LanceDBRetrievalService(RetrievalServiceBase):
         if self._table is not None:
             existing = (
                 self._table.search()
-                .where(f"doc_id = '{_escape_sql(doc.doc_id)}' AND namespace = '{_escape_sql(ns)}'")
+                .where(
+                    f"doc_id = '{_escape_sql(doc.doc_id)}' AND namespace = '{_escape_sql(ns)}'"
+                )
                 .limit(1)
                 .to_list()
             )
             if existing:
-                raise ValueError(f"Duplicate doc_id: '{doc.doc_id}' already exists in namespace '{ns}'")
+                raise ValueError(
+                    f"Duplicate doc_id: '{doc.doc_id}' already exists in namespace '{ns}'"
+                )
         record = self._doc_to_record(doc, ns)
         if self._table is None:
             self._ensure_table(record)
@@ -160,14 +164,18 @@ class LanceDBRetrievalService(RetrievalServiceBase):
             self._rebuild_fts_index()
         return doc.doc_id
 
-    def get_by_id(self, doc_id: str, namespace: Optional[str] = None) -> Optional[Document]:
+    def get_by_id(
+        self, doc_id: str, namespace: Optional[str] = None
+    ) -> Optional[Document]:
         if self._table is None:
             return None
         ns = self._resolve_namespace(namespace)
         try:
             results = (
                 self._table.search()
-                .where(f"doc_id = '{_escape_sql(doc_id)}' AND namespace = '{_escape_sql(ns)}'")
+                .where(
+                    f"doc_id = '{_escape_sql(doc_id)}' AND namespace = '{_escape_sql(ns)}'"
+                )
                 .limit(1)
                 .to_list()
             )
@@ -184,14 +192,18 @@ class LanceDBRetrievalService(RetrievalServiceBase):
         ns = self._resolve_namespace(namespace)
         existing = (
             self._table.search()
-            .where(f"doc_id = '{_escape_sql(doc.doc_id)}' AND namespace = '{_escape_sql(ns)}'")
+            .where(
+                f"doc_id = '{_escape_sql(doc.doc_id)}' AND namespace = '{_escape_sql(ns)}'"
+            )
             .limit(1)
             .to_list()
         )
         if not existing:
             return False
         doc.updated_at = datetime.now(timezone.utc).isoformat()
-        self._table.delete(f"doc_id = '{_escape_sql(doc.doc_id)}' AND namespace = '{_escape_sql(ns)}'")
+        self._table.delete(
+            f"doc_id = '{_escape_sql(doc.doc_id)}' AND namespace = '{_escape_sql(ns)}'"
+        )
         record = self._doc_to_record(doc, ns)
         self._table.add([record])
         self._rebuild_fts_index()
@@ -203,13 +215,17 @@ class LanceDBRetrievalService(RetrievalServiceBase):
         ns = self._resolve_namespace(namespace)
         existing = (
             self._table.search()
-            .where(f"doc_id = '{_escape_sql(doc_id)}' AND namespace = '{_escape_sql(ns)}'")
+            .where(
+                f"doc_id = '{_escape_sql(doc_id)}' AND namespace = '{_escape_sql(ns)}'"
+            )
             .limit(1)
             .to_list()
         )
         if not existing:
             return False
-        self._table.delete(f"doc_id = '{_escape_sql(doc_id)}' AND namespace = '{_escape_sql(ns)}'")
+        self._table.delete(
+            f"doc_id = '{_escape_sql(doc_id)}' AND namespace = '{_escape_sql(ns)}'"
+        )
         self._rebuild_fts_index()
         return True
 
@@ -258,7 +274,10 @@ class LanceDBRetrievalService(RetrievalServiceBase):
                     .to_list()
                 )
                 if fts_results:
-                    raw = [(r.get("doc_id", ""), float(r.get("_score", 0.0) or 0.0)) for r in fts_results]
+                    raw = [
+                        (r.get("doc_id", ""), float(r.get("_score", 0.0) or 0.0))
+                        for r in fts_results
+                    ]
                     max_s = max((s for _, s in raw), default=0.0)
                     for did, s in raw:
                         bm25_scores[did] = (s / max_s) if max_s > 0 else 0.0
@@ -273,7 +292,9 @@ class LanceDBRetrievalService(RetrievalServiceBase):
         alpha = self.hybrid_alpha
         combined: Dict[str, float] = {}
         for did in all_ids:
-            combined[did] = alpha * vector_scores.get(did, 0.0) + (1.0 - alpha) * bm25_scores.get(did, 0.0)
+            combined[did] = alpha * vector_scores.get(did, 0.0) + (
+                1.0 - alpha
+            ) * bm25_scores.get(did, 0.0)
 
         scored: List[Tuple[Document, float]] = []
         for did, score in combined.items():

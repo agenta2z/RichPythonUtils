@@ -1,18 +1,20 @@
-from typing import Union, Iterable, Callable
+from typing import Callable, Iterable, Union
 
 import nltk
-
 from rich_python_utils.nlp_utils.common import (
-    Languages, get_language_for_nltk_tokenizer, get_language_for_nltk_pos_tagger, PreDefinedNlpToolNames
+    get_language_for_nltk_pos_tagger,
+    get_language_for_nltk_tokenizer,
+    Languages,
+    PreDefinedNlpToolNames,
 )
 from rich_python_utils.nlp_utils.part_of_speech.common import get_pos_tagger
 
 
 def pos_tag_(
-        text: Union[str, Iterable[str]],
-        break_into_sentences: bool = False,
-        language: Union[str, Languages] = Languages.English,
-        tagger: Callable = None
+    text: Union[str, Iterable[str]],
+    break_into_sentences: bool = False,
+    language: Union[str, Languages] = Languages.English,
+    tagger: Callable = None,
 ):
     """
 
@@ -35,10 +37,7 @@ def pos_tag_(
 
     language_tokenizer = get_language_for_nltk_tokenizer(language)
     if tagger is None:
-        tagger = get_pos_tagger(
-            tool=PreDefinedNlpToolNames.NLTK,
-            language=language
-        )
+        tagger = get_pos_tagger(tool=PreDefinedNlpToolNames.NLTK, language=language)
 
     if isinstance(text, str) and break_into_sentences:
         # tokenize the article into sentences, then tokenize each sentence into words

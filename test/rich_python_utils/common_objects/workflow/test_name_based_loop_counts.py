@@ -2,22 +2,25 @@
 
 Validates: Requirements 31.1, 31.2, 31.3, 37.1
 """
+
 import os
 import shutil
 import tempfile
 
 import pytest
-from attr import attrs, attrib
-
-from rich_python_utils.common_objects.workflow.workflow import Workflow
+from attr import attrib, attrs
 from rich_python_utils.common_objects.workflow.common.expansion import ExpansionResult
-from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import ResultPassDownMode
+from rich_python_utils.common_objects.workflow.common.result_pass_down_mode import (
+    ResultPassDownMode,
+)
 from rich_python_utils.common_objects.workflow.common.step_wrapper import StepWrapper
+from rich_python_utils.common_objects.workflow.workflow import Workflow
 
 
 # ---------------------------------------------------------------------------
 # Concrete Workflow subclass for testing
 # ---------------------------------------------------------------------------
+
 
 @attrs(slots=False)
 class _TestWorkflow(Workflow):

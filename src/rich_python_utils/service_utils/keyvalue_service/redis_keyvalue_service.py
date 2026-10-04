@@ -34,9 +34,9 @@ Usage:
 """
 
 import json
-from typing import Any, Optional, List, Dict
+from typing import Any, Dict, List, Optional
 
-from attr import attrs, attrib
+from attr import attrib, attrs
 
 from .keyvalue_service_base import KeyValueServiceBase
 
@@ -215,7 +215,9 @@ class RedisKeyValueService(KeyValueServiceBase):
 
     # ── Optimized batch methods using Redis pipelines ──
 
-    def get_many(self, keys: List[str], namespace: Optional[str] = None) -> Dict[str, Any]:
+    def get_many(
+        self, keys: List[str], namespace: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Get multiple values using a single Redis pipeline round-trip."""
         if not keys:
             return {}
