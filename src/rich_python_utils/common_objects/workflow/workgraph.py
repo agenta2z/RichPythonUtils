@@ -43,6 +43,7 @@ from rich_python_utils.common_utils import (
 from rich_python_utils.common_utils.async_utils import (
     async_execute_with_retry,
     call_maybe_async,
+    run_async_joined,
 )
 from rich_python_utils.common_utils.attr_helper import getattr_or_new
 
@@ -1499,7 +1500,11 @@ class WorkGraphNode(Node, WorkNodeBase):
                                 max_retry=self.max_repeat,
                                 min_retry_wait=self.min_repeat_wait,
                                 max_retry_wait=self.max_repeat_wait,
-                                retry_on_exceptions=self.retry_on_exceptions,
+                                # The sync twin treats an empty value as "retry on all";
+                                # the async one needs a tuple for its ``except`` clause.
+                                retry_on_exceptions=tuple(
+                                    self.retry_on_exceptions or (Exception,)
+                                ),
                                 output_validator=self.output_validator,
                                 pre_condition=self.repeat_condition,
                                 args=rel_args,
@@ -2156,12 +2161,16 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
 
         After reconstruction, re-attaches the subgraph via add_next(), propagates
         settings, and adds reconstructed nodes to the BFS queue for further traversal.
+
+        Returns:
+            The ``id()`` of every node whose expansion was re-attached.
         """
         from collections import deque
 
+        reattached = set()
         # Fast-path skip when expansion is disabled and no registry configured.
         if self.max_expansion_depth == 0 and self.subgraph_registry is None:
-            return
+            return reattached
 
         visited = set()
         queue = deque(self.start_nodes)
@@ -2277,6 +2286,7 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
                         sg_node._max_total_nodes = self.max_total_nodes
                     node._propagate_settings_to_subgraph(reconstructed_subgraph.nodes)
                     node._expansion_applied = True
+                    reattached.add(id(node))
 
                     # Add reconstructed nodes to traversal queue
                     for sg_node in reconstructed_subgraph.nodes:
@@ -2291,6 +2301,8 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
             for next_node in node.next or []:
                 if id(next_node) not in visited:
                     queue.append(next_node)
+
+        return reattached
 
     # =========================================================================
     # Phase 4: Queue-Based Execution Support
@@ -2727,19 +2739,7 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
         # Delegate to async path if use_async is enabled
         # =====================================================================
         if self.use_async:
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                loop = None
-            if loop is not None and loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(1) as pool:
-                    return pool.submit(
-                        asyncio.run, self._arun(*args, **kwargs)
-                    ).result()
-            else:
-                return asyncio.run(self._arun(*args, **kwargs))
+            return run_async_joined(self._arun(*args, **kwargs))
 
         # =====================================================================
         # Phase 4: Delegate to executor if configured
@@ -2772,8 +2772,9 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
         self._clear_all_node_queues()
 
         # Reconstruct graph expansions from persisted records when resuming
+        reattached = set()
         if self.resume_with_saved_results is not False:
-            self._reconstruct_graph_expansions(*args, **kwargs)
+            reattached = self._reconstruct_graph_expansions(*args, **kwargs)
 
         output = []
         is_loaded_from_saved_results = []
@@ -2783,7 +2784,9 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
             is_loaded_from_saved_result, result = node.load_result(*args, **kwargs)
             is_loaded_from_saved_results.append(is_loaded_from_saved_result)
 
-            if not is_loaded_from_saved_result:
+            # A re-attached expansion must still execute; the node itself
+            # reloads its saved result instead of recomputing it.
+            if not is_loaded_from_saved_result or id(node) in reattached:
                 try:
                     # Run the node if no saved result was loaded.
                     # NOTE: every node is an entry point to the graph,
@@ -2845,8 +2848,9 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
         self._clear_all_node_queues()
 
         # Reconstruct graph expansions from persisted records when resuming
+        reattached = set()
         if self.resume_with_saved_results is not False:
-            self._reconstruct_graph_expansions(*args, **kwargs)
+            reattached = self._reconstruct_graph_expansions(*args, **kwargs)
 
         _EMPTY = object()  # Sentinel — distinguishes "no result" from "result is None"
 
@@ -2878,7 +2882,7 @@ class WorkGraph(DirectedAcyclicGraph, WorkNodeBase):
         async def _run_start_node(idx, node):
             is_loaded, result = node.load_result(*args, **kwargs)
             node_info[idx] = (node, is_loaded)
-            if is_loaded:
+            if is_loaded and id(node) not in reattached:
                 # Match sync behavior: loaded results are NOT added to output
                 return WorkGraphStopFlags.Continue
             if terminate_event.is_set():

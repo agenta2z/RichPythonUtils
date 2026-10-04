@@ -51,6 +51,11 @@ class LazyConfigFactory:
         self._injectables = injectables or {}
         self.template_extra_feed: dict = {}
 
+    def resume_identity(self) -> Dict[str, Any]:
+        """The captured config: what every product is built from. The injectables
+        are shared live parent objects, not part of the recipe."""
+        return self._config_dict
+
     def __call__(self) -> Any:
         """Instantiate a fresh sub-tree from the captured config.
 
@@ -70,6 +75,14 @@ class LazyConfigFactory:
         if self.template_extra_feed and hasattr(instance, "template_extra_feed"):
             instance.template_extra_feed.update(self.template_extra_feed)
         return instance
+
+    def fresh(self) -> "LazyConfigFactory":
+        """Return an equivalent factory with an empty ``template_extra_feed``.
+
+        The config dict and injectables are shared: ``__call__`` deep-copies
+        them on every call and never mutates them.
+        """
+        return LazyConfigFactory(self._config_dict, self._injectables)
 
     @property
     def target(self) -> str:

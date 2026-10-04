@@ -1269,6 +1269,15 @@ def _collect_slot_defaults(cls: Any) -> Dict[str, Any]:
     return merged
 
 
+def collect_slot_defaults(cls: Any) -> Dict[str, Any]:
+    """Return the ``{slot_path: defaults_obj}`` bundles *cls* declares across its MRO.
+
+    Same resolution as the config walk's slot-default step (subclass bundles
+    replace base bundles per slot). Returns a new dict; the cached one is shared.
+    """
+    return dict(_collect_slot_defaults(cls))
+
+
 def _apply_at_path(
     current: Any,
     path_parts: List[str],

@@ -239,15 +239,11 @@ class TestWorkflowSaveResumeRoundTrip:
             tracked_steps = [_make_tracked_step(f, i) for i, f in enumerate(factors)]
 
             # Second run: resume from saved results.
-            # Use an explicit int index (last step) because
-            # isinstance(True, int) is True in Python, so
-            # resume_with_saved_results=True is treated as 1.
-            last_idx = len(factors) - 1
             wf2 = SaveableTestWorkflow(
                 steps=tracked_steps,
                 result_pass_down_mode=ResultPassDownMode.ResultAsFirstArg,
                 enable_result_save=StepResultSaveOptions.Always,
-                resume_with_saved_results=last_idx,
+                resume_with_saved_results=True,
                 save_dir=save_dir,
             )
             resumed_result = await wf2.arun(input_val)

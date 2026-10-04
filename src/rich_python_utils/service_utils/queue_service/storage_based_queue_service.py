@@ -81,21 +81,15 @@ Usage (Context Manager):
 import base64
 import os
 import pickle
-import sys
 import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-# Platform-specific imports for file locking
-if sys.platform == "win32":
-    import msvcrt
-else:
-    import fcntl
-
 from attr import attrib, attrs, Factory
 
+from ...io_utils.file_lock import FileLock
 from ...io_utils.on_storage_lists import OnStorageLists
 from .queue_service_base import QueueServiceBase
 
@@ -116,7 +110,7 @@ class StorageBasedQueueService(QueueServiceBase):
         storage: OnStorageLists instance for queue data
         metadata_storage: OnStorageLists instance for queue metadata
         _closed: Flag indicating if service is closed
-        _lock_file: File handle for global lock
+        _lock: Global lock on ``_lock_path``
         _lock_path: Path to lock file
 
     Example:
@@ -138,7 +132,7 @@ class StorageBasedQueueService(QueueServiceBase):
     storage: OnStorageLists = attrib(init=False)
     metadata_storage: OnStorageLists = attrib(init=False)
     _lock_path: str = attrib(init=False)
-    _lock_file: Optional[Any] = attrib(init=False, default=None)
+    _lock: Optional[FileLock] = attrib(init=False, default=None)
     _closed: bool = attrib(init=False, default=False)
 
     def __attrs_post_init__(self):
@@ -197,7 +191,7 @@ class StorageBasedQueueService(QueueServiceBase):
 
         # Lock file for global operations
         self._lock_path = os.path.join(self.root_path, ".lock")
-        self._lock_file = None
+        self._lock = FileLock(self._lock_path)
 
         # Service state
         self._closed = False
@@ -217,43 +211,11 @@ class StorageBasedQueueService(QueueServiceBase):
         """
         if self._closed:
             raise RuntimeError("Service is closed")
-
-        # Open lock file
-        if self._lock_file is None or self._lock_file.closed:
-            self._lock_file = open(self._lock_path, "a")
-
-        start_time = time.time()
-        while True:
-            try:
-                # Try to acquire exclusive lock (platform-specific)
-                if sys.platform == "win32":
-                    # Windows: use msvcrt
-                    msvcrt.locking(self._lock_file.fileno(), msvcrt.LK_NBLCK, 1)
-                else:
-                    # Unix: use fcntl
-                    fcntl.flock(self._lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                return True
-            except (IOError, OSError):
-                # Lock is held by another process
-                if timeout is not None:
-                    elapsed = time.time() - start_time
-                    if elapsed >= timeout:
-                        return False
-                # Wait a bit before retrying
-                time.sleep(0.01)
+        return self._lock.acquire(timeout=timeout)
 
     def _release_lock(self):
         """Release global lock."""
-        if self._lock_file and not self._lock_file.closed:
-            try:
-                if sys.platform == "win32":
-                    # Windows: use msvcrt
-                    msvcrt.locking(self._lock_file.fileno(), msvcrt.LK_UNLCK, 1)
-                else:
-                    # Unix: use fcntl
-                    fcntl.flock(self._lock_file.fileno(), fcntl.LOCK_UN)
-            except (IOError, OSError):
-                pass
+        self._lock.release()
 
     def create_queue(self, queue_id: str) -> bool:
         """
@@ -612,14 +574,6 @@ class StorageBasedQueueService(QueueServiceBase):
                 self._release_lock()
             except:
                 pass
-
-            # Close lock file
-            if self._lock_file and not self._lock_file.closed:
-                try:
-                    self._lock_file.close()
-                except:
-                    pass
-                self._lock_file = None
 
             # Clean up temp directory if created
             if self._temp_dir:

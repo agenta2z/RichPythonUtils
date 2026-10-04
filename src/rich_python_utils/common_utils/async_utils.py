@@ -12,16 +12,26 @@ with functools.partial, descriptors, __call__-based objects, and decorated/wrapp
 """
 
 import asyncio
+import concurrent.futures
+import contextlib
+import contextvars
 import inspect
 import logging
+import queue
 import random
+import threading
+from collections.abc import AsyncIterator, Iterator
 from time import monotonic
-from typing import Any, Callable, Dict, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, Sequence, Tuple, TypeVar, Union
 
 from rich_python_utils.common_utils.function_helper import (  # noqa: F401 — re-exported
     FallbackMode,
     OutputValidationExhaustedError,
 )
+
+logger: logging.Logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
 
 
 async def maybe_await(result: Any) -> Any:
@@ -324,14 +334,9 @@ async def async_execute_with_retry(
                         # ValueError: a single failing leaf re-runs the entire
                         # parent subtree — retries multiply N×M×K across nesting
                         # levels. See the OutputValidationExhaustedError docstring.
-                        if isinstance(verdict, str):
-                            last_exception = OutputValidationExhaustedError(
-                                "Output validation failed", verdict
-                            )
-                        else:
-                            last_exception = OutputValidationExhaustedError(
-                                "Output validation failed"
-                            )
+                        last_exception = OutputValidationExhaustedError.from_verdict(
+                            verdict
+                        )
                         transition_exception = last_exception
                         total_attempts_across_chain += 1
 
@@ -476,3 +481,144 @@ def _run_async(coro) -> Any:
         ):
             return asyncio.run(coro)
         raise
+
+
+def run_async_joined(coro) -> Any:
+    """Run ``coro`` to completion from sync code and return its result.
+
+    With no running event loop this is ``asyncio.run(coro)``, as in
+    :func:`_run_async`. Inside a running loop, where ``_run_async`` raises, the
+    coroutine runs on its own event loop in a worker thread under a copy of the
+    caller's context, so the caller's ContextVars are visible to it (its writes
+    stay in the copy); the calling thread, and so the running loop, blocks until
+    it finishes. Exceptions propagate unchanged in both branches.
+
+    The cross-loop hazards of :func:`_run_async` apply in both branches.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop is None:
+        return asyncio.run(coro)
+    context = contextvars.copy_context()
+    with concurrent.futures.ThreadPoolExecutor(1) as pool:
+        return pool.submit(context.run, asyncio.run, coro).result()
+
+
+_ITEM, _ERROR, _DONE = "item", "error", "done"
+
+
+class _ThreadedAsyncIteration:
+    """One async iterator driven on its own event loop in a worker thread.
+
+    The pump records its loop and task under ``_lock`` before it produces
+    anything, and :meth:`stop` sets ``_cancel_requested`` under the same lock, so a
+    stop either sees the task and cancels it or is seen by the pump before it
+    starts.
+    """
+
+    def __init__(self, agen_factory: Callable[[], AsyncIterator[Any]]) -> None:
+        self._agen_factory = agen_factory
+        self.items: queue.Queue[tuple[str, Any]] = queue.Queue()
+        self._lock = threading.Lock()
+        self._cancel_requested = False
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._task: asyncio.Task[None] | None = None
+
+    def run(self) -> None:
+        try:
+            with asyncio.Runner() as runner:
+                runner.run(self._pump())
+        except (Exception, asyncio.CancelledError) as exc:
+            self.items.put((_ERROR, exc))
+        finally:
+            self.items.put((_DONE, None))
+
+    async def _pump(self) -> None:
+        with self._lock:
+            if self._cancel_requested:
+                return
+            self._loop = asyncio.get_running_loop()
+            self._task = asyncio.current_task()
+        try:
+            async for item in self._agen_factory():
+                self.items.put((_ITEM, item))
+        except asyncio.CancelledError:
+            if not self._cancel_requested:
+                raise
+
+    def stop(self, thread: threading.Thread, join_timeout: float, owner: str) -> None:
+        with self._lock:
+            self._cancel_requested = True
+            loop, task = self._loop, self._task
+        if loop is not None and task is not None:
+            # A closed loop means the pump already finished.
+            with contextlib.suppress(RuntimeError):
+                loop.call_soon_threadsafe(task.cancel)
+        thread.join(join_timeout)
+        self._log_unobserved_errors(owner)
+        if thread.is_alive():
+            logger.error(
+                "iterate_async_in_thread[%s]: the async iterator ignored "
+                "cancellation; its worker thread is still running %.1fs after the "
+                "sync consumer closed it.",
+                owner,
+                join_timeout,
+            )
+
+    def _log_unobserved_errors(self, owner: str) -> None:
+        while True:
+            try:
+                kind, value = self.items.get_nowait()
+            except queue.Empty:
+                return
+            if kind == _ERROR:
+                logger.warning(
+                    "iterate_async_in_thread[%s]: the async iterator raised after "
+                    "its sync consumer stopped reading.",
+                    owner,
+                    exc_info=value,
+                )
+
+
+def iterate_async_in_thread(
+    agen_factory: Callable[[], AsyncIterator[T]],
+    *,
+    owner: str | None = None,
+    join_timeout: float = 5.0,
+) -> Iterator[T]:
+    """Iterate an async iterator from sync code, one item at a time.
+
+    The iterator is created by ``agen_factory`` and driven by an
+    ``asyncio.Runner`` in a daemon worker thread. The thread starts at the first
+    ``next()``, under a copy of the context current at that point, so the
+    iterator sees the consumer's ContextVars as they were then (its own writes
+    stay in the copy). Items arrive in order, and an exception from the iterator
+    is raised to the consumer.
+
+    Closing the generator early, including by garbage collection, cancels the
+    iterator's task and joins the thread for at most ``join_timeout`` seconds; a
+    thread still alive after that is logged at ERROR under ``owner`` (by default
+    the factory's qualified name). Works with or without a running event loop in
+    the calling thread.
+    """
+    label = owner or getattr(agen_factory, "__qualname__", repr(agen_factory))
+    iteration = _ThreadedAsyncIteration(agen_factory)
+    thread = threading.Thread(
+        target=contextvars.copy_context().run,
+        args=(iteration.run,),
+        name=f"iterate_async_in_thread[{label}]",
+        daemon=True,
+    )
+    thread.start()
+    try:
+        while True:
+            kind, value = iteration.items.get()
+            if kind == _DONE:
+                return
+            if kind == _ERROR:
+                raise value
+            yield value
+    finally:
+        iteration.stop(thread, join_timeout, label)

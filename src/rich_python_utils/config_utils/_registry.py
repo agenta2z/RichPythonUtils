@@ -8,7 +8,8 @@ Registry is module-level global state. Use _reset_registry() in test fixtures.
 
 from __future__ import annotations
 
-from typing import Dict, Optional, Sequence, Tuple
+import importlib
+from typing import Any, Dict, Optional, Sequence, Tuple
 
 _registry: Dict[str, str] = {}  # alias -> "module.ClassName"
 _registry_by_category: Dict[
@@ -138,6 +139,25 @@ def resolve_target(target: str) -> str:
         f"Ensure the registration module has been imported "
         f"(e.g., 'import agent_foundation.common.configs')."
     )
+
+
+def import_target(target: str) -> Any:
+    """Resolve *target* (alias or dotted import path) and return the imported object.
+
+    Raises ``KeyError`` for an unknown alias and ``ImportError`` when the module
+    or attribute cannot be imported.
+    """
+    import_path = resolve_target(target)
+    module_path, _, attr_name = import_path.rpartition(".")
+    if not module_path:
+        raise ImportError(f"Target {target!r} is not a dotted import path")
+    module = importlib.import_module(module_path)
+    try:
+        return getattr(module, attr_name)
+    except AttributeError as exc:
+        raise ImportError(
+            f"Module {module_path!r} has no attribute {attr_name!r} (target {target!r})"
+        ) from exc
 
 
 def list_registered(category: Optional[str] = None) -> Dict[str, str]:

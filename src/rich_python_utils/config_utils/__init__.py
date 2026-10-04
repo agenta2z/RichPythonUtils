@@ -29,11 +29,13 @@ Discoverability::
     list_registered()                  # all aliases
     list_registered('inferencer')      # filtered by category
     resolve_target('ClaudeAPI')        # alias → full import path
+    import_target('ClaudeAPI')         # alias → imported class (raises on failure)
 """
 
 from rich_python_utils.config_utils._registry import (
     _reset_registry,
     AliasResolutionError,
+    import_target,
     list_registered,
     MissingTargetError,
     register,
@@ -72,17 +74,27 @@ def instantiate(config, _convert_="all", merge_dict_typed_attributes=True, **kwa
     )
 
 
+def collect_slot_defaults(cls):
+    from rich_python_utils.config_utils._instantiate import (
+        collect_slot_defaults as _collect,
+    )
+
+    return _collect(cls)
+
+
 __all__ = [
     # Config loading
     "load_config",
     "merge_configs",
     # Instantiation
     "instantiate",
+    "collect_slot_defaults",
     # Registry
     "register",
     "register_alias",
     "register_class",
     "resolve_target",
+    "import_target",
     "list_registered",
     "_reset_registry",
     # Exceptions

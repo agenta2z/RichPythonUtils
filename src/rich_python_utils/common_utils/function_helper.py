@@ -375,6 +375,14 @@ class OutputValidationExhaustedError(ValueError):
     MultiFlow ``InferenceInput`` count is > 1 (the whole fan-out re-ran).
     """
 
+    @classmethod
+    def from_verdict(cls, verdict: Any) -> "OutputValidationExhaustedError":
+        """Build the rejection for an ``output_validator`` verdict; a string
+        verdict names the recovery handler and is kept as ``args[1]``."""
+        if isinstance(verdict, str):
+            return cls("Output validation failed", verdict)
+        return cls("Output validation failed")
+
 
 class FallbackMode(enum.Enum):
     """Controls when the retry helper transitions to the next fallback callable.
@@ -420,7 +428,8 @@ def execute_with_retry(
 
     Args:
         func (Callable): The function to execute.
-        max_retry (int): Maximum number of retries. Retry is disabled if this number <=1. Defaults to 1.
+        max_retry (int): Maximum number of retries. Retry is disabled if this number <=1 (a single attempt,
+            whose output is still checked by output_validator). Defaults to 1.
         min_retry_wait (float): Minimum wait time between retries in seconds. Defaults to 0.
         max_retry_wait (float): Maximum wait time between retries in seconds. If this is 0, then no retry wait time. Defaults to 0.
         retry_on_exceptions (List[type]): List of exception types to retry on. If not specified, then retry on all types of exceptions. Defaults to None.
@@ -453,6 +462,8 @@ def execute_with_retry(
         ValueError: If total_timeout is negative. If fallback_func is provided but fallback_mode is NEVER.
             If fallback_mode is not NEVER but no fallback_func provided. If any fallback callable is async.
         TimeoutError: If total_timeout expires during the retry loop.
+        OutputValidationExhaustedError: If the last attempt's output was rejected by `output_validator`
+                   and `default_return_or_raise` is None.
         Exception: The last exception raised if all retries fail and `default_return_or_raise` is an exception,
                    or a default exception if `default_return_or_raise` is None.
 
@@ -532,19 +543,6 @@ def execute_with_retry(
     if total_timeout is not None:
         deadline = monotonic() + total_timeout
 
-    # Handle single execution case (max_retry <= 1)
-    # Bypass fast path when total_timeout or fallback_func is set
-    if max_retry <= 1 and deadline is None and fallback_func is None:
-        # Check pre_condition before execution
-        if pre_condition is not None and not pre_condition(*args, **kwargs):
-            if default_return_or_raise is None:
-                return None
-            elif isinstance(default_return_or_raise, Exception):
-                raise default_return_or_raise
-            else:
-                return default_return_or_raise
-        return func(*args, **kwargs)
-
     # --- Build callable chain ---
     if fallback_func is not None and fallback_mode != FallbackMode.NEVER:
         callable_chain = [func] + fallback_func
@@ -572,7 +570,11 @@ def execute_with_retry(
                 str(last_exception)[:500],
             )
         if default_return_or_raise is None:
-            if has_fallback:
+            # A validation rejection keeps its type so enclosing wrappers can
+            # treat it as terminal (see OutputValidationExhaustedError).
+            if has_fallback or isinstance(
+                last_exception, OutputValidationExhaustedError
+            ):
                 raise last_exception
             else:
                 raise Exception(
@@ -605,6 +607,19 @@ def execute_with_retry(
             raise default_return_or_raise
         else:
             return default_return_or_raise
+
+    # Single execution (max_retry <= 1): one attempt, still validated. Bypassed
+    # when total_timeout or fallback_func is set.
+    if max_retry <= 1 and deadline is None and fallback_func is None:
+        if _check_pre_condition():
+            return _handle_pre_condition_stop()
+        result = func(*args, **kwargs)
+        _verdict = output_validator(result) if output_validator else True
+        if _verdict is True or _verdict is None:
+            return result
+        last_exception = OutputValidationExhaustedError.from_verdict(_verdict)
+        total_attempts_across_chain = 1
+        return _default_return_or_raise_terminal()
 
     for chain_idx, current_func in enumerate(callable_chain):
         is_last_in_chain = chain_idx == len(callable_chain) - 1
@@ -647,14 +662,9 @@ def execute_with_retry(
                     # consulting non_retryable; terminal once it escapes to the
                     # `except` gate below). See OutputValidationExhaustedError.
                     execution_failed = True
-                    if isinstance(_verdict, str):
-                        last_exception = OutputValidationExhaustedError(
-                            "Output validation failed", _verdict
-                        )
-                    else:
-                        last_exception = OutputValidationExhaustedError(
-                            "Output validation failed"
-                        )
+                    last_exception = OutputValidationExhaustedError.from_verdict(
+                        _verdict
+                    )
                     transition_exception = last_exception
                     # ON_FIRST_FAILURE for primary: validator failure triggers immediate transition
                     if (

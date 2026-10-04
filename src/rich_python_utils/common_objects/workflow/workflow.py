@@ -933,10 +933,20 @@ class Workflow(WorkNodeBase, ABC):
             else:
                 child_dir = os.path.join(parent_result_dir, attr_name)
             os.makedirs(child_dir, exist_ok=True)
-            child._result_root_override = child_dir
-            child.enable_result_save = self.enable_result_save
-            child.resume_with_saved_results = self.resume_with_saved_results
-            child.checkpoint_mode = self.checkpoint_mode
+            self._configure_child_workflow(
+                child,
+                _result_root_override=child_dir,
+                enable_result_save=self.enable_result_save,
+                resume_with_saved_results=self.resume_with_saved_results,
+                checkpoint_mode=self.checkpoint_mode,
+            )
+
+    def _configure_child_workflow(self, child: "Workflow", **settings: Any) -> None:
+        """Hook: give a child workflow its checkpoint ``settings``. Default: set
+        each one on the child. A subclass whose children read per-call settings
+        can hand them over without writing the child."""
+        for name, value in settings.items():
+            setattr(child, name, value)
 
     def _get_step_identifier(self, step: Callable, index: int) -> Dict[str, Any]:
         """Get serializable identifier for a step callable.
@@ -1110,6 +1120,7 @@ class Workflow(WorkNodeBase, ABC):
                 saved_step_results_back_search_start_index = (
                     self.resume_with_saved_results
                     if isinstance(self.resume_with_saved_results, int)
+                    and not isinstance(self.resume_with_saved_results, bool)
                     else len(self._steps) - 1
                 )
 
@@ -1465,6 +1476,7 @@ class Workflow(WorkNodeBase, ABC):
                 saved_step_results_back_search_start_index = (
                     self.resume_with_saved_results
                     if isinstance(self.resume_with_saved_results, int)
+                    and not isinstance(self.resume_with_saved_results, bool)
                     else len(self._steps) - 1
                 )
 

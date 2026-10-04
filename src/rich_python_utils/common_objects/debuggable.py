@@ -753,6 +753,15 @@ class Debuggable(Identifiable, ABC):
         """
         return None
 
+    def _log_display_name(self) -> Optional[str]:
+        """Hook: the descriptive name a record carries in place of the default
+        class-name ``log_name`` (e.g. a ``WorkGraphNode``'s hierarchical BTA name).
+
+        Default: the instance's ``name`` attribute. A subclass whose name is
+        resolved per call overrides this instead of writing ``name``.
+        """
+        return getattr(self, "name", None)
+
     def log(
         self,
         log_item: Any,
@@ -873,10 +882,10 @@ class Debuggable(Identifiable, ABC):
             log_type = self.default_log_type
 
         # Dynamic log_name: if log_name is the default class name and the
-        # instance has a more descriptive `name` attribute (e.g., WorkGraphNode
-        # with hierarchical BTA name), prefer it for log output.
+        # instance has a more descriptive name (``_log_display_name``), prefer it
+        # for log output.
         _effective_log_name = self.log_name
-        _name = getattr(self, "name", None)
+        _name = self._log_display_name()
         if (
             _name
             and _name != _effective_log_name
